@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "cosmos-common",
+    "cosmos-agent",
+    "app/src-tauri",
+]
+resolver = "2"

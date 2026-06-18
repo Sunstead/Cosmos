@@ -1,0 +1,11 @@
+[package]
+name = "cosmos-common"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+ts-rs = { version = "10", features = ["serde-compat"] }
+
+[dev-dependencies]
+ts-rs = { version = "10", features = ["serde-compat"] }
