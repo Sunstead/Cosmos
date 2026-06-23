@@ -9,6 +9,7 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from '@/components/ui/resizable-sidebar';
+import { Link, useLocation } from '@tanstack/react-router';
 import {
   Activity,
   Archive,
@@ -22,18 +23,20 @@ import {
 } from 'lucide-react';
 
 const NAV_ITEMS = [
-  { label: 'Overview', icon: LayoutDashboard, href: '#' },
-  { label: 'Nodes', icon: Server, href: '#' },
-  { label: 'Services', icon: Hexagon, href: '#' },
-  { label: 'Volumes', icon: Database, href: '#' },
-  { label: 'Network', icon: Network, href: '#' },
-  { label: 'Monitoring', icon: Activity, href: '#' },
-  { label: 'Logs', icon: FileText, href: '#' },
-  { label: 'Backups', icon: Archive, href: '#' },
-  { label: 'Settings', icon: Settings, href: '#' },
+  { label: 'Overview', icon: LayoutDashboard, href: '/overview' },
+  { label: 'Nodes', icon: Server, href: '/nodes' },
+  { label: 'Services', icon: Hexagon, href: '/services' },
+  { label: 'Volumes', icon: Database, href: '/volumes' },
+  { label: 'Network', icon: Network, href: '/network' },
+  { label: 'Monitoring', icon: Activity, href: '/monitoring' },
+  { label: 'Logs', icon: FileText, href: '/logs' },
+  { label: 'Backups', icon: Archive, href: '/backups' },
+  { label: 'Settings', icon: Settings, href: '/settings' },
 ] as const;
 
 export function AppSidebar() {
+  const location = useLocation();
+
   return (
     <Sidebar collapsible='icon'>
       {/* <SidebarHeader /> */}
@@ -45,14 +48,14 @@ export function AppSidebar() {
                 <SidebarMenuItem key={label}>
                   <SidebarMenuButton
                     asChild
-                    isActive={i === 0}
+                    isActive={location.pathname == href}
                     className='rounded-l-none data-[active=true]:shadow-[inset_2px_0_0_0_var(--color-primary)] space-x-3 pl-5'
                     size='lg'
                   >
-                    <a href={href}>
+                    <Link to={href}>
                       <Icon className='size-5!' />
                       <span>{label}</span>
-                    </a>
+                    </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
