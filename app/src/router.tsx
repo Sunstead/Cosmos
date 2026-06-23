@@ -6,7 +6,6 @@ import {
   Outlet,
   redirect,
 } from '@tanstack/react-router';
-import { TanStackRouterDevtools } from '@tanstack/react-router-devtools';
 import { AppLayout } from './layouts/AppLayout';
 import OverviewPage from './pages/overview-page';
 import { NodesPage } from './pages/nodes-page';

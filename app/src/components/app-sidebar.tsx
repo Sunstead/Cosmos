@@ -44,7 +44,7 @@ export function AppSidebar() {
         <SidebarGroup className='pl-0'>
           <SidebarGroupContent>
             <SidebarMenu>
-              {NAV_ITEMS.map(({ label, icon: Icon, href }, i) => (
+              {NAV_ITEMS.map(({ label, icon: Icon, href }) => (
                 <SidebarMenuItem key={label}>
                   <SidebarMenuButton
                     asChild
