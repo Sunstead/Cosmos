@@ -19,7 +19,7 @@ export default function SimpleStatCard({
   icon: React.ElementType;
 }) {
   return (
-    <Card className='w-64 h-20'>
+    <Card className='min-w-64 w-max h-21'>
       <CardContent className='h-full'>
         <div className='flex items-center h-full gap-x-4 text-muted-foreground'>
           <div className='size-10'>

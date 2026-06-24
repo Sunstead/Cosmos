@@ -120,7 +120,7 @@ export default function TitleBar() {
                     strokeLinecap: 'round',
                     strokeLinejoin: 'round',
                   }}
-                  d='M 6.5 1.5 h 6 A 3 3 0 0 1 14.5 4.5 v 6'
+                  d="M 5.5 1.5 h 5 A 4 4 0 0 1 14.5 5.5 v 6"
                 />
               </svg>
             ) : (

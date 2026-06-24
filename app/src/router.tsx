@@ -16,14 +16,24 @@ import { MonitoringPage } from './pages/monitoring-page';
 import { LogsPage } from './pages/logs-page';
 import { BackupsPage } from './pages/backups-page';
 import { SettingsPage } from './pages/settings-page';
+import { useNodeStore } from './stores/nodes';
+import { getDefaultNodes } from './config';
 
 const rootRoute = createRootRoute({
+  beforeLoad: async () => {
+    const store = useNodeStore.getState();
+    if (store.nodes.length === 0) {
+      const defaults = await getDefaultNodes();
+      for (const node of defaults) {
+        await store.addNode(node.url);
+      }
+    }
+  },
   component: () => (
     <>
       <AppLayout>
         <Outlet />
       </AppLayout>
-      {/* <TanStackRouterDevtools /> */}
     </>
   ),
 });

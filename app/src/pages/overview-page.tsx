@@ -1,4 +1,5 @@
 import SimpleStatCard from '@/components/simple-stat-card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Box, Boxes, ChartLine, Earth, HardDrive } from 'lucide-react';
 
 export default function OverviewPage() {
@@ -31,19 +32,61 @@ export default function OverviewPage() {
         />
         <SimpleStatCard
           value={2.14}
-          unit="TB"
+          unit='TB'
           label='TOTAL STORAGE'
           status='60% Used'
           statusColor='default'
           icon={HardDrive}
         />
         <SimpleStatCard
-          value={"99.9%"}
+          value={'99.9%'}
           label='UPTIME'
           status='Last 30 Days'
           statusColor='default'
           icon={ChartLine}
         />
+      </div>
+      <div className='w-full grid grid-cols-3 gap-4'>
+        <Card className='col-span-2 h-128'>
+          <CardHeader>
+            <CardTitle className='text-muted-foreground'>
+              CONSTELLATION
+            </CardTitle>
+          </CardHeader>
+          <CardContent></CardContent>
+        </Card>
+        <Card className='h-128'>
+          <CardHeader>
+            <CardTitle className='text-muted-foreground'>
+              QUICK LAUNCH
+            </CardTitle>
+          </CardHeader>
+          <CardContent></CardContent>
+        </Card>
+        <Card className='h-64'>
+          <CardHeader>
+            <CardTitle className='text-muted-foreground'>
+              RESOURCE USAGE
+            </CardTitle>
+          </CardHeader>
+          <CardContent></CardContent>
+        </Card>
+        <Card className='h-64'>
+          <CardHeader>
+            <CardTitle className='text-muted-foreground'>
+              SERVICES
+            </CardTitle>
+          </CardHeader>
+          <CardContent></CardContent>
+        </Card>
+        <Card className='h-64'>
+          <CardHeader>
+            <CardTitle className='text-muted-foreground'>
+              LOGS
+            </CardTitle>
+          </CardHeader>
+          <CardContent></CardContent>
+        </Card>
       </div>
     </div>
   );
