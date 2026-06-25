@@ -1,11 +1,13 @@
 mod docker;
 mod metrics;
 
-use axum::{ extract::State, routing::get, Json, Router };
+use axum::{ extract::State, response::sse::{ Event, KeepAlive, Sse }, routing::get, Json, Router };
 use cosmos_common::types::{ ContainersResponse, HostInfo };
-use std::{ net::SocketAddr, sync::Arc };
+use futures_util::{ Stream, StreamExt };
+use std::{ convert::Infallible, net::SocketAddr, sync::Arc, time::Duration };
 use sysinfo::System;
 use tokio::sync::Mutex;
+use tokio_stream::wrappers::IntervalStream;
 use tower_http::cors::CorsLayer;
 
 pub struct NetSnapshot {
@@ -43,6 +45,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/v1/host", get(host_handler))
+        .route("/v1/host/stream", get(host_stream_handler))
         .route("/v1/containers", get(containers_handler))
         .layer(CorsLayer::permissive())
         .with_state(state);
@@ -56,6 +59,21 @@ async fn main() {
 
 async fn host_handler(State(state): State<AppState>) -> Json<HostInfo> {
     Json(metrics::get_host_info(state).await)
+}
+
+async fn host_stream_handler(State(state): State<AppState>) -> Sse<
+    impl Stream<Item = Result<Event, Infallible>>
+> {
+    let stream = IntervalStream::new(tokio::time::interval(Duration::from_secs(1))).then(move |_| {
+        let state = state.clone();
+        async move {
+            let info = metrics::get_host_info(state).await;
+            let data = serde_json::to_string(&info).unwrap_or_default();
+            Ok::<Event, Infallible>(Event::default().data(data))
+        }
+    });
+
+    Sse::new(stream).keep_alive(KeepAlive::default())
 }
 
 async fn containers_handler() -> Json<ContainersResponse> {

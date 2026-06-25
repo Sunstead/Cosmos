@@ -1,23 +1,22 @@
 import { useQuery } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
+import { HostInfo } from '@/generated/HostInfo';
 import { useNodeStore } from '../stores/nodes';
-
-// How often each data type refreshes
-const INTERVALS = {
-  host: 1_000, // Hardware metrics interval
-  containers: 5_000, // Containers
-} as const;
 
 export function useHostInfo(nodeId: string | null) {
   const getClient = useNodeStore((s) => s.getClient);
   const client = nodeId ? getClient(nodeId) : null;
+  const [data, setData] = useState<HostInfo | null>(null);
 
-  return useQuery({
-    queryKey: ['host', nodeId],
-    queryFn: () => client!.getHost(),
-    enabled: !!client,
-    refetchInterval: INTERVALS.host,
-    refetchIntervalInBackground: false, // Pause when tab is hidden
-  });
+  useEffect(() => {
+    if (!client) {
+      setData(null);
+      return;
+    }
+    return client.streamHost((info) => setData(info));
+  }, [client]);
+
+  return { data, isLoading: data === null };
 }
 
 export function useContainers(nodeId: string | null) {
@@ -28,7 +27,7 @@ export function useContainers(nodeId: string | null) {
     queryKey: ['containers', nodeId],
     queryFn: () => client!.getContainers(),
     enabled: !!client,
-    refetchInterval: INTERVALS.containers,
+    refetchInterval: 5_000,
     refetchIntervalInBackground: false,
   });
 }

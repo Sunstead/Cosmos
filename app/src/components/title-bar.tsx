@@ -1,21 +1,27 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { SidebarTrigger } from '@/components/ui/resizable-sidebar';
 import { Button } from '@/components/ui/button';
-import { platform } from '@tauri-apps/plugin-os';
-import { getCurrentWindow } from '@tauri-apps/api/window';
+
+const isTauri = () => '__TAURI_INTERNALS__' in window;
 
 export default function TitleBar() {
   const [isMac, setIsMac] = useState(false);
-  const [isDesktop, setIsDesktop] = useState(true);
+  const [isDesktop, setIsDesktop] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-
-  const appWindow = getCurrentWindow();
+  const appWindowRef = useRef<any>(null);
 
   useEffect(() => {
+    if (!isTauri()) return;
+    setIsDesktop(true);
+
     let unlisten: (() => void) | null = null;
 
     const init = async () => {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
+      const appWindow = getCurrentWindow();
+      appWindowRef.current = appWindow;
+
       setIsMaximized(await appWindow.isMaximized());
       setIsFullscreen(await appWindow.isFullscreen());
 
@@ -33,13 +39,13 @@ export default function TitleBar() {
   }, []);
 
   useEffect(() => {
-    try {
-      const p = platform();
-      setIsMac(p === 'macos');
-    } catch {
-      setIsDesktop(false);
-    }
+    if (!isTauri()) return;
+    import('@tauri-apps/plugin-os').then(({ platform }) => {
+      setIsMac(platform() === 'macos');
+    });
   }, []);
+
+  const appWindow = appWindowRef.current;
 
   return (
     <header className='bg-sidebar w-full h-12 min-h-9 draggable relative flex items-center'>
@@ -53,21 +59,18 @@ export default function TitleBar() {
               <SidebarTrigger className='size-10 no-drag z-50 select-all' />
             </>
           ) : (
-            <>
-              {/* <WebSidebarHeader /> */}
-              <SidebarTrigger className='size-10 no-drag z-50 select-all' />
-            </>
+            <SidebarTrigger className='size-10 no-drag z-50 select-all' />
           )}
         </div>
       </div>
 
-      {!isMac && (
+      {isDesktop && !isMac && (
         <div className='flex ml-auto select-all text-muted-foreground'>
           {/* Minimize */}
           <Button
             className='flex items-center justify-center rounded-none w-12 h-12 select-all z-50 no-drag'
             variant='ghost'
-            onClick={() => appWindow.minimize()}
+            onClick={() => appWindow?.minimize()}
           >
             <svg
               xmlns='http://www.w3.org/2000/svg'
@@ -88,7 +91,7 @@ export default function TitleBar() {
           <Button
             className='flex items-center justify-center rounded-none w-12 h-12 select-all z-50 no-drag'
             variant='ghost'
-            onClick={() => appWindow.toggleMaximize()}
+            onClick={() => appWindow?.toggleMaximize()}
           >
             {isMaximized ? (
               <svg
@@ -97,7 +100,6 @@ export default function TitleBar() {
                 height='16'
                 viewBox='0 0 16 16'
               >
-                {/* front window */}
                 <rect
                   style={{
                     fill: 'none',
@@ -111,7 +113,6 @@ export default function TitleBar() {
                   height='10'
                   ry='2'
                 />
-                {/* back window — top + top-right corner + right edge */}
                 <path
                   style={{
                     fill: 'none',
@@ -120,7 +121,7 @@ export default function TitleBar() {
                     strokeLinecap: 'round',
                     strokeLinejoin: 'round',
                   }}
-                  d="M 5.5 1.5 h 5 A 4 4 0 0 1 14.5 5.5 v 6"
+                  d='M 5.5 1.5 h 5 A 4 4 0 0 1 14.5 5.5 v 6'
                 />
               </svg>
             ) : (
@@ -151,7 +152,7 @@ export default function TitleBar() {
           <Button
             className='flex items-center justify-center rounded-none w-12 h-12 select-all z-50 no-drag'
             variant='ghost'
-            onClick={() => appWindow.close()}
+            onClick={() => appWindow?.close()}
           >
             <svg
               xmlns='http://www.w3.org/2000/svg'

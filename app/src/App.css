@@ -95,14 +95,15 @@
 .dark {
   --background: #010207;
   --foreground: oklch(0.985 0 0);
-  --card: #0c0b0fa2;
+  --card: #0b0b0fa2;
   --card-foreground: oklch(0.985 0 0);
-  --popover: #14141da2;
-  --primary: oklch(78.068% 0.12112 243.441);
+  --popover: #0b0b0fa2;
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(96.32% 0.00353 248.568);
   --primary-foreground: #010309;
   --secondary: oklch(0.274 0.006 286.033);
   --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(25.618% 0.00987 268.308);
+  --muted: #13151c;
   --muted-foreground: oklch(62.181% 0.01205 280.295);
   --accent: oklch(0.274 0.006 286.033);
   --accent-foreground: oklch(0.985 0 0);
@@ -147,5 +148,28 @@
   }
   html {
     @apply font-sans;
+  }
+}
+
+@layer utilities {
+  .bg-popover,
+  .bg-card,
+  .bg-muted,
+  .bg-accent,
+  .bg-sidebar {
+    @apply backdrop-blur-lg!;
+  }
+
+  .blur-overlay::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    backdrop-filter: blur(var(--tw-backdrop-blur));
+    -webkit-backdrop-filter: blur(var(--tw-backdrop-blur));
+    background-color: hsl(var(--popover) / 0.15);
+    z-index: -1; /* ensure it stays behind foreground content */
+    @apply backdrop-blur-lg!;
   }
 }

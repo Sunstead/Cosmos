@@ -1,7 +1,6 @@
 import { useHostInfo, useContainers } from '@/api/queries';
 import HardwareStatDisplay from '@/components/hardware-stat-display';
 import { SpecDisplay } from '@/components/spec-display';
-import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
@@ -24,30 +23,33 @@ import {
   Cpu,
   HardDrive,
   MemoryStick,
-  MoreVertical,
   Server,
   Shell,
 } from 'lucide-react';
+import NodeOptionsDropdown from './node-options-dropdown';
 
 interface NodeCardProps {
   nodeId: string;
 }
 
 export function NodeCard({ nodeId }: NodeCardProps) {
-  const { data: host, isLoading, isError } = useHostInfo(nodeId);
+  const { data: host, isLoading } = useHostInfo(nodeId);
   useContainers(nodeId);
   const getHistory = useMetricsHistory((s) => s.getHistory);
   const history = getHistory(nodeId);
 
   if (isLoading) {
     return (
-      <Card className='flex items-center justify-center min-h-48'>
+      <Card className='flex items-center justify-center min-h-48 relative'>
+        <div className='flex absolute top-2 right-2'>
+          <NodeOptionsDropdown nodeId={nodeId} />
+        </div>
         <p className='text-muted-foreground text-sm'>Connecting...</p>
       </Card>
     );
   }
 
-  if (isError) {
+  if (!host) {
     return (
       <Card className='flex items-center justify-center min-h-48'>
         <p className='text-muted-foreground text-sm'>Node unreachable</p>
@@ -72,15 +74,13 @@ export function NodeCard({ nodeId }: NodeCardProps) {
               </p>
             </div>
           </div>
-          <Button variant='ghost' size='icon-lg'>
-            <MoreVertical />
-          </Button>
+          <NodeOptionsDropdown nodeId={nodeId} />
         </div>
       </CardHeader>
       <CardContent>
         <div className='w-full grid grid-cols-[1fr_max-content_2fr] gap-4'>
           <div className='size-full flex items-center justify-center px-6'>
-            <img src={`/${host?.name}.png`} alt={`${host?.name} node`} />
+            <img src={`/${host?.name}.png`} alt={`${host?.name} node`} className='drop-shadow-xl drop-shadow-black/50' />
           </div>
           <div className='rounded-md border p-4 w-full min-w-56 space-y-2'>
             <SpecDisplay

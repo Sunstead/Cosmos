@@ -8,13 +8,10 @@ import {
 } from '@/components/ui/resizable-sidebar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useTauriWindow } from '@/hooks/use-tauri-window';
-import { isTauri } from '@/lib/tauri';
 import { useNodeStore } from '@/stores/nodes';
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   useTauriWindow();
-  const isDesktop = isTauri();
-
   const nodes = useNodeStore((s) => s.nodes);
 
   return (
@@ -29,7 +26,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <AppSidebar />
             <SidebarInset className='bg-sidebar min-w-0'>
               <div
-                className={`size-full max-w-full bg-background ${isDesktop ? 'md:rounded-tl-2xl overflow-hidden border-t' : ''} border-l`}
+                className={`size-full max-w-full bg-background md:rounded-tl-2xl overflow-hidden border-t border-l`}
               >
                 <ScrollArea className='h-full w-full rounded-tl-2xl'>
                   {children}
