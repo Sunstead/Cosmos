@@ -14,10 +14,17 @@ pub struct NetSnapshot {
     pub time: std::time::Instant,
 }
 
+pub struct DiskSnapshot {
+    pub read_bytes: std::collections::HashMap<String, u64>,
+    pub write_bytes: std::collections::HashMap<String, u64>,
+    pub time: std::time::Instant,
+}
+
 #[derive(Clone)]
 pub struct AppState {
     pub node_name: String,
     pub last_net: Arc<Mutex<Option<NetSnapshot>>>,
+    pub last_disk: Arc<Mutex<Option<DiskSnapshot>>>,
 }
 
 #[tokio::main]
@@ -31,6 +38,7 @@ async fn main() {
     let state = AppState {
         node_name,
         last_net: Arc::new(Mutex::new(None)),
+        last_disk: Arc::new(Mutex::new(None)),
     };
 
     let app = Router::new()

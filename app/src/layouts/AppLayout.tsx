@@ -1,4 +1,5 @@
 import { AppSidebar } from '@/components/app-sidebar';
+import { NodeMetricsCollector } from '@/components/node-metrics-collector';
 import { ThemeProvider } from '@/components/theme-provider';
 import TitleBar from '@/components/title-bar';
 import {
@@ -7,13 +8,20 @@ import {
 } from '@/components/ui/resizable-sidebar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useTauriWindow } from '@/hooks/use-tauri-window';
+import { isTauri } from '@/lib/tauri';
+import { useNodeStore } from '@/stores/nodes';
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   useTauriWindow();
-  const isDesktop = true;
+  const isDesktop = isTauri();
+
+  const nodes = useNodeStore((s) => s.nodes);
 
   return (
     <ThemeProvider defaultTheme='dark' storageKey='vite-ui-theme'>
+      {nodes.map((n) => (
+        <NodeMetricsCollector key={n.id} nodeId={n.id} />
+      ))}
       <div className='flex flex-col h-screen'>
         <SidebarProvider className='flex-col'>
           <TitleBar />
