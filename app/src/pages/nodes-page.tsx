@@ -2,18 +2,28 @@ import AddNode from '@/components/add-node';
 import GridListToggle, { GridListView } from '@/components/grid-list-toggle';
 import { NodeCard } from '@/components/node-card';
 import NodeEmpty from '@/components/node-empty';
+import NodeTableRow from '@/components/node-table-row';
 import SimpleStatCard from '@/components/simple-stat-card';
+import { Card } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { useNodeStore } from '@/stores/nodes';
-import { ChartLine, GlobeCheck, GlobeOff, Server } from 'lucide-react';
+import { GlobeCheck, GlobeOff, Server } from 'lucide-react';
 import { useState } from 'react';
 
 export function NodesPage() {
   const [view, setView] = useState<GridListView>('grid');
-  const { onlineNodes } = useNodeStore();
   const nodes = useNodeStore((s) => s.nodes);
+  const onlineNodes = useNodeStore((s) => s.onlineNodes);
+  const offlineCount = nodes.length - onlineNodes;
 
   return (
-    <div className='p-4 space-y-4 max-w-full h-full flex flex-col'>
+    <>
       <div className='flex justify-between items-center'>
         <h1 className='text-muted-foreground text-xl'>NODES</h1>
         <div className='flex items-center gap-4'>
@@ -21,7 +31,6 @@ export function NodesPage() {
           <AddNode />
         </div>
       </div>
-
       {nodes.length === 0 ? (
         <div className='flex-1 flex justify-center items-center'>
           <NodeEmpty />
@@ -30,10 +39,12 @@ export function NodesPage() {
         <>
           <div className='flex flex-wrap gap-4 max-w-full'>
             <SimpleStatCard
-              value={String(nodes.length)}
+              value={nodes.length}
               label='TOTAL NODES'
-              status='All Online'
-              statusColor='success'
+              status={
+                offlineCount === 0 ? 'All Online' : `${offlineCount} Offline`
+              }
+              statusColor={offlineCount === 0 ? 'success' : 'error'}
               icon={Server}
             />
             <SimpleStatCard
@@ -44,31 +55,45 @@ export function NodesPage() {
               icon={GlobeCheck}
             />
             <SimpleStatCard
-              value={nodes.length - onlineNodes}
+              value={offlineCount}
               label='OFFLINE'
               status=''
               statusColor='default'
               icon={GlobeOff}
             />
-            <SimpleStatCard
-              value='99.99%'
-              label='AVG UPTIME'
-              status='Last 30 Days'
-              statusColor='default'
-              icon={ChartLine}
-            />
           </div>
-          {view == 'grid' ? (
+          {view === 'grid' ? (
             <div className='grid grid-cols-2 w-full gap-4'>
               {nodes.map((node) => (
                 <NodeCard key={node.id} nodeId={node.id} />
               ))}
             </div>
           ) : (
-            <div>test</div>
+            <Card className='p-0'>
+              <Table className='table-fixed'>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className='w-12' />
+                    <TableHead className=''>Name</TableHead>
+                    <TableHead className='min-w-20'>CPU</TableHead>
+                    <TableHead className='min-w-36'>Memory</TableHead>
+                    <TableHead className='min-w-36'>Network</TableHead>
+                    <TableHead className='min-w-36'>Disk I/O</TableHead>
+                    <TableHead className='min-w-32'>Uptime</TableHead>
+                    <TableHead className='w-28' />
+                    <TableHead className='w-14' />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {nodes.map((node) => (
+                    <NodeTableRow key={node.id} nodeId={node.id} />
+                  ))}
+                </TableBody>
+              </Table>
+            </Card>
           )}
         </>
       )}
-    </div>
+    </>
   );
 }

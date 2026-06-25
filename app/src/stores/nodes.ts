@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { AgentClient } from '../api/client';
+import { HostInfo } from '@/generated/HostInfo';
 
 export interface NodeConfig {
   id: string;
@@ -15,6 +16,7 @@ interface NodeStore {
   activeNodeId: string | null;
   clients: Record<string, AgentClient>;
   nodeStatuses: Record<string, NodeStatus>;
+  nodeHostInfo: Record<string, HostInfo>;
   onlineNodes: number;
   addNode: (url: string) => Promise<void>;
   removeNode: (id: string) => void;
@@ -32,6 +34,7 @@ export const useNodeStore = create<NodeStore>()(
       activeNodeId: null,
       clients: {},
       nodeStatuses: {},
+      nodeHostInfo: {},
       onlineNodes: 0,
 
       addNode: async (url: string) => {
@@ -64,6 +67,7 @@ export const useNodeStore = create<NodeStore>()(
                 n.id === id ? { ...n, name: host.name } : n,
               ),
               nodeStatuses,
+              nodeHostInfo: { ...s.nodeHostInfo, [id]: host },
               onlineNodes: countOnline(nodeStatuses),
             };
           });
@@ -82,11 +86,13 @@ export const useNodeStore = create<NodeStore>()(
         set((s) => {
           const { [id]: _c, ...remainingClients } = s.clients;
           const { [id]: _s, ...remainingStatuses } = s.nodeStatuses;
+          const { [id]: _h, ...remainingHostInfo } = s.nodeHostInfo;
           return {
             nodes: s.nodes.filter((n) => n.id !== id),
             activeNodeId: s.activeNodeId === id ? null : s.activeNodeId,
             clients: remainingClients,
             nodeStatuses: remainingStatuses,
+            nodeHostInfo: remainingHostInfo,
             onlineNodes: countOnline(remainingStatuses),
           };
         }),
@@ -116,7 +122,6 @@ export const useNodeStore = create<NodeStore>()(
         state.nodeStatuses = nodeStatuses;
         state.onlineNodes = 0;
 
-        // Re-verify every node in parallel
         await Promise.allSettled(
           state.nodes.map(async (node) => {
             try {
@@ -129,6 +134,7 @@ export const useNodeStore = create<NodeStore>()(
                 return {
                   nodeStatuses: updated,
                   onlineNodes: countOnline(updated),
+                  nodeHostInfo: { ...s.nodeHostInfo, [node.id]: host },
                   nodes: s.nodes.map((n) =>
                     n.id === node.id ? { ...n, name: host.name } : n,
                   ),

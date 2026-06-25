@@ -12,6 +12,11 @@ export function getMemUsagePct(host: HostInfo | undefined): number {
   return Math.round((used / total) * 100);
 }
 
+/** Memory used in GB, rounded to the nearest GB */
+export function getMemUsedGb(host: HostInfo | undefined): number {
+  return Math.round(host?.mem_used_gb ?? 0);
+}
+
 /** Total disk capacity across all disks, rounded to the nearest GB */
 export function getTotalDiskGb(host: HostInfo | undefined): number {
   if (!host?.disk?.length) return 0;
@@ -26,4 +31,14 @@ export function getNetTxMbps(host: HostInfo | undefined): number {
 /** Network RX rate in Mbps, rounded to 1 decimal place */
 export function getNetRxMbps(host: HostInfo | undefined): number {
   return Math.round((host?.net_rx_mbps ?? 0) * 10) / 10;
+}
+
+/** Primary disk read rate in MB/s, rounded to 1 decimal place */
+export function getDiskReadMbps(host: HostInfo | undefined): number {
+  return Math.round((host?.disk?.[0]?.read_mbps ?? 0) * 10) / 10;
+}
+
+/** Primary disk write rate in MB/s, rounded to 1 decimal place */
+export function getDiskWriteMbps(host: HostInfo | undefined): number {
+  return Math.round((host?.disk?.[0]?.write_mbps ?? 0) * 10) / 10;
 }

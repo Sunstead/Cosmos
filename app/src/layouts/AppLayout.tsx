@@ -29,7 +29,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 className={`size-full max-w-full bg-background md:rounded-tl-2xl overflow-hidden border-t border-l`}
               >
                 <ScrollArea className='h-full w-full rounded-tl-2xl'>
-                  {children}
+                  <div className='table-cell relative'>
+                    <div className='p-4 space-y-4 max-w-full h-full flex flex-col absolute inset-0'>
+                      {children}
+                    </div>
+                  </div>
                 </ScrollArea>
               </div>
             </SidebarInset>

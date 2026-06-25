@@ -5,6 +5,7 @@ import {
   createHashHistory,
   Outlet,
   redirect,
+  createBrowserHistory,
 } from '@tanstack/react-router';
 import { AppLayout } from './layouts/AppLayout';
 import OverviewPage from './pages/overview-page';
@@ -18,6 +19,7 @@ import { BackupsPage } from './pages/backups-page';
 import { SettingsPage } from './pages/settings-page';
 import { useNodeStore } from './stores/nodes';
 import { getDefaultNodes } from './config';
+import { isTauri } from './lib/tauri';
 
 const rootRoute = createRootRoute({
   beforeLoad: async () => {
@@ -114,9 +116,9 @@ const routeTree = rootRoute.addChildren([
 ]);
 
 // Hash history for Tauri — works fine in browser too
-const hashHistory = createHashHistory();
+const history = isTauri() ? createHashHistory() : createBrowserHistory();
 
-export const router = createRouter({ routeTree, history: hashHistory });
+export const router = createRouter({ routeTree, history: history });
 
 // Global type registration for full type inference
 declare module '@tanstack/react-router' {

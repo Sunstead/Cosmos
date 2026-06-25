@@ -10,6 +10,8 @@ import {
 } from '@/components/ui/card';
 import {
   getCpuPct,
+  getDiskReadMbps,
+  getDiskWriteMbps,
   getMemUsagePct,
   getNetRxMbps,
   getNetTxMbps,
@@ -20,13 +22,18 @@ import { useMetricsHistory } from '@/stores/metrics-history';
 import {
   ArrowDown,
   ArrowUp,
+  BookOpen,
   Cpu,
   HardDrive,
+  Info,
   MemoryStick,
+  PencilLine,
   Server,
   Shell,
 } from 'lucide-react';
 import NodeOptionsDropdown from './node-options-dropdown';
+import { Button } from './ui/button';
+import DualStatDisplay from './dual-stat-display';
 
 interface NodeCardProps {
   nodeId: string;
@@ -77,10 +84,14 @@ export function NodeCard({ nodeId }: NodeCardProps) {
           <NodeOptionsDropdown nodeId={nodeId} />
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className='space-y-4'>
         <div className='w-full grid grid-cols-[1fr_max-content_2fr] gap-4'>
           <div className='size-full flex items-center justify-center px-6'>
-            <img src={`/${host?.name}.png`} alt={`${host?.name} node`} className='drop-shadow-xl drop-shadow-black/50' />
+            <img
+              src={`/${host?.name}.png`}
+              alt={`${host?.name} node`}
+              className='drop-shadow-xl drop-shadow-black/50'
+            />
           </div>
           <div className='rounded-md border p-4 w-full min-w-56 space-y-2'>
             <SpecDisplay
@@ -126,24 +137,40 @@ export function NodeCard({ nodeId }: NodeCardProps) {
               name='NETWORK'
               color='var(--color-network)'
               value={
-                <div className='text-muted-foreground text-end'>
-                  <div className='flex items-center justify-end gap-1'>
-                    <ArrowUp className='text-network size-4' />
-                    <p className='text-xs'>{getNetTxMbps(host)} Mbps</p>
-                  </div>
-                  <div className='flex items-center justify-end gap-1'>
-                    <ArrowDown className='text-network size-4' />
-                    <p className='text-xs'>{getNetRxMbps(host)} Mbps</p>
-                  </div>
-                </div>
+                <DualStatDisplay
+                  icon1={ArrowUp}
+                  icon2={ArrowDown}
+                  value1={`${getNetTxMbps(host)} Mbps`}
+                  value2={`${getNetRxMbps(host)} Mbps`}
+                  color='var(--color-network)'
+                  side='right'
+                />
               }
             />
             <HardwareStatDisplay
               data={history?.diskRead}
               name='DISK I/O'
               color='var(--color-disk)'
-              value='32 MB/s'
+              value={
+                <DualStatDisplay
+                  icon1={BookOpen}
+                  icon2={PencilLine}
+                  value1={`${getDiskReadMbps(host)} MB/s`}
+                  value2={`${getDiskWriteMbps(host)} MB/s`}
+                  color='var(--color-disk)'
+                  side='right'
+                />
+              }
             />
+          </div>
+        </div>
+        <div className='flex justify-between items-center'>
+          <div className='flex items-center gap-1'></div>
+          <div className='flex items-center'>
+            <Button className='w-full' variant='outline' size='lg'>
+              <Info />
+              Details
+            </Button>
           </div>
         </div>
       </CardContent>

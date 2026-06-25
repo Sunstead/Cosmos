@@ -101,9 +101,9 @@
   --popover-foreground: oklch(0.985 0 0);
   --primary: oklch(96.32% 0.00353 248.568);
   --primary-foreground: #010309;
-  --secondary: oklch(0.274 0.006 286.033);
+  --secondary: oklch(25.914% 0.01306 285.43);
   --secondary-foreground: oklch(0.985 0 0);
-  --muted: #13151c;
+  --muted: #1c1e24;
   --muted-foreground: oklch(62.181% 0.01205 280.295);
   --accent: oklch(0.274 0.006 286.033);
   --accent-foreground: oklch(0.985 0 0);
@@ -129,8 +129,8 @@
   --warning: #efd215;
   --error: #c91e27;
 
-  --cpu: #5fa6ca;
-  --ram: #a141b9;
+  --cpu: #6cbae1;
+  --ram: #d977f1;
   --network: #4ac981;
   --disk: #ca793b;
 }
