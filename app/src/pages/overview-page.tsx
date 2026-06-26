@@ -4,7 +4,7 @@ import { Box, Boxes, ChartLine, Earth, HardDrive } from 'lucide-react';
 
 export default function OverviewPage() {
   return (
-    <div className='p-4 space-y-4 max-w-full'>
+    <>
       <div>
         <h1 className='text-muted-foreground text-xl'>OVERVIEW</h1>
       </div>
@@ -88,6 +88,6 @@ export default function OverviewPage() {
           <CardContent></CardContent>
         </Card>
       </div>
-    </div>
+    </>
   );
 }
