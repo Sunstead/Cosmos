@@ -70,34 +70,34 @@ export default function TitleBar() {
           <Button
             className='flex items-center justify-center rounded-none w-12 h-12 select-all z-50 no-drag'
             variant='ghost'
-            onClick={() => appWindow?.minimize()}
+            onClick={() => appWindow.minimize()}
           >
             <svg
               xmlns='http://www.w3.org/2000/svg'
-              width='16'
-              height='16'
-              viewBox='0 0 16 16'
-              strokeWidth='1.5'
+              width='18'
+              height='18'
+              viewBox='0 0 24 24'
+              strokeWidth='2'
               stroke='currentColor'
               fill='none'
               strokeLinecap='round'
               strokeLinejoin='round'
             >
-              <line x1='1.5' y1='8' x2='14.5' y2='8' />
+              <path stroke='none' d='M0 0h24v24H0z' fill='none' />
+              <line x1='5' y1='12' x2='19' y2='12' />
             </svg>
           </Button>
-
           {/* Maximize / Restore */}
           <Button
             className='flex items-center justify-center rounded-none w-12 h-12 select-all z-50 no-drag'
             variant='ghost'
-            onClick={() => appWindow?.toggleMaximize()}
+            onClick={() => appWindow.toggleMaximize()}
           >
             {isMaximized ? (
               <svg
                 xmlns='http://www.w3.org/2000/svg'
-                width='16'
-                height='16'
+                width='18'
+                height='18'
                 viewBox='0 0 16 16'
               >
                 <rect
@@ -107,11 +107,11 @@ export default function TitleBar() {
                     strokeWidth: 1.5,
                     strokeLinejoin: 'round',
                   }}
-                  x='1.5'
-                  y='4.5'
-                  width='10'
-                  height='10'
-                  ry='2'
+                  width='8'
+                  height='8'
+                  x='2.5'
+                  y='5.5'
+                  ry='1.5'
                 />
                 <path
                   style={{
@@ -121,52 +121,52 @@ export default function TitleBar() {
                     strokeLinecap: 'round',
                     strokeLinejoin: 'round',
                   }}
-                  d='M 5.5 1.5 h 5 A 4 4 0 0 1 14.5 5.5 v 6'
+                  d='M 5 2.5 h 5.5 A 2.5 2.5 0 0 1 13 5 v 5.5'
                 />
               </svg>
             ) : (
               <svg
                 xmlns='http://www.w3.org/2000/svg'
-                width='16'
-                height='16'
+                width='18'
+                height='18'
                 viewBox='0 0 16 16'
               >
                 <rect
                   style={{
                     fill: 'none',
                     stroke: 'currentColor',
-                    strokeWidth: 1.5,
+                    strokeWidth: 1.55298,
                     strokeLinejoin: 'round',
                   }}
-                  x='1.5'
-                  y='1.5'
-                  width='13'
-                  height='13'
-                  ry='3'
+                  width='9'
+                  height='9'
+                  x='3.5'
+                  y='3.5'
+                  ry='2.2857144'
                 />
               </svg>
             )}
           </Button>
-
           {/* Close */}
           <Button
             className='flex items-center justify-center rounded-none w-12 h-12 select-all z-50 no-drag'
             variant='ghost'
-            onClick={() => appWindow?.close()}
+            onClick={() => appWindow.close()}
           >
             <svg
               xmlns='http://www.w3.org/2000/svg'
-              width='16'
-              height='16'
-              viewBox='0 0 16 16'
-              strokeWidth='1.5'
+              width='18'
+              height='18'
+              viewBox='0 0 24 24'
+              strokeWidth='2'
               stroke='currentColor'
               fill='none'
               strokeLinecap='round'
               strokeLinejoin='round'
             >
-              <line x1='2.5' y1='2.5' x2='13.5' y2='13.5' />
-              <line x1='13.5' y1='2.5' x2='2.5' y2='13.5' />
+              <path stroke='none' d='M0 0h24v24H0z' fill='none' />
+              <path d='M18 6l-12 12' />
+              <path d='M6 6l12 12' />
             </svg>
           </Button>
         </div>

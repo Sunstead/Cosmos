@@ -63,7 +63,7 @@ export function NodesPage() {
             />
           </div>
           {view === 'grid' ? (
-            <div className='grid grid-cols-2 w-full gap-4'>
+            <div className='grid grid-cols-1 @6xl:grid-cols-2 w-full gap-4'>
               {nodes.map((node) => (
                 <NodeCard key={node.id} nodeId={node.id} />
               ))}

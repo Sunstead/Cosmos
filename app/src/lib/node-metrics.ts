@@ -14,13 +14,24 @@ export function getMemUsagePct(host: HostInfo | undefined): number {
 
 /** Memory used in GB, rounded to the nearest GB */
 export function getMemUsedGb(host: HostInfo | undefined): number {
-  return Math.round(host?.mem_used_gb ?? 0);
+  return Math.round((host?.mem_used_gb ?? 0) * 10) / 10;
 }
 
 /** Total disk capacity across all disks, rounded to the nearest GB */
 export function getTotalDiskGb(host: HostInfo | undefined): number {
   if (!host?.disk?.length) return 0;
   return Math.round(host.disk.reduce((acc, d) => acc + d.total_gb, 0));
+}
+
+/** Disk type across all drives (SSD, HDD, or Mixed) */
+export function getDiskType(host: HostInfo | undefined): string {
+  let same: boolean = true;
+
+  for (let i = 1; i < (host?.disk.length ?? 1); i++) {
+    if (host?.disk[i].kind !== host?.disk[0].kind) same = false;
+  }
+
+  return same ? (host?.disk[0].kind ?? 'Unknown') : 'Mixed';
 }
 
 /** Network TX rate in Mbps, rounded to 1 decimal place */

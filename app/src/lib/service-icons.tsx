@@ -6,6 +6,7 @@ import NextcloudIcon from '@/assets/icons/nextcloud.svg?react';
 import ImmichIcon from '@/assets/icons/immich.svg?react';
 import UptimeKumaIcon from '@/assets/icons/uptime-kuma.svg?react';
 import PortainerIcon from '@/assets/icons/portainer-dark.svg?react';
+import TailscaleIcon from '@/assets/icons/tailscale-light.svg?react';
 
 type SvgComponent = ComponentType<SVGProps<SVGSVGElement>>;
 
@@ -15,6 +16,7 @@ const ICONS: Record<string, SvgComponent> = {
   immich: ImmichIcon,
   'uptime-kuma': UptimeKumaIcon,
   portainer: PortainerIcon,
+  tailscale: TailscaleIcon,
 };
 
 interface ServiceIconProps extends SVGProps<SVGSVGElement> {

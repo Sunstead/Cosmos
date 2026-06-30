@@ -14,7 +14,6 @@ import {
   getCpuPct,
   getDiskReadMbps,
   getDiskWriteMbps,
-  getMemUsedGb,
   getMemUsagePct,
   getNetRxMbps,
   getNetTxMbps,
@@ -65,11 +64,11 @@ export default function NodeTableRow({ nodeId }: { nodeId: string }) {
           {host.hostname}
         </p>
       </TableCell>
-      <TableCell className='text-cpu tabular-nums'>
+      <TableCell className='tabular-nums'>
         {getCpuPct(host)}%
       </TableCell>
-      <TableCell className='text-ram tabular-nums whitespace-nowrap'>
-        {getMemUsedGb(host)}GB ({getMemUsagePct(host)}%)
+      <TableCell className='tabular-nums whitespace-nowrap'>
+        {getMemUsagePct(host)}%
       </TableCell>
       <TableCell>
         <DualStatDisplay

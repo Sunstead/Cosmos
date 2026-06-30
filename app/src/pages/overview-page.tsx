@@ -1,11 +1,15 @@
 import SimpleStatCard from '@/components/simple-stat-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Box, Boxes, ChartLine, Earth, HardDrive } from 'lucide-react';
+import { useContainersStore } from '@/stores/containers';
+import { QuickLaunchServiceButton } from '@/components/quick-launch-service-button';
 
 export default function OverviewPage() {
+  const services = useContainersStore((s) => s.services);
+
   return (
     <>
-      <div>
+      <div className='min-h-9 flex items-center'>
         <h1 className='text-muted-foreground text-xl'>OVERVIEW</h1>
       </div>
       <div className='flex flex-wrap gap-4 max-w-full'>
@@ -61,7 +65,15 @@ export default function OverviewPage() {
               QUICK LAUNCH
             </CardTitle>
           </CardHeader>
-          <CardContent></CardContent>
+          <CardContent className='h-full'>
+            <div className='grid grid-cols-3 grid-rows-3 h-full gap-2'>
+              {services
+                .filter((service) => service.key !== 'system')
+                .map((service) => (
+                  <QuickLaunchServiceButton serviceInfo={service} />
+                ))}
+            </div>
+          </CardContent>
         </Card>
         <Card className='h-64'>
           <CardHeader>
@@ -73,17 +85,13 @@ export default function OverviewPage() {
         </Card>
         <Card className='h-64'>
           <CardHeader>
-            <CardTitle className='text-muted-foreground'>
-              SERVICES
-            </CardTitle>
+            <CardTitle className='text-muted-foreground'>SERVICES</CardTitle>
           </CardHeader>
           <CardContent></CardContent>
         </Card>
         <Card className='h-64'>
           <CardHeader>
-            <CardTitle className='text-muted-foreground'>
-              LOGS
-            </CardTitle>
+            <CardTitle className='text-muted-foreground'>LOGS</CardTitle>
           </CardHeader>
           <CardContent></CardContent>
         </Card>

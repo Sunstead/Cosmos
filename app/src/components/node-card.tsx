@@ -11,6 +11,7 @@ import {
 import {
   getCpuPct,
   getDiskReadMbps,
+  getDiskType,
   getDiskWriteMbps,
   getMemUsagePct,
   getNetRxMbps,
@@ -85,15 +86,15 @@ export function NodeCard({ nodeId }: NodeCardProps) {
         </div>
       </CardHeader>
       <CardContent className='space-y-4'>
-        <div className='w-full grid grid-cols-[1fr_max-content_2fr] gap-4'>
-          <div className='size-full flex items-center justify-center px-6'>
+        <div className='w-full grid grid-cols-5 gap-4'>
+          <div className='size-full flex items-center justify-center max-w-30 mx-auto'>
             <img
               src={`/${host?.name}.png`}
               alt={`${host?.name} node`}
               className='drop-shadow-xl drop-shadow-black/50'
             />
           </div>
-          <div className='rounded-md border p-4 w-full min-w-56 space-y-2'>
+          <div className='rounded-md border p-4 space-y-2 col-span-2'>
             <SpecDisplay
               icon={Cpu}
               name='CPU'
@@ -109,7 +110,7 @@ export function NodeCard({ nodeId }: NodeCardProps) {
             <SpecDisplay
               icon={HardDrive}
               name='Storage'
-              model={`${getTotalDiskGb(host)}GB`}
+              model={`${getTotalDiskGb(host)}GB ${getDiskType(host)}`}
               details=''
             />
             <SpecDisplay
@@ -119,7 +120,7 @@ export function NodeCard({ nodeId }: NodeCardProps) {
               details=''
             />
           </div>
-          <div className='rounded-md border p-4 w-full min-w-0 flex flex-col justify-between'>
+          <div className='rounded-md border p-4 w-full min-w-0 flex flex-col justify-between col-span-2'>
             <HardwareStatDisplay
               data={history?.cpu}
               name='CPU'

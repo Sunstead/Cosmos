@@ -1,5 +1,5 @@
-use bollard::{ container::ListContainersOptions, container::StatsOptions, Docker };
-use cosmos_common::types::{ ContainerInfo, ContainersResponse };
+use bollard::{ Docker, container::{ ListContainersOptions, StatsOptions }, secret::PortTypeEnum };
+use cosmos_common::types::{ ContainerInfo, ContainersResponse, PortInfo, PortType };
 use futures_util::StreamExt;
 
 pub async fn get_containers() -> ContainersResponse {
@@ -12,7 +12,7 @@ pub async fn get_containers() -> ContainersResponse {
     };
 
     let options = ListContainersOptions::<String> {
-        all: false, // running only
+        all: true,
         ..Default::default()
     };
 
@@ -24,7 +24,6 @@ pub async fn get_containers() -> ContainersResponse {
         }
     };
 
-    // Collect stats concurrently across all containers
     let futures: Vec<_> = container_list
         .into_iter()
         .map(|c| {
@@ -40,26 +39,49 @@ pub async fn get_containers() -> ContainersResponse {
                     .to_string();
                 let image = c.image.unwrap_or_default();
                 let status = c.status.unwrap_or_default();
-                let started_at = c.created.map(|t| {
-                    chrono::DateTime
-                        ::from_timestamp(t, 0)
-                        .map(|dt| dt.to_rfc3339())
-                        .unwrap_or_default()
-                });
+                let state = c.state.unwrap_or_default();
                 let labels = c.labels.unwrap_or_default();
+
                 let compose_project = labels.get("com.docker.compose.project").cloned();
                 let cosmos_service = labels.get("cosmos.service").cloned();
+                let cosmos_service_description = labels.get("cosmos.service.description").cloned();
+                let cosmos_service_url = labels.get("cosmos.service.url").cloned();
 
-                let (cpu_pct, mem_mb) = get_container_stats(&docker, &id).await;
+                let ports: Vec<PortInfo> = c.ports
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|p| PortInfo {
+                        ip: p.ip,
+                        private_port: p.private_port,
+                        public_port: p.public_port,
+                        port_type: p.typ.and_then(|t| {
+                            match t {
+                                PortTypeEnum::TCP => Some(PortType::Tcp),
+                                PortTypeEnum::UDP => Some(PortType::Udp),
+                                PortTypeEnum::SCTP => Some(PortType::Sctp),
+                                PortTypeEnum::EMPTY => None,
+                            }
+                        }),
+                    })
+                    .collect();
+
+                let (cpu_pct, mem_mb, started_at) = get_container_stats_and_info(
+                    &docker,
+                    &id
+                ).await;
 
                 ContainerInfo {
                     id,
                     name,
                     image,
                     status,
+                    state,
+                    ports,
                     started_at,
                     compose_project,
                     cosmos_service,
+                    cosmos_service_description,
+                    cosmos_service_url,
                     cpu_pct,
                     mem_mb,
                 }
@@ -71,14 +93,17 @@ pub async fn get_containers() -> ContainersResponse {
     ContainersResponse { containers }
 }
 
-async fn get_container_stats(docker: &Docker, id: &str) -> (f64, f64) {
-    let options = StatsOptions {
-        stream: false,
-        one_shot: true,
-    };
-    let mut stream = docker.stats(id, Some(options));
+async fn get_container_stats_and_info(docker: &Docker, id: &str) -> (f64, f64, Option<String>) {
+    let (stats_result, inspect_result) = tokio::join!(
+        async {
+            let options = StatsOptions { stream: false, one_shot: true };
+            let mut stream = docker.stats(id, Some(options));
+            stream.next().await
+        },
+        docker.inspect_container(id, None)
+    );
 
-    match stream.next().await {
+    let (cpu_pct, mem_mb) = match stats_result {
         Some(Ok(stats)) => {
             let cpu_pct = {
                 let cpu_delta = stats.cpu_stats.cpu_usage.total_usage.saturating_sub(
@@ -98,5 +123,12 @@ async fn get_container_stats(docker: &Docker, id: &str) -> (f64, f64) {
             (cpu_pct, mem_mb)
         }
         _ => (0.0, 0.0),
-    }
+    };
+
+    let started_at = inspect_result
+        .ok()
+        .and_then(|i| i.state)
+        .and_then(|s| s.started_at);
+
+    (cpu_pct, mem_mb, started_at)
 }

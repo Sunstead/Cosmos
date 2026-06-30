@@ -1,3 +1,4 @@
+import { useAllContainersSync } from '@/api/queries';
 import { AppSidebar } from '@/components/app-sidebar';
 import { NodeMetricsCollector } from '@/components/node-metrics-collector';
 import { ThemeProvider } from '@/components/theme-provider';
@@ -12,6 +13,7 @@ import { useNodeStore } from '@/stores/nodes';
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   useTauriWindow();
+  useAllContainersSync();
   const nodes = useNodeStore((s) => s.nodes);
 
   return (
@@ -30,7 +32,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               >
                 <ScrollArea className='h-full w-full rounded-tl-2xl'>
                   <div className='table-cell relative'>
-                    <div className='p-4 space-y-4 max-w-full h-full flex flex-col absolute inset-0'>
+                    <div className='p-4 space-y-4 max-w-full h-full flex flex-col absolute inset-0 @container'>
                       {children}
                     </div>
                   </div>

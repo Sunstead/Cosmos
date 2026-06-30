@@ -20,6 +20,7 @@ import { SettingsPage } from './pages/settings-page';
 import { useNodeStore } from './stores/nodes';
 import { getDefaultNodes } from './config';
 import { isTauri } from './lib/tauri';
+import { ContainersPage } from './pages/containers-page';
 
 const rootRoute = createRootRoute({
   beforeLoad: async () => {
@@ -66,6 +67,12 @@ const servicesRoute = createRoute({
   component: () => <ServicesPage />,
 });
 
+const containersRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/containers',
+  component: () => <ContainersPage />,
+});
+
 const volumesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/volumes',
@@ -107,6 +114,7 @@ const routeTree = rootRoute.addChildren([
   dashboardRoute,
   nodesRoute,
   servicesRoute,
+  containersRoute,
   volumesRoute,
   networkRoute,
   monitoringRoute,

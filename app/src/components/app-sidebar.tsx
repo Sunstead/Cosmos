@@ -11,10 +11,8 @@ import {
 } from '@/components/ui/resizable-sidebar';
 import { Link, useLocation } from '@tanstack/react-router';
 import {
-  Activity,
-  Archive,
+  Container,
   Database,
-  FileText,
   Hexagon,
   LayoutDashboard,
   Network,
@@ -26,11 +24,9 @@ const NAV_ITEMS = [
   { label: 'Overview', icon: LayoutDashboard, href: '/overview' },
   { label: 'Nodes', icon: Server, href: '/nodes' },
   { label: 'Services', icon: Hexagon, href: '/services' },
+  { label: 'Containers', icon: Container, href: '/containers' },
   { label: 'Volumes', icon: Database, href: '/volumes' },
   { label: 'Network', icon: Network, href: '/network' },
-  { label: 'Monitoring', icon: Activity, href: '/monitoring' },
-  { label: 'Logs', icon: FileText, href: '/logs' },
-  { label: 'Backups', icon: Archive, href: '/backups' },
   { label: 'Settings', icon: Settings, href: '/settings' },
 ] as const;
 
@@ -64,7 +60,7 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter />
-      <SidebarRail />
+      <SidebarRail className='mt-3' />
     </Sidebar>
   );
 }

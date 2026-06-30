@@ -12,6 +12,23 @@ pub struct DiskInfo {
     pub kind: String,
 }
 
+#[derive(Serialize, Deserialize, TS, Debug, Clone, PartialEq)]
+#[ts(export, export_to = "../../app/src/generated/")]
+pub enum PortType {
+    Tcp,
+    Udp,
+    Sctp,
+}
+
+#[derive(Serialize, Deserialize, TS, Debug, Clone)]
+#[ts(export, export_to = "../../app/src/generated/")]
+pub struct PortInfo {
+    pub ip: Option<String>,
+    pub private_port: u16,
+    pub public_port: Option<u16>,
+    pub port_type: Option<PortType>,
+}
+
 #[derive(Serialize, Deserialize, TS, Debug, Clone)]
 #[ts(export, export_to = "../../app/src/generated/")]
 pub struct HostInfo {
@@ -38,9 +55,13 @@ pub struct ContainerInfo {
     pub name: String,
     pub image: String,
     pub status: String,
+    pub state: String,
+    pub ports: Vec<PortInfo>,
     pub started_at: Option<String>,
     pub compose_project: Option<String>,
     pub cosmos_service: Option<String>,
+    pub cosmos_service_description: Option<String>,
+    pub cosmos_service_url: Option<String>,
     pub cpu_pct: f64,
     pub mem_mb: f64,
 }
