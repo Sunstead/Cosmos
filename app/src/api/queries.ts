@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { HostInfo } from '@/generated/HostInfo';
 import { useNodeStore } from '../stores/nodes';
 import { useContainersStore } from '../stores/containers';
+import { useVolumesStore } from '@/stores/volumes';
 
 export function useHostInfo(nodeId: string | null) {
   const getClient = useNodeStore((s) => s.getClient);
@@ -69,6 +70,50 @@ export function useAllContainersSync() {
       },
       enabled: !!getClient(node.id),
       refetchInterval: 5_000,
+      refetchIntervalInBackground: false,
+    })),
+  });
+}
+
+export function useVolumes(nodeId: string | null) {
+  const getClient = useNodeStore((s) => s.getClient);
+  const client = nodeId ? getClient(nodeId) : null;
+  return useQuery({
+    queryKey: ['volumes', nodeId],
+    queryFn: () => client!.getVolumes(),
+    enabled: !!client,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
+  });
+}
+
+export function useAllVolumesSync() {
+  const nodes = useNodeStore((s) => s.nodes);
+  const getClient = useNodeStore((s) => s.getClient);
+  const setNodeVolumes = useVolumesStore((s) => s.setNodeVolumes);
+  const removeNode = useVolumesStore((s) => s.removeNode);
+
+  const prevNodeIds = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const current = new Set(nodes.map((n) => n.id));
+    for (const id of prevNodeIds.current) {
+      if (!current.has(id)) removeNode(id);
+    }
+    prevNodeIds.current = current;
+  }, [nodes]);
+
+  useQueries({
+    queries: nodes.map((node) => ({
+      queryKey: ['volumes', node.id],
+      queryFn: async () => {
+        const client = getClient(node.id);
+        if (!client) throw new Error(`No client for node ${node.id}`);
+        const result = await client.getVolumes();
+        setNodeVolumes(node.id, result.volumes);
+        return result;
+      },
+      enabled: !!getClient(node.id),
+      refetchInterval: 30_000,
       refetchIntervalInBackground: false,
     })),
   });

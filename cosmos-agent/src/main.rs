@@ -1,8 +1,9 @@
 mod docker;
 mod metrics;
+mod volumes;
 
 use axum::{ extract::State, response::sse::{ Event, KeepAlive, Sse }, routing::get, Json, Router };
-use cosmos_common::types::{ ContainersResponse, HostInfo };
+use cosmos_common::types::{ ContainersResponse, HostInfo, VolumesResponse };
 use futures_util::{ Stream, StreamExt };
 use std::{ convert::Infallible, net::SocketAddr, sync::Arc, time::Duration };
 use sysinfo::System;
@@ -47,6 +48,7 @@ async fn main() {
         .route("/v1/host", get(host_handler))
         .route("/v1/host/stream", get(host_stream_handler))
         .route("/v1/containers", get(containers_handler))
+        .route("/v1/volumes", get(volumes_handler))
         .layer(CorsLayer::permissive())
         .with_state(state);
 
@@ -78,4 +80,8 @@ async fn host_stream_handler(State(state): State<AppState>) -> Sse<
 
 async fn containers_handler() -> Json<ContainersResponse> {
     Json(docker::get_containers().await)
+}
+
+async fn volumes_handler() -> Json<VolumesResponse> {
+    Json(volumes::get_volumes().await)
 }

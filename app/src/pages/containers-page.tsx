@@ -42,9 +42,9 @@ export function ContainersPage() {
 
   const containers = useMemo<ContainerRow[]>(
     () =>
-      Object.entries(nodeContainers).flatMap(([nodeId, list]) =>
-        list.map((c) => ({ ...c, nodeId })),
-      ),
+      Object.entries(nodeContainers)
+        .flatMap(([nodeId, list]) => list.map((c) => ({ ...c, nodeId })))
+        .sort((a, b) => a.name.localeCompare(b.name)),
     [nodeContainers],
   );
 
@@ -83,6 +83,7 @@ export function ContainersPage() {
           columns={columns}
           data={containers}
           getRowId={(row) => `${row.nodeId}:${row.id}`}
+          emptyMessage='No containers found.'
         />
       </div>
     </>

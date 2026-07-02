@@ -71,3 +71,23 @@ pub struct ContainerInfo {
 pub struct ContainersResponse {
     pub containers: Vec<ContainerInfo>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../app/src/generated/")]
+pub struct VolumeInfo {
+    pub name: String,
+    pub driver: String,
+    pub mountpoint: String,
+    pub created_at: Option<String>,
+    pub scope: Option<String>,
+    pub compose_project: Option<String>,
+    pub cosmos_service: Option<String>,
+    // Names of containers currently mounting this volume. Empty = unused.
+    pub in_use_by: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../app/src/generated/")]
+pub struct VolumesResponse {
+    pub volumes: Vec<VolumeInfo>,
+}

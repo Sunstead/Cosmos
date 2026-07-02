@@ -1,5 +1,6 @@
 import { ContainersResponse } from '@/generated/ContainersResponse';
 import { HostInfo } from '@/generated/HostInfo';
+import { VolumesResponse } from '@/generated/VolumesResponse';
 
 export class AgentClient {
   constructor(private baseUrl: string) {}
@@ -27,6 +28,12 @@ export class AgentClient {
   async getContainers(): Promise<ContainersResponse> {
     const res = await fetch(`${this.baseUrl}/v1/containers`);
     if (!res.ok) throw new Error(`Failed to fetch containers: ${res.status}`);
+    return res.json();
+  }
+
+  async getVolumes(): Promise<VolumesResponse> {
+    const res = await fetch(`${this.baseUrl}/v1/volumes`);
+    if (!res.ok) throw new Error(`Failed to fetch volumes: ${res.status}`);
     return res.json();
   }
 }

@@ -22,6 +22,7 @@ interface DataTableProps<TData, TValue> {
   data: TData[];
   getRowId?: (row: TData) => string;
   onRowSelectionChange?: (selected: TData[]) => void;
+  emptyMessage?: string;
 }
 
 export function DataTable<TData, TValue>({
@@ -29,6 +30,7 @@ export function DataTable<TData, TValue>({
   data,
   getRowId,
   onRowSelectionChange,
+  emptyMessage = "No data found.",
 }: DataTableProps<TData, TValue>) {
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
 
@@ -92,7 +94,7 @@ export function DataTable<TData, TValue>({
                 colSpan={columns.length}
                 className='h-24 text-center text-muted-foreground'
               >
-                No containers found.
+                {emptyMessage}
               </TableCell>
             </TableRow>
           )}

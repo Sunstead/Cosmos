@@ -1,4 +1,4 @@
-import { useAllContainersSync } from '@/api/queries';
+import { useAllContainersSync, useAllVolumesSync } from '@/api/queries';
 import { AppSidebar } from '@/components/app-sidebar';
 import { NodeMetricsCollector } from '@/components/node-metrics-collector';
 import { ThemeProvider } from '@/components/theme-provider';
@@ -14,6 +14,7 @@ import { useNodeStore } from '@/stores/nodes';
 export function AppLayout({ children }: { children: React.ReactNode }) {
   useTauriWindow();
   useAllContainersSync();
+  useAllVolumesSync();
   const nodes = useNodeStore((s) => s.nodes);
 
   return (
