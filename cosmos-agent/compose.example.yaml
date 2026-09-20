@@ -1,0 +1,66 @@
+# cosmos-agent — example Compose service.
+#
+# Copy into your stack, adjust the volumes to the filesystems you actually
+# want charted, and create the token file:
+#
+#   openssl rand -hex 32 > ./cosmos_token && chmod 600 ./cosmos_token
+#   echo "DOCKER_GID=$(stat -c '%g' /var/run/docker.sock)" >> .env
+
+services:
+  cosmos-agent:
+    image: cosmos-agent:0.2.0
+    container_name: cosmos-agent
+    restart: unless-stopped
+
+    # REQUIRED, not a convenience. /proc/net/dev is rendered from the reading
+    # process's network namespace, and sysinfo has no HOST_PROC-style escape
+    # hatch — so without host networking the agent reports the container's
+    # own veth instead of the machine's interfaces.
+    #
+    # Consequence: `ports:` does not apply. The agent binds :7700 on the host
+    # directly. Firewall it, or bind it to a LAN/Tailscale address via
+    # COSMOS_AGENT_BIND.
+    network_mode: host
+
+    read_only: true                          # rootfs immutable; SQLite lives on the named volume
+    cap_drop: [ALL]                          # :7700 is above 1024, so no CAP_NET_BIND_SERVICE
+    security_opt: [no-new-privileges:true]
+    user: "65532:65532"
+    group_add: ["${DOCKER_GID}"]             # uid 65532 cannot read docker.sock (root:docker 0660) without this
+
+    environment:
+      COSMOS_AGENT_CONFIG: /etc/cosmos-agent/agent.toml
+      COSMOS_AGENT_TOKEN_FILE: /run/secrets/cosmos_token
+      RUST_LOG: "info,cosmos_agent=info"
+      TZ: ${TZ:-Etc/UTC}
+
+    volumes:
+      - ./agent.toml:/etc/cosmos-agent/agent.toml:ro
+      - ./cosmos_token:/run/secrets/cosmos_token:ro
+
+      # NOTE: `:ro` on a unix socket is NOT a security control. The flag applies
+      # to the inode, not the protocol — anyone who can connect() to this socket
+      # has the full Docker API, which is root-equivalent on the host. The real
+      # controls are `allow_actions = false` in agent.toml and network
+      # isolation. A socket proxy is an option, but it must be configured to
+      # permit /containers/*/stats and /containers/*/logs, which most
+      # deny-by-default configurations block.
+      - /var/run/docker.sock:/var/run/docker.sock
+
+      # Mount only the filesystems you chart, and name them in [[host.disks]].
+      # A bind mount appears in the container's /proc/mounts with the correct
+      # underlying device, so both statvfs (used/total) and /proc/diskstats
+      # (throughput) resolve correctly. `rslave` propagation lets the agent see
+      # later host mounts while never pinning one alive.
+      - /:/host/rootfs:ro,rslave
+      # - /mnt/tank:/host/mnt/tank:ro,rslave
+
+      # Backups: the status file your restic job writes, and the systemd timer
+      # stamp whose mtime is an independent "the timer fired" signal.
+      - ${BACKUP_PATH:-/srv/backups}:/host/backups:ro
+      - /var/lib/systemd/timers:/host/systemd-timers:ro
+
+      - cosmos-agent-data:/var/lib/cosmos-agent   # SQLite; the only writable path
+
+volumes:
+  cosmos-agent-data:

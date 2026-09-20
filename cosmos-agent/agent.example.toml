@@ -1,0 +1,94 @@
+# cosmos-agent configuration.
+#
+# Every value below is the built-in default unless noted. Any of it can be
+# overridden by environment variables: COSMOS_AGENT_BIND, COSMOS_AGENT_TOKEN,
+# COSMOS_AGENT_TOKEN_FILE, COSMOS_AGENT_ALLOW_ACTIONS, COSMOS_AGENT_DOCKER_SOCKET,
+# COSMOS_AGENT_HISTORY, COSMOS_AGENT_HISTORY_PATH, COSMOS_NODE_NAME, RUST_LOG.
+
+# Defaults to the system hostname.
+node_name = "jupiter"
+
+[server]
+bind = "0.0.0.0:7700"
+shutdown_grace_secs = 10
+
+[auth]
+# Prefer token_file over token: it keeps the secret out of this file.
+#   openssl rand -hex 32 > ./cosmos_token && chmod 600 ./cosmos_token
+token_file = "/run/secrets/cosmos_token"
+
+# Browser EventSource and WebSocket cannot set request headers, so the
+# streaming routes accept ?token= as a fallback. Turning this off breaks live
+# metrics and log following in the web build (the Tauri build is unaffected).
+allow_query_token = true
+
+# The agent REFUSES TO START without a token unless this is explicitly true.
+# Something that can stop containers must not be open by default.
+allow_anonymous = false
+
+[cors]
+# tauri://localhost, http(s)://tauri.localhost and localhost:1420 are always
+# allowed. Add anything else you serve the web build from.
+extra_origins = []
+allow_null_origin = false
+
+[host]
+interval_ms = 1000
+
+# Under `network_mode: host` the agent sees every bridge, veth and tunnel the
+# machine has. Summing those into "node throughput" counts container traffic
+# two or three times over.
+net_exclude = ["lo*", "docker*", "br-*", "veth*", "virbr*", "cni*", "flannel*"]
+net_include = []   # non-empty turns this into an allowlist and wins outright
+
+# Which filesystems to report, and what to call them.
+#
+# Leave this out when running directly on a host and every mount is reported.
+# In a container you want it: otherwise you get overlayfs, tmpfs and every
+# bind mount. `path` is what the agent sees, `label` is what the UI shows.
+[[host.disks]]
+path  = "/host/rootfs"
+label = "/"
+
+# [[host.disks]]
+# path  = "/host/mnt/tank"
+# label = "/mnt/tank"
+
+[docker]
+socket = "/var/run/docker.sock"
+interval_ms = 2000
+stats_concurrency = 8
+
+# Off by default: a node is read-only until you say otherwise. Turning this on
+# lets the desktop app start, stop, restart and remove containers.
+allow_actions = false
+allow_logs = true
+
+# Subscribe to the Docker event stream so the container list refreshes the
+# moment something starts or dies, instead of at the next poll.
+watch_events = true
+
+[history]
+enabled = true
+path = "/var/lib/cosmos-agent/metrics.db"
+flush_interval_secs = 10
+retain_1s_secs = 3600      # 1 hour of full-resolution samples
+retain_1m_secs = 604800    # 7 days at 1-minute buckets
+retain_5m_secs = 7776000   # 90 days at 5-minute buckets
+
+[backups]
+# Reads the status file your restic job writes. The agent never runs restic,
+# never holds RESTIC_PASSWORD, and never takes a repository lock.
+# See scripts/backup-status.sh for the snippet that produces this file.
+enabled = false
+status_file = "/host/backups/restic-status.json"
+
+# mtime of this file is when the timer last fired — an independent signal that
+# catches the case where the timer ran but the job died before writing status.
+timer_stamp = "/host/systemd-timers/stamp-jupiter-backup.timer"
+
+# Backups older than 1.5x this are reported as stale.
+expected_interval_secs = 86400
+
+# A display name. Never the real repository path.
+repo_label = "jupiter/restic"

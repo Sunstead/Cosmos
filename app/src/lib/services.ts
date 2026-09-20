@@ -14,7 +14,7 @@ export type ServiceInfo = {
   description: string | null;
   url: string | null;
   cpu_pct: number;
-  mem_mb: number;
+  mem_used_bytes: number;
   uptime_ms: number | null;
   containers: ContainerSummary[];
   running: number;
@@ -71,7 +71,7 @@ export function deriveServices(
         url:
           group.map((c) => c.cosmos_service_url).find((u) => u != null) ?? null,
         cpu_pct: group.reduce((sum, c) => sum + c.cpu_pct, 0),
-        mem_mb: group.reduce((sum, c) => sum + c.mem_mb, 0),
+        mem_used_bytes: group.reduce((sum, c) => sum + c.mem_used_bytes, 0),
         uptime_ms: earliestStart !== null ? Date.now() - earliestStart : null,
         containers: group.map((c) => ({ name: c.name, state: c.state })),
         running: runningContainers.length,
