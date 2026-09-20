@@ -30,10 +30,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <SidebarInset className='bg-sidebar min-w-0'>
               <div className='size-full max-w-full bg-background md:rounded-tl-2xl overflow-hidden border-t border-l'>
                 <ScrollArea className='h-full w-full rounded-tl-2xl'>
-                  <div className='table-cell relative'>
-                    <div className='p-4 space-y-4 max-w-full h-full flex flex-col absolute inset-0 @container'>
-                      {children}
-                    </div>
+                  {/*
+                    `min-h-full` rather than `h-full`: with a fixed height the
+                    flex column had to distribute space, and flex-shrink
+                    collapsed whichever card had the most wrappable content —
+                    the node detail spec panel rendered 32px tall with all its
+                    text inside it. Growing past the viewport and letting the
+                    ScrollArea scroll is what's actually wanted.
+                  */}
+                  <div className='flex min-h-full max-w-full flex-col gap-4 p-4 @container'>
+                    {children}
                   </div>
                 </ScrollArea>
               </div>
