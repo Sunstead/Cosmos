@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { PageHeader } from '@/components/page-header';
 import { useVolumesStore } from '@/stores/volumes';
 import { columns, VolumeRow } from '@/components/volume-columns';
 import { DataTable } from '@/components/containers-data-table';
@@ -29,40 +30,37 @@ export function VolumesPage() {
 
   return (
     <>
-      <div className='min-h-9 flex items-center'>
-        <h1 className='text-muted-foreground text-xl'>VOLUMES</h1>
-      </div>
+      <PageHeader title='VOLUMES' />
       <div className='flex flex-wrap gap-4 max-w-full'>
         <SimpleStatCard
           value={stats.total}
-          label='VOLUMES'
+          label='Volumes'
           status={stats.unused > 0 ? `${stats.unused} unused` : 'All in use'}
           statusColor={stats.unused > 0 ? 'warn' : 'success'}
           icon={Database}
         />
         <SimpleStatCard
           value={stats.inUse}
-          label='IN USE'
+          label='In use'
           status=''
           statusColor='default'
           icon={Link2}
         />
         <SimpleStatCard
           value={stats.unused}
-          label='UNUSED'
+          label='Unused'
           status={stats.unused > 0 ? 'Reclaimable' : ''}
           statusColor={stats.unused > 0 ? 'warn' : 'default'}
           icon={AlertTriangle}
         />
       </div>
-      <div className='gap-4'>
-        <DataTable
-          columns={columns}
-          data={volumes}
-          getRowId={(row) => `${row.nodeId}:${row.name}`}
-          emptyMessage='No volumes found.'
-        />
-      </div>
+      <DataTable
+        columns={columns}
+        data={volumes}
+        getRowId={(row) => `${row.nodeId}:${row.name}`}
+        emptyMessage='No volumes found.'
+        searchPlaceholder='Search volumes…'
+      />
     </>
   );
 }

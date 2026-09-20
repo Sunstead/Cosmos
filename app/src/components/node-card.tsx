@@ -1,26 +1,5 @@
-import { useHostInfo, useContainers } from '@/api/queries';
-import HardwareStatDisplay from '@/components/hardware-stat-display';
-import { SpecDisplay } from '@/components/spec-display';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import {
-  getCpuPct,
-  getDiskReadMbps,
-  getDiskType,
-  getDiskWriteMbps,
-  getMemUsagePct,
-  getNetRxMbps,
-  getNetTxMbps,
-  getTotalDiskGb,
-  formatBytes,
-} from '@/lib/node-metrics';
-import { secondsToDuration } from '@/lib/time';
-import { useMetricsHistory } from '@/stores/metrics-history';
+import { memo } from 'react';
+import { Link } from '@tanstack/react-router';
 import {
   ArrowDown,
   ArrowUp,
@@ -30,38 +9,69 @@ import {
   Info,
   MemoryStick,
   PencilLine,
-  Server,
   Shell,
 } from 'lucide-react';
-import NodeOptionsDropdown from './node-options-dropdown';
+import { useHostInfo, useNodeMeta } from '@/api/queries';
+import {
+  formatBytes,
+  getCpuPct,
+  getDiskReadMbps,
+  getDiskType,
+  getDiskWriteMbps,
+  getMemUsagePct,
+  getNetRxMbps,
+  getNetTxMbps,
+  getTotalDiskGb,
+} from '@/lib/node-metrics';
+import { secondsToDuration } from '@/lib/time';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { SpecDisplay } from '@/components/spec-display';
 import { Button } from './ui/button';
 import DualStatDisplay from './dual-stat-display';
+import HardwareStatDisplay from './hardware-stat-display';
+import { LiveValue } from './live-value';
+import NodeOptionsDropdown from './node-options-dropdown';
+import { NodePlanet } from './node-planet';
+import { NodeStatusBadge } from './node-status-badge';
 
-interface NodeCardProps {
-  nodeId: string;
-}
+/**
+ * A node's summary card.
+ *
+ * Re-renders only when the node's *connection state* changes — never when a
+ * sample arrives. Every live number is a `<LiveValue>` and every chart a
+ * `<Sparkline>`, both writing through refs. Previously the whole subtree,
+ * including a Radix dropdown and four recharts instances, was rebuilt once a
+ * second.
+ */
+export const NodeCard = memo(function NodeCard({ nodeId }: { nodeId: string }) {
+  const meta = useNodeMeta(nodeId);
+  // Read once for the parts that genuinely don't change — CPU model, core
+  // count, OS, total RAM. Later samples carry identical values.
+  const { data: host } = useHostInfo(nodeId);
 
-export function NodeCard({ nodeId }: NodeCardProps) {
-  const { data: host, isLoading } = useHostInfo(nodeId);
-  useContainers(nodeId);
-  const getHistory = useMetricsHistory((s) => s.getHistory);
-  const history = getHistory(nodeId);
-
-  if (isLoading) {
+  if (!meta || (meta.status === 'connecting' && !host)) {
     return (
       <Card className='flex items-center justify-center min-h-48 relative'>
-        <div className='flex absolute top-2 right-2'>
+        <div className='absolute top-2 right-2'>
           <NodeOptionsDropdown nodeId={nodeId} />
         </div>
-        <p className='text-muted-foreground text-sm'>Connecting...</p>
+        <p className='text-muted-foreground text-sm'>Connecting…</p>
       </Card>
     );
   }
 
   if (!host) {
     return (
-      <Card className='flex items-center justify-center min-h-48'>
-        <p className='text-muted-foreground text-sm'>Node unreachable</p>
+      <Card className='flex flex-col items-center justify-center gap-3 min-h-48 relative p-6'>
+        <div className='absolute top-2 right-2'>
+          <NodeOptionsDropdown nodeId={nodeId} />
+        </div>
+        <NodeStatusBadge nodeId={nodeId} />
+        {meta.error && (
+          <p className='text-muted-foreground text-xs text-center max-w-xs'>
+            {meta.error}
+          </p>
+        )}
       </Card>
     );
   }
@@ -70,42 +80,42 @@ export function NodeCard({ nodeId }: NodeCardProps) {
     <Card>
       <CardHeader>
         <div className='flex items-center gap-4'>
-          <Server />
-          <div className='flex-1 flex items-center justify-between'>
-            <div>
-              <CardTitle>{host?.name}</CardTitle>
-              <CardDescription>{host?.hostname}</CardDescription>
+          <div className='flex-1 min-w-0'>
+            <div className='flex items-center gap-2'>
+              <p className='text-lg font-medium truncate'>{host.name}</p>
+              <NodeStatusBadge nodeId={nodeId} />
             </div>
-            <div>
-              <p className='text-xs text-muted-foreground text-end'>Uptime</p>
-              <p className='text-xs text-success text-end'>
-                {secondsToDuration(host?.uptime_secs ?? 0)}
-              </p>
-            </div>
+            <p className='text-sm text-muted-foreground truncate'>{host.hostname}</p>
+          </div>
+          <div className='text-end shrink-0'>
+            <p className='text-xs text-muted-foreground'>Uptime</p>
+            <LiveValue
+              nodeId={nodeId}
+              className='text-xs text-success tabular-nums'
+              format={(h) => secondsToDuration(h.uptime_secs)}
+            />
           </div>
           <NodeOptionsDropdown nodeId={nodeId} />
         </div>
       </CardHeader>
+
       <CardContent className='space-y-4'>
         <div className='w-full grid grid-cols-5 gap-4'>
           <div className='size-full flex items-center justify-center max-w-30 mx-auto'>
-            <img
-              src={`/${host?.name}.png`}
-              alt={`${host?.name} node`}
-              className='drop-shadow-xl drop-shadow-black/50'
-            />
+            <NodePlanet name={host.name} className='size-24' />
           </div>
+
           <div className='rounded-md border p-4 space-y-2 col-span-2'>
             <SpecDisplay
               icon={Cpu}
               name='CPU'
-              model={host?.cpu_model ?? ''}
-              details={`${host?.cpu_physical_cores} cores / ${host?.cpu_logical_cores} threads`}
+              model={host.cpu_model}
+              details={`${host.cpu_physical_cores} cores / ${host.cpu_logical_cores} threads`}
             />
             <SpecDisplay
               icon={MemoryStick}
               name='RAM'
-              model={formatBytes(host?.mem_total_bytes ?? 0)}
+              model={formatBytes(host.mem_total_bytes)}
               details=''
             />
             <SpecDisplay
@@ -114,68 +124,70 @@ export function NodeCard({ nodeId }: NodeCardProps) {
               model={`${getTotalDiskGb(host)}GB ${getDiskType(host)}`}
               details=''
             />
-            <SpecDisplay
-              icon={Shell}
-              name={host?.os ?? ''}
-              model=''
-              details=''
-            />
+            <SpecDisplay icon={Shell} name={host.os} model='' details='' />
           </div>
+
           <div className='rounded-md border p-4 w-full min-w-0 flex flex-col justify-between col-span-2'>
             <HardwareStatDisplay
-              data={history?.cpu}
+              nodeId={nodeId}
+              metric='cpu'
               name='CPU'
               color='var(--color-cpu)'
-              value={`${getCpuPct(host)}%`}
+              scale='percent'
+              format={(h) => `${getCpuPct(h)}%`}
             />
             <HardwareStatDisplay
-              data={history?.ram}
+              nodeId={nodeId}
+              metric='ram'
               name='RAM'
               color='var(--color-ram)'
-              value={`${getMemUsagePct(host)}%`}
+              scale='percent'
+              format={(h) => `${getMemUsagePct(h)}%`}
             />
             <HardwareStatDisplay
-              data={history?.netRx}
+              nodeId={nodeId}
+              metric='netRx'
               name='NETWORK'
               color='var(--color-network)'
-              value={
-                <DualStatDisplay
-                  icon1={ArrowUp}
-                  icon2={ArrowDown}
-                  value1={`${getNetTxMbps(host)} Mbps`}
-                  value2={`${getNetRxMbps(host)} Mbps`}
-                  color='var(--color-network)'
-                  side='right'
-                />
-              }
-            />
+            >
+              <DualStatDisplay
+                nodeId={nodeId}
+                icon1={ArrowUp}
+                icon2={ArrowDown}
+                format1={(h) => `${getNetTxMbps(h)} Mbps`}
+                format2={(h) => `${getNetRxMbps(h)} Mbps`}
+                color='var(--color-network)'
+                side='right'
+              />
+            </HardwareStatDisplay>
             <HardwareStatDisplay
-              data={history?.diskRead}
+              nodeId={nodeId}
+              metric='diskRead'
               name='DISK I/O'
               color='var(--color-disk)'
-              value={
-                <DualStatDisplay
-                  icon1={BookOpen}
-                  icon2={PencilLine}
-                  value1={`${getDiskReadMbps(host)} MB/s`}
-                  value2={`${getDiskWriteMbps(host)} MB/s`}
-                  color='var(--color-disk)'
-                  side='right'
-                />
-              }
-            />
+            >
+              <DualStatDisplay
+                nodeId={nodeId}
+                icon1={BookOpen}
+                icon2={PencilLine}
+                format1={(h) => `${getDiskReadMbps(h)} MB/s`}
+                format2={(h) => `${getDiskWriteMbps(h)} MB/s`}
+                color='var(--color-disk)'
+                side='right'
+              />
+            </HardwareStatDisplay>
           </div>
         </div>
-        <div className='flex justify-between items-center'>
-          <div className='flex items-center gap-1'></div>
-          <div className='flex items-center'>
-            <Button className='w-full' variant='outline' size='lg'>
+
+        <div className='flex justify-end'>
+          <Button asChild variant='outline' size='lg'>
+            <Link to='/nodes/$nodeId' params={{ nodeId }}>
               <Info />
               Details
-            </Button>
-          </div>
+            </Link>
+          </Button>
         </div>
       </CardContent>
     </Card>
   );
-}
+});

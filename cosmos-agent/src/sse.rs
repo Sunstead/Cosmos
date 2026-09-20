@@ -20,8 +20,12 @@ pub fn stream_watch<T, F>(
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>>
     where T: Send + Sync + 'static, F: Fn(&T) -> Arc<str> + Send + Clone + 'static
 {
+    // Deliberately unnamed, so it arrives as the default `message` event.
+    // A named event (`event: sample`) is only delivered to a matching
+    // `addEventListener`, never to `EventSource.onmessage` — which silently
+    // produces an open stream that no default handler ever sees.
     let stream = WatchStream::new(rx).map(move |value| {
-        Ok(Event::default().event("sample").data(json(&value).as_ref()))
+        Ok(Event::default().data(json(&value).as_ref()))
     });
 
     Sse::new(stream).keep_alive(

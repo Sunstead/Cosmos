@@ -1,19 +1,25 @@
-import * as React from "react"
+import { useCallback, useSyncExternalStore } from 'react';
 
-const MOBILE_BREAKPOINT = 768
+const MOBILE_BREAKPOINT = 768;
 
-export function useIsMobile() {
-  const [isMobile, setIsMobile] = React.useState<boolean | undefined>(undefined)
+/**
+ * Tracks whether the viewport is below the mobile breakpoint.
+ *
+ * Reads `matches` from the media query itself rather than re-measuring
+ * `window.innerWidth`, and subscribes through `useSyncExternalStore` so there
+ * is no state written from inside an effect.
+ */
+export function useIsMobile(): boolean {
+  const subscribe = useCallback((onChange: () => void) => {
+    const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`);
+    mql.addEventListener('change', onChange);
+    return () => mql.removeEventListener('change', onChange);
+  }, []);
 
-  React.useEffect(() => {
-    const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`)
-    const onChange = () => {
-      setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
-    }
-    mql.addEventListener("change", onChange)
-    setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
-    return () => mql.removeEventListener("change", onChange)
-  }, [])
-
-  return !!isMobile
+  return useSyncExternalStore(
+    subscribe,
+    () => window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`).matches,
+    // Server/prerender snapshot: assume desktop.
+    () => false,
+  );
 }

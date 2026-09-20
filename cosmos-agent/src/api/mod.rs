@@ -30,6 +30,7 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/containers/:id/stop", post(containers::stop))
         .route("/v1/containers/:id/restart", post(containers::restart))
         .route("/v1/containers/:id", delete(containers::remove))
+        .route("/v1/volumes/:name", delete(volumes::remove))
         .layer(from_fn_with_state(state.clone(), auth::require_write));
 
     let read = Router::new()
