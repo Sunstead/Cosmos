@@ -1,120 +1,189 @@
-import { useQueries, useQuery } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { HostInfo } from '@/generated/HostInfo';
-import { useNodeStore } from '../stores/nodes';
-import { useContainersStore } from '../stores/containers';
-import { useVolumesStore } from '@/stores/volumes';
+import { MetricStep } from '@/generated/MetricStep';
+import { getConnection, useNodeStore } from '@/stores/nodes';
+import { NodeMeta } from './connection';
 
-export function useHostInfo(nodeId: string | null) {
-  const getClient = useNodeStore((s) => s.getClient);
-  const cached = useNodeStore((s) =>
-    nodeId ? (s.nodeHostInfo[nodeId] ?? null) : null,
+/**
+ * Live connection state for a node — status, capabilities, agent version.
+ *
+ * Cheap to subscribe to: it only changes on an actual transition, not on
+ * every sample.
+ */
+export function useNodeMeta(nodeId: string | null): NodeMeta | null {
+  return useNodeStore((s) => (nodeId ? (s.meta[nodeId] ?? null) : null));
+}
+
+/**
+ * The latest host sample, as React state.
+ *
+ * **This re-renders its component once per second.** Use it for things that
+ * genuinely change — a detail panel, a page-level readout. For a number or a
+ * chart inside a card that is otherwise static, prefer `<LiveValue>` or
+ * `<Sparkline>`, which subscribe to the same stream and write through a ref
+ * without re-rendering anything.
+ */
+export function useHostInfo(nodeId: string | null): {
+  data: HostInfo | null;
+  status: NodeMeta['status'];
+} {
+  const meta = useNodeMeta(nodeId);
+
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      const conn = nodeId ? getConnection(nodeId) : null;
+      return conn ? conn.onHost(onChange) : () => {};
+    },
+    [nodeId],
   );
-  const client = nodeId ? getClient(nodeId) : null;
-  const [data, setData] = useState<HostInfo | null>(cached);
 
-  useEffect(() => {
-    if (cached && !data) setData(cached);
-  }, [cached]);
+  // `getHost()` returns the same object until a new sample replaces it, so
+  // this is a stable snapshot and won't loop.
+  const getSnapshot = useCallback(
+    () => (nodeId ? (getConnection(nodeId)?.getHost() ?? null) : null),
+    [nodeId],
+  );
 
-  useEffect(() => {
-    if (!client) {
-      setData(null);
-      return;
-    }
-    return client.streamHost((info) => setData(info));
-  }, [client]);
-
-  return { data, isLoading: data === null };
+  const data = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  return { data, status: meta?.status ?? 'connecting' };
 }
 
-export function useContainers(nodeId: string | null) {
-  const getClient = useNodeStore((s) => s.getClient);
-  const client = nodeId ? getClient(nodeId) : null;
+/**
+ * Subscribes to a node's host stream without causing a re-render.
+ *
+ * The callback is stored in a ref so changing it doesn't tear down the
+ * subscription — components pass inline closures freely.
+ */
+export function useHostSubscription(
+  nodeId: string | null,
+  onSample: (host: HostInfo) => void,
+) {
+  const handler = useRef(onSample);
+
+  // Assigned in an effect, not during render.
+  useEffect(() => {
+    handler.current = onSample;
+  }, [onSample]);
+
+  useEffect(() => {
+    if (!nodeId) return;
+    const conn = getConnection(nodeId);
+    if (!conn) return;
+    return conn.onHost((host) => handler.current(host));
+  }, [nodeId]);
+}
+
+/**
+ * Historical metrics from the agent's SQLite store.
+ *
+ * Unlike the live sparkline buffers, this is a genuine request/response, so
+ * react-query is the right tool. `enabled` keys off the capability flag —
+ * agents with history disabled return 501 and we shouldn't ask again.
+ */
+export function useMetricHistory(
+  nodeId: string | null,
+  opts: { rangeSeconds: number; step?: MetricStep; maxPoints?: number },
+) {
+  const meta = useNodeMeta(nodeId);
+  const supported = meta?.capabilities.metrics_history ?? false;
+
   return useQuery({
-    queryKey: ['containers', nodeId],
-    queryFn: () => client!.getContainers(),
-    enabled: !!client,
-    refetchInterval: 5_000,
-    refetchIntervalInBackground: false,
+    // Keyed by the range *length*, not by absolute bounds — the window is
+    // resolved at fetch time, so the key stays stable across renders.
+    queryKey: ['metrics', nodeId, opts.rangeSeconds, opts.step, opts.maxPoints],
+    queryFn: () => {
+      const conn = getConnection(nodeId!);
+      if (!conn) throw new Error('node is not connected');
+      const to = Math.floor(Date.now() / 1000);
+      return conn.client.getMetrics({
+        from: to - opts.rangeSeconds,
+        to,
+        step: opts.step,
+        maxPoints: opts.maxPoints,
+      });
+    },
+    enabled: !!nodeId && supported && meta?.status === 'online',
+    staleTime: 15_000,
+    refetchInterval: 60_000,
+    retry: 1,
   });
 }
 
-// Fetches containers for all known nodes and keeps the containers store in sync.
-// Mount once at the app/layout level — does not render anything.
-export function useAllContainersSync() {
-  const nodes = useNodeStore((s) => s.nodes);
-  const getClient = useNodeStore((s) => s.getClient);
-  const setNodeContainers = useContainersStore((s) => s.setNodeContainers);
-  const removeNode = useContainersStore((s) => s.removeNode);
+export function useBackups(nodeId: string | null) {
+  const meta = useNodeMeta(nodeId);
+  const supported = meta?.capabilities.backups ?? false;
 
-  // Remove store entries for nodes that have been deleted
-  const prevNodeIds = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    const current = new Set(nodes.map((n) => n.id));
-    for (const id of prevNodeIds.current) {
-      if (!current.has(id)) removeNode(id);
-    }
-    prevNodeIds.current = current;
-  }, [nodes]);
-
-  useQueries({
-    queries: nodes.map((node) => ({
-      queryKey: ['containers', node.id],
-      queryFn: async () => {
-        const client = getClient(node.id);
-        if (!client) throw new Error(`No client for node ${node.id}`);
-        const result = await client.getContainers();
-        setNodeContainers(node.id, result.containers);
-        return result;
-      },
-      enabled: !!getClient(node.id),
-      refetchInterval: 5_000,
-      refetchIntervalInBackground: false,
-    })),
-  });
-}
-
-export function useVolumes(nodeId: string | null) {
-  const getClient = useNodeStore((s) => s.getClient);
-  const client = nodeId ? getClient(nodeId) : null;
   return useQuery({
-    queryKey: ['volumes', nodeId],
-    queryFn: () => client!.getVolumes(),
-    enabled: !!client,
-    refetchInterval: 30_000,
-    refetchIntervalInBackground: false,
+    queryKey: ['backups', nodeId],
+    queryFn: () => {
+      const conn = getConnection(nodeId!);
+      if (!conn) throw new Error('node is not connected');
+      return conn.client.getBackups();
+    },
+    enabled: !!nodeId && supported && meta?.status === 'online',
+    refetchInterval: 60_000,
+    retry: 1,
   });
 }
 
-export function useAllVolumesSync() {
-  const nodes = useNodeStore((s) => s.nodes);
-  const getClient = useNodeStore((s) => s.getClient);
-  const setNodeVolumes = useVolumesStore((s) => s.setNodeVolumes);
-  const removeNode = useVolumesStore((s) => s.removeNode);
+/**
+ * Container lifecycle actions.
+ *
+ * The agent pushes a fresh container list within ~50ms of an action via its
+ * Docker event watcher, so there's nothing to invalidate here — the stream
+ * delivers the new state on its own.
+ */
+export function useContainerActions(nodeId: string | null) {
+  const [pending, setPending] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const prevNodeIds = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    const current = new Set(nodes.map((n) => n.id));
-    for (const id of prevNodeIds.current) {
-      if (!current.has(id)) removeNode(id);
-    }
-    prevNodeIds.current = current;
-  }, [nodes]);
+  const run = useCallback(
+    async (
+      containerId: string,
+      action: 'start' | 'stop' | 'restart' | 'remove',
+      opts: { force?: boolean; volumes?: boolean } = {},
+    ) => {
+      const conn = nodeId ? getConnection(nodeId) : null;
+      if (!conn) return false;
 
-  useQueries({
-    queries: nodes.map((node) => ({
-      queryKey: ['volumes', node.id],
-      queryFn: async () => {
-        const client = getClient(node.id);
-        if (!client) throw new Error(`No client for node ${node.id}`);
-        const result = await client.getVolumes();
-        setNodeVolumes(node.id, result.volumes);
-        return result;
+      setPending(`${containerId}:${action}`);
+      setError(null);
+      try {
+        if (action === 'remove') {
+          await conn.client.removeContainer(containerId, opts);
+        } else {
+          await conn.client.containerAction(containerId, action);
+        }
+        return true;
+      } catch (e) {
+        setError(e instanceof Error ? e.message : `could not ${action} container`);
+        return false;
+      } finally {
+        setPending(null);
+      }
+    },
+    [nodeId],
+  );
+
+  return { run, pending, error, clearError: () => setError(null) };
+}
+
+/**
+ * Re-renders on a timer, for durations that would otherwise go stale.
+ *
+ * Uptime strings only change once a minute, so there is no reason to recompute
+ * them on every host sample.
+ */
+export function useTick(intervalMs = 60_000): number {
+  return useSyncExternalStore(
+    useCallback(
+      (onChange) => {
+        const id = setInterval(onChange, intervalMs);
+        return () => clearInterval(id);
       },
-      enabled: !!getClient(node.id),
-      refetchInterval: 30_000,
-      refetchIntervalInBackground: false,
-    })),
-  });
+      [intervalMs],
+    ),
+    () => Math.floor(Date.now() / intervalMs),
+  );
 }

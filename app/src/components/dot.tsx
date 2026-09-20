@@ -2,18 +2,35 @@ import { cn } from '@/lib/utils';
 
 export type DotVariant = 'success' | 'warning' | 'error' | 'disabled';
 
-export function Dot({ variant = 'disabled' }: { variant?: DotVariant }) {
-  const classes = (() => {
-    switch (variant) {
-      case 'success':
-        return 'bg-success';
-      case 'warning':
-        return 'bg-warning';
-      case 'error':
-        return 'bg-error';
-      case 'disabled':
-        return 'bg-muted-foreground/25';
-    }
-  })();
-  return <div className={cn('size-2 rounded-full', classes)} />;
+const VARIANTS: Record<DotVariant, string> = {
+  success: 'bg-success',
+  warning: 'bg-warning',
+  error: 'bg-error',
+  disabled: 'bg-muted-foreground/25',
+};
+
+export function Dot({
+  variant = 'disabled',
+  title,
+  pulse,
+  className,
+}: {
+  variant?: DotVariant;
+  /** Native tooltip — used to name the container a dot represents. */
+  title?: string;
+  /** Soft glow for something live. */
+  pulse?: boolean;
+  className?: string;
+}) {
+  return (
+    <span
+      title={title}
+      className={cn(
+        'inline-block size-2 shrink-0 rounded-full',
+        VARIANTS[variant],
+        pulse && variant === 'success' && 'shadow-[0_0_6px_var(--color-success)]',
+        className,
+      )}
+    />
+  );
 }

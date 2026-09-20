@@ -27,15 +27,14 @@ Frontend (from `app/`):
 npm run dev                        # Vite on :1420 (browser build)
 npm run tauri dev                  # desktop app
 npm run build                      # tsc && vite build
-npx tsc --noEmit                   # typecheck alone
+npm run lint                       # expected clean; ui/ is vendored and exempt
+npm test                           # vitest, pure logic only
 ```
 
 Agent container:
 ```bash
 docker build -f cosmos-agent/Dockerfile -t cosmos-agent:0.2.0 .   # build from the REPO ROOT
 ```
-
-There is no frontend lint config and no frontend test suite yet.
 
 ## Type sharing (Rust → TS)
 
@@ -85,18 +84,79 @@ Disk mounts need `[[host.disks]]` entries to filter overlayfs noise and remap `/
 
 Workspace `[profile.release-agent]` adds `panic = "abort"`; it is deliberately *not* in `[profile.release]`, which would also apply to `app/src-tauri` where Tauri uses `catch_unwind`.
 
-## Frontend data flow
+## Frontend architecture
 
-The app talks directly to agents from the webview (no Tauri IPC for data):
+The app talks directly to agents from the webview; no Tauri IPC for data.
 
-- `stores/nodes.ts` (zustand, persisted) holds `NodeConfig[]`, an `AgentClient` per node, per-node status and latest `HostInfo`.
-- `api/queries.ts` — host info via SSE (`useHostInfo`), containers/volumes via react-query polling, mirrored into `stores/containers.ts` / `stores/volumes.ts`.
-- Adding an endpoint: type in `cosmos-common` → route + module in `cosmos-agent` → method on `AgentClient` → hook in `queries.ts` → store/page.
+**One connection per node, owned by the store.** `api/connection.ts` —
+`NodeConnection` owns that agent's host stream, container stream and volume
+polling for the node's whole lifetime, plus capability negotiation, an explicit
+backoff reconnect and the status machine (`connecting | online | offline |
+unauthorized`). Connections live in a `Map` outside React state
+(`stores/nodes.ts`), so navigation never tears a stream down. `useHostInfo`
+previously opened an `EventSource` per *call site*: 2 per node on `/nodes`, 4
+under StrictMode, each causing the agent to run an independent sampler.
 
-**Nodes bootstrap.** `router.tsx` root `beforeLoad` seeds nodes via `config.ts`: no defaults under Tauri; in a browser it fetches `/config.json`. Hash history under Tauri (`lib/tauri.ts`).
+The browser's built-in EventSource retry only covers a dropped connection — on
+a non-2xx it closes permanently, which is why the reconnect is explicit. And
+because EventSource never exposes a status code, `connect()` probes with a
+real `getHost()` first; without that, a 401 and a dead host are
+indistinguishable and a wrong token retries forever.
 
-**UI.** Pages in `src/pages/`, routes in `src/router.tsx`, shell in `layouts/AppLayout.tsx`. `components/ui/` is shadcn-generated (`components.json`); prefer the shadcn CLI. Path alias `@/` → `app/src/`.
+**Keep 1 Hz data out of React.** `<LiveValue>` and `<Sparkline>` subscribe to
+the stream and write through refs inside a shared animation frame
+(`lib/frame-scheduler.ts`), coalescing to one frame per node per sample. Node
+cards re-render on *connection state* changes only. `<Sparkline>` uses a fixed
+`0 0 100 100` viewBox with `preserveAspectRatio="none"`, so it never measures
+itself — replacing a recharts `ResponsiveContainer` + `AreaChart` per metric
+(four per card, each with a ResizeObserver, plus an inline `<style>` element
+re-injected on every render).
 
-### Known state (mid-rework)
+Recharts is still used on `/monitoring`, where the data is a request/response
+at human timescales and that's the right tool.
 
-The agent is rewritten; the frontend has only had the mechanical unit migration applied so far. Still outstanding: one SSE connection per node (currently one per *call site*), ring-buffer metrics history, `React.memo` and keeping 1 Hz data out of React, the five stub pages (`network`, `monitoring`, `logs`, `backups`, `settings`), the hardcoded Overview stats, and the no-op action menus — the agent endpoints they need now exist.
+**Ring buffers.** `lib/ring-buffer.ts` — preallocated `Float32Array` + write
+cursor, O(1) push, zero allocation. Replaces ~720 element copies and 19
+allocations per node per second.
+
+**Adding an endpoint:** type in `cosmos-common` → route + module in
+`cosmos-agent` → method on `AgentClient` → subscription in `NodeConnection` or
+hook in `queries.ts` → store/page. Gate the UI on the `capabilities` flag so
+older agents degrade instead of erroring.
+
+**Units.** Raw bytes and bytes/sec on the wire; all formatting lives in
+`lib/node-metrics.ts`.
+
+**Service model.** Services are declared by the `cosmos.service` Docker label,
+grouped per node in `lib/services.ts`. `cosmos.service: system` marks
+infrastructure and is filtered by `userFacingServices()`. `cosmos.service.url`
+labels hold **bare hostnames**, which are relative paths in an `href` — always
+route them through `serviceHref()` in `lib/agent-url.ts`.
+
+**Nodes bootstrap.** `router.tsx` root `beforeLoad` seeds from `config.ts`: no
+defaults under Tauri; in a browser it fetches `/config.json`. Hash history
+under Tauri. Note `onRehydrateStorage` runs *during* `create()`, so it seeds
+through the rehydrating draft and defers `attach()` to a microtask — touching
+`useNodeStore` there hits its temporal dead zone.
+
+**UI.** Pages in `src/pages/`, routes in `src/router.tsx` (defined one by one —
+a helper function erases TanStack Router's literal path inference), shell in
+`layouts/AppLayout.tsx`. `components/ui/` is shadcn-generated; prefer the
+shadcn CLI, and note it's exempt from the React Compiler lint rules because
+`shadcn add` would overwrite any fixes. Path alias `@/` → `app/src/`.
+
+**Design tokens.** `App.css`. Semantic and metric tokens are defined for both
+themes; they used to exist only under `.dark`, which is why light mode was
+broken and the theme toggle was never wired up. `.glass` is applied
+deliberately to cards and popovers rather than as a blanket utility override —
+the previous global `backdrop-blur-lg!` forced a backdrop filter composite on
+every surface on every paint. `.label-hud` is the small-caps label style.
+
+## Gotchas worth knowing
+
+- **SSE events must stay unnamed.** The agent emits `Event::default().data(..)`
+  with no `.event(..)`. A named event is only delivered to a matching
+  `addEventListener`, never to `EventSource.onmessage` — which looks like a
+  perfectly healthy open stream that no handler ever sees.
+- `npm run build` fails on a fresh clone until `cargo test -p cosmos-common`
+  has generated `app/src/generated/`.

@@ -1,24 +1,8 @@
 import { ColumnDef } from '@tanstack/react-table';
-import {
-  Logs,
-  MoreVertical,
-  Play,
-  RotateCcw,
-  Square,
-  Trash,
-} from 'lucide-react';
 import { ContainerInfo } from '@/generated/ContainerInfo';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Dot, DotVariant } from './dot';
+import { ContainerActionsCell } from './container-actions-cell';
 import { formatBytes } from '@/lib/node-metrics';
 import { msToDuration } from '@/lib/time';
 
@@ -129,47 +113,7 @@ export const columns: ColumnDef<ContainerRow>[] = [
   },
   {
     id: 'actions',
-    cell: ({ row }) => {
-      const container = row.original;
-      return (
-        <div className='text-right'>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant='ghost' size='icon-lg'>
-                <MoreVertical />
-                <span className='sr-only'>Open menu</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align='end' className='w-max min-w-48'>
-              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-              <DropdownMenuItem
-                onClick={() => navigator.clipboard.writeText(container.id)}
-              >
-                Copy container ID
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem>
-                <Play /> Start
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Square /> Stop
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <RotateCcw /> Restart
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Logs /> View logs
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem variant='destructive'>
-                <Trash />
-                Remove
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      );
-    },
+    cell: ({ row }) => <ContainerActionsCell container={row.original} />,
     enableSorting: false,
     enableHiding: false,
   },

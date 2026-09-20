@@ -204,6 +204,19 @@ impl DockerHandle {
         Ok(ContainerActionResult { id: id.to_string(), action, state })
     }
 
+    /// Removes a named volume. Docker refuses while a container still
+    /// mounts it, which surfaces as a 409 rather than silently destroying
+    /// data a running service depends on.
+    pub async fn remove_volume(&self, name: &str, force: bool) -> Result<(), AgentError> {
+        let docker = self.require()?;
+        docker
+            .remove_volume(name, Some(bollard::volume::RemoveVolumeOptions { force })).await
+            .map_err(|e| from_docker("remove volume", name, e))?;
+
+        self.inner.changed.notify_waiters();
+        Ok(())
+    }
+
     // --- logs ---------------------------------------------------------------
 
     pub fn logs_options(tail: String, since: i64, follow: bool) -> LogsOptions<String> {

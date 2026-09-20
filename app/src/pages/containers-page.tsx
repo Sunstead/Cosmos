@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { PageHeader } from '@/components/page-header';
 import { useContainersStore } from '@/stores/containers';
 import { columns, ContainerRow } from '@/components/container-columns';
 import { DataTable } from '@/components/containers-data-table';
@@ -52,40 +53,37 @@ export function ContainersPage() {
 
   return (
     <>
-      <div className='min-h-9 flex items-center'>
-        <h1 className='text-muted-foreground text-xl'>CONTAINERS</h1>
-      </div>
+      <PageHeader title='CONTAINERS' />
       <div className='flex flex-wrap gap-4 max-w-full'>
         <SimpleStatCard
           value={stats.total}
-          label='CONTAINERS'
-          status={`${stats.active} Active`}
+          label='Containers'
+          status={`${stats.active} running`}
           statusColor={activeStatusColor(stats.active, stats.total)}
           icon={Container}
         />
         <SimpleStatCard
           value={`${stats.cpuPct}%`}
-          label='CONTAINER CPU USAGE'
+          label='Container CPU'
           status=''
           statusColor='default'
           icon={Cpu}
         />
         <SimpleStatCard
           value={formatBytes(stats.memBytes)}
-          label='CONTAINER MEMORY'
+          label='Container memory'
           status=''
           statusColor='default'
           icon={MemoryStick}
         />
       </div>
-      <div className='gap-4'>
-        <DataTable
-          columns={columns}
-          data={containers}
-          getRowId={(row) => `${row.nodeId}:${row.id}`}
-          emptyMessage='No containers found.'
-        />
-      </div>
+      <DataTable
+        columns={columns}
+        data={containers}
+        getRowId={(row) => `${row.nodeId}:${row.id}`}
+        emptyMessage='No containers found.'
+        searchPlaceholder='Search containers…'
+      />
     </>
   );
 }

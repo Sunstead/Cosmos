@@ -1,6 +1,7 @@
 import { ContainerInfo } from '@/generated/ContainerInfo';
 
 export type ContainerSummary = {
+  id: string;
   name: string;
   state: string;
 };
@@ -15,12 +16,26 @@ export type ServiceInfo = {
   url: string | null;
   cpu_pct: number;
   mem_used_bytes: number;
-  uptime_ms: number | null;
+  /**
+   * Epoch ms of the earliest running container, or null.
+   *
+   * Deliberately an absolute instant rather than a precomputed duration: a
+   * duration would change on every derivation, so the object identity would
+   * differ every tick even when nothing about the service had, and every
+   * subscriber would re-render. Format it at the point of display.
+   */
+  startedAt: number | null;
   containers: ContainerSummary[];
   running: number;
   total: number;
   status: ServiceStatus;
 };
+
+/**
+ * Label value used for infrastructure that shouldn't appear as a user-facing
+ * service — Caddy, Postgres, Redis, Tailscale all carry it.
+ */
+export const SYSTEM_SERVICE_KEY = 'system';
 
 function formatServiceName(key: string): string {
   return key
@@ -28,58 +43,68 @@ function formatServiceName(key: string): string {
     .replace(/(^|\s)\S/g, (char) => char.toUpperCase());
 }
 
-export function deriveServices(
-  nodeContainers: Record<string, ContainerInfo[]>,
+/**
+ * Groups one node's containers into services.
+ *
+ * Services are declared by the `cosmos.service` Docker label; a container
+ * without one becomes a single-container service under its own name.
+ * Derivation is per-node so a poll from one node doesn't recompute every
+ * other node's services.
+ */
+export function deriveNodeServices(
+  nodeId: string,
+  containers: ContainerInfo[],
 ): ServiceInfo[] {
-  const services: ServiceInfo[] = [];
+  const groups = new Map<string, ContainerInfo[]>();
 
-  for (const [nodeId, containers] of Object.entries(nodeContainers)) {
-    const groups = new Map<string, ContainerInfo[]>();
-
-    for (const c of containers) {
-      const key = c.cosmos_service ?? c.name;
-      const group = groups.get(key) ?? [];
-      group.push(c);
-      groups.set(key, group);
-    }
-
-    for (const [key, group] of groups) {
-      const runningContainers = group.filter((c) => c.state === 'running');
-      const total = group.length;
-
-      const earliestStart =
-        runningContainers
-          .map((c) => (c.started_at ? Date.parse(c.started_at) : null))
-          .filter((t): t is number => t !== null)
-          .sort((a, b) => a - b)[0] ?? null;
-
-      const status: ServiceStatus =
-        runningContainers.length === 0
-          ? 'stopped'
-          : runningContainers.length < total
-            ? 'partial'
-            : 'running';
-
-      services.push({
-        key,
-        nodeId,
-        name: formatServiceName(key),
-        description:
-          group
-            .map((c) => c.cosmos_service_description)
-            .find((d) => d != null) ?? null,
-        url:
-          group.map((c) => c.cosmos_service_url).find((u) => u != null) ?? null,
-        cpu_pct: group.reduce((sum, c) => sum + c.cpu_pct, 0),
-        mem_used_bytes: group.reduce((sum, c) => sum + c.mem_used_bytes, 0),
-        uptime_ms: earliestStart !== null ? Date.now() - earliestStart : null,
-        containers: group.map((c) => ({ name: c.name, state: c.state })),
-        running: runningContainers.length,
-        total,
-        status,
-      });
-    }
+  for (const c of containers) {
+    const key = c.cosmos_service ?? c.name;
+    const group = groups.get(key) ?? [];
+    group.push(c);
+    groups.set(key, group);
   }
 
+  const services: ServiceInfo[] = [];
+
+  for (const [key, group] of groups) {
+    const runningContainers = group.filter((c) => c.state === 'running');
+    const total = group.length;
+
+    const startedAt =
+      runningContainers
+        .map((c) => (c.started_at ? Date.parse(c.started_at) : NaN))
+        .filter((t) => Number.isFinite(t))
+        .sort((a, b) => a - b)[0] ?? null;
+
+    const status: ServiceStatus =
+      runningContainers.length === 0
+        ? 'stopped'
+        : runningContainers.length < total
+          ? 'partial'
+          : 'running';
+
+    services.push({
+      key,
+      nodeId,
+      name: formatServiceName(key),
+      description:
+        group.map((c) => c.cosmos_service_description).find((d) => d != null) ?? null,
+      url: group.map((c) => c.cosmos_service_url).find((u) => u != null) ?? null,
+      cpu_pct: group.reduce((sum, c) => sum + c.cpu_pct, 0),
+      mem_used_bytes: group.reduce((sum, c) => sum + c.mem_used_bytes, 0),
+      startedAt,
+      containers: group.map((c) => ({ id: c.id, name: c.name, state: c.state })),
+      running: runningContainers.length,
+      total,
+      status,
+    });
+  }
+
+  services.sort((a, b) => a.name.localeCompare(b.name));
   return services;
+}
+
+/** Services a user would actually click on — infrastructure filtered out. */
+export function userFacingServices(services: ServiceInfo[]): ServiceInfo[] {
+  return services.filter((s) => s.key !== SYSTEM_SERVICE_KEY);
 }

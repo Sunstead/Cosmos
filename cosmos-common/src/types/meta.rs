@@ -28,6 +28,7 @@ pub struct Capabilities {
     pub container_logs: bool,
     pub websocket_logs: bool,
     pub volumes: bool,
+    pub volume_actions: bool,
     pub metrics_history: bool,
     pub backups: bool,
 }
@@ -42,6 +43,7 @@ impl Capabilities {
             container_logs: false,
             websocket_logs: false,
             volumes: true,
+            volume_actions: false,
             metrics_history: false,
             backups: false,
         }

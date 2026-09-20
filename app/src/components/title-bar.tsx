@@ -1,19 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
+import type { Window as TauriWindow } from '@tauri-apps/api/window';
 import { SidebarTrigger } from '@/components/ui/resizable-sidebar';
 import { Button } from '@/components/ui/button';
-
-const isTauri = () => '__TAURI_INTERNALS__' in window;
+import { isTauri } from '@/lib/tauri';
 
 export default function TitleBar() {
   const [isMac, setIsMac] = useState(false);
-  const [isDesktop, setIsDesktop] = useState(false);
+  // Known at first render, so it never has to be written from an effect.
+  const [isDesktop] = useState(isTauri);
   const [isMaximized, setIsMaximized] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const appWindowRef = useRef<any>(null);
+  const appWindowRef = useRef<TauriWindow | null>(null);
 
   useEffect(() => {
-    if (!isTauri()) return;
-    setIsDesktop(true);
+    if (!isDesktop) return;
 
     let unlisten: (() => void) | null = null;
 
@@ -36,7 +36,7 @@ export default function TitleBar() {
     return () => {
       unlisten?.();
     };
-  }, []);
+  }, [isDesktop]);
 
   useEffect(() => {
     if (!isTauri()) return;
@@ -70,7 +70,7 @@ export default function TitleBar() {
           <Button
             className='flex items-center justify-center rounded-none w-12 h-12 select-all z-50 no-drag'
             variant='ghost'
-            onClick={() => appWindow.minimize()}
+            onClick={() => appWindow?.minimize()}
           >
             <svg
               xmlns='http://www.w3.org/2000/svg'
@@ -91,7 +91,7 @@ export default function TitleBar() {
           <Button
             className='flex items-center justify-center rounded-none w-12 h-12 select-all z-50 no-drag'
             variant='ghost'
-            onClick={() => appWindow.toggleMaximize()}
+            onClick={() => appWindow?.toggleMaximize()}
           >
             {isMaximized ? (
               <svg
@@ -151,7 +151,7 @@ export default function TitleBar() {
           <Button
             className='flex items-center justify-center rounded-none w-12 h-12 select-all z-50 no-drag'
             variant='ghost'
-            onClick={() => appWindow.close()}
+            onClick={() => appWindow?.close()}
           >
             <svg
               xmlns='http://www.w3.org/2000/svg'

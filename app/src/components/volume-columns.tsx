@@ -1,16 +1,7 @@
 import { ColumnDef } from '@tanstack/react-table';
-import { MoreVertical, Trash } from 'lucide-react';
 import { VolumeInfo } from '@/generated/VolumeInfo';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { VolumeActionsCell } from './volume-actions-cell';
 import { Dot, DotVariant } from './dot';
 
 // Volumes are flattened across nodes for the table; nodeId keeps row ids
@@ -106,32 +97,7 @@ export const columns: ColumnDef<VolumeRow>[] = [
   },
   {
     id: 'actions',
-    cell: ({ row }) => {
-      const volume = row.original;
-      return (
-        <div className='text-right'>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant='ghost' size='icon-lg'>
-                <MoreVertical />
-                <span className='sr-only'>Open menu</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align='end' className='w-max min-w-48'>
-              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-              <DropdownMenuItem onClick={() => navigator.clipboard.writeText(volume.name)}>
-                Copy volume name
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem variant='destructive' disabled={volume.in_use_by.length > 0}>
-                <Trash />
-                Remove
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      );
-    },
+    cell: ({ row }) => <VolumeActionsCell volume={row.original} />,
     enableSorting: false,
     enableHiding: false,
   },
