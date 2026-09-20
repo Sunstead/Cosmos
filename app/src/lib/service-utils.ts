@@ -4,11 +4,6 @@ export function formatCpuPercent(cpuPct: number): string {
   return `${Math.round(cpuPct * 100) / 100}%`;
 }
 
-export function formatMemoryGb(memMb: number): string {
-  if (memMb < 1024) return `${Math.round(memMb * 100) / 100} MB`
-  return `${Math.round((memMb / 1024) * 100) / 100} GB`;
-}
-
 // Running containers first, stable otherwise. Returns a new array —
 // never mutates the input (it may be coming straight from a store).
 export function sortContainersByState(

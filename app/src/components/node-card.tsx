@@ -17,6 +17,7 @@ import {
   getNetRxMbps,
   getNetTxMbps,
   getTotalDiskGb,
+  formatBytes,
 } from '@/lib/node-metrics';
 import { secondsToDuration } from '@/lib/time';
 import { useMetricsHistory } from '@/stores/metrics-history';
@@ -104,7 +105,7 @@ export function NodeCard({ nodeId }: NodeCardProps) {
             <SpecDisplay
               icon={MemoryStick}
               name='RAM'
-              model={`${Math.round(host?.mem_total_gb ?? 0)}GB`}
+              model={formatBytes(host?.mem_total_bytes ?? 0)}
               details=''
             />
             <SpecDisplay

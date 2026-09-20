@@ -12,10 +12,10 @@ import { ServiceInfo } from '@/lib/services';
 import { msToDuration } from '@/lib/time';
 import {
   formatCpuPercent,
-  formatMemoryGb,
   getServiceStatusDisplay,
   sortContainersByState,
 } from '@/lib/service-utils';
+import { formatBytes } from '@/lib/node-metrics';
 import { Dot } from './dot';
 
 export function ServiceCard({
@@ -63,7 +63,7 @@ export function ServiceCard({
           <div className='text-center text-xs text-muted-foreground'>
             <p>MEMORY</p>
             <p className='text-foreground'>
-              {formatMemoryGb(serviceInfo.mem_mb)}
+              {formatBytes(serviceInfo.mem_used_bytes)}
             </p>
           </div>
         </div>

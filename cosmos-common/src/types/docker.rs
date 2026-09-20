@@ -1,0 +1,153 @@
+use serde::{ Deserialize, Serialize };
+use ts_rs::TS;
+
+#[derive(Serialize, Deserialize, TS, Debug, Clone, Copy, PartialEq, Eq)]
+#[ts(export, export_to = "../../app/src/generated/")]
+#[serde(rename_all = "snake_case")]
+pub enum PortType {
+    Tcp,
+    Udp,
+    Sctp,
+}
+
+#[derive(Serialize, Deserialize, TS, Debug, Clone)]
+#[ts(export, export_to = "../../app/src/generated/")]
+pub struct PortInfo {
+    pub ip: Option<String>,
+    pub private_port: u16,
+    pub public_port: Option<u16>,
+    pub port_type: Option<PortType>,
+}
+
+#[derive(Serialize, Deserialize, TS, Debug, Clone)]
+#[ts(export, export_to = "../../app/src/generated/")]
+pub struct ContainerInfo {
+    pub id: String,
+    pub name: String,
+    pub image: String,
+    /// Docker's human string, e.g. "Up 3 hours (healthy)".
+    pub status: String,
+    /// Docker's machine state, e.g. "running", "exited".
+    pub state: String,
+    pub ports: Vec<PortInfo>,
+    /// RFC3339. Cached against state transitions rather than re-inspected.
+    pub started_at: Option<String>,
+    #[ts(type = "number")]
+    pub created_unix: i64,
+    pub restart_count: u32,
+    pub compose_project: Option<String>,
+    pub cosmos_service: Option<String>,
+    pub cosmos_service_description: Option<String>,
+    pub cosmos_service_url: Option<String>,
+    /// Percent of one core x online cores, differenced across agent ticks.
+    /// 0.0 on a container's first sighting; correct from the next tick.
+    pub cpu_pct: f32,
+    #[ts(type = "number")]
+    pub mem_used_bytes: u64,
+    /// 0 when the container has no memory limit set.
+    #[ts(type = "number")]
+    pub mem_limit_bytes: u64,
+}
+
+#[derive(Serialize, Deserialize, TS, Debug, Clone)]
+#[ts(export, export_to = "../../app/src/generated/")]
+pub struct ContainersResponse {
+    pub containers: Vec<ContainerInfo>,
+    /// Unix seconds of the sample these came from.
+    #[ts(type = "number")]
+    pub sampled_at: i64,
+}
+
+#[derive(Serialize, Deserialize, TS, Debug, Clone)]
+#[ts(export, export_to = "../../app/src/generated/")]
+pub struct VolumeInfo {
+    pub name: String,
+    pub driver: String,
+    pub mountpoint: String,
+    pub created_at: Option<String>,
+    pub scope: Option<String>,
+    pub compose_project: Option<String>,
+    pub cosmos_service: Option<String>,
+    /// Names of containers currently mounting this volume. Empty = unused.
+    pub in_use_by: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, TS, Debug, Clone)]
+#[ts(export, export_to = "../../app/src/generated/")]
+pub struct VolumesResponse {
+    pub volumes: Vec<VolumeInfo>,
+    #[ts(type = "number")]
+    pub sampled_at: i64,
+}
+
+// --- actions ---------------------------------------------------------------
+
+#[derive(Serialize, Deserialize, TS, Debug, Clone, Default)]
+#[ts(export, export_to = "../../app/src/generated/")]
+pub struct ContainerActionRequest {
+    /// Seconds to wait for graceful shutdown before SIGKILL. Docker's default
+    /// is 10 when omitted.
+    pub timeout_secs: Option<u32>,
+}
+
+#[derive(Serialize, Deserialize, TS, Debug, Clone, Copy, PartialEq, Eq)]
+#[ts(export, export_to = "../../app/src/generated/")]
+#[serde(rename_all = "snake_case")]
+pub enum ContainerAction {
+    Start,
+    Stop,
+    Restart,
+    Remove,
+}
+
+#[derive(Serialize, Deserialize, TS, Debug, Clone)]
+#[ts(export, export_to = "../../app/src/generated/")]
+pub struct ContainerActionResult {
+    pub id: String,
+    pub action: ContainerAction,
+    /// State Docker reported after the action, when it could be read.
+    pub state: Option<String>,
+}
+
+// --- logs ------------------------------------------------------------------
+
+#[derive(Serialize, Deserialize, TS, Debug, Clone, Copy, PartialEq, Eq)]
+#[ts(export, export_to = "../../app/src/generated/")]
+#[serde(rename_all = "snake_case")]
+pub enum LogStream {
+    Stdout,
+    Stderr,
+}
+
+#[derive(Serialize, Deserialize, TS, Debug, Clone)]
+#[ts(export, export_to = "../../app/src/generated/")]
+pub struct LogLine {
+    pub stream: LogStream,
+    /// RFC3339 from Docker when timestamps are enabled.
+    pub ts: Option<String>,
+    pub text: String,
+}
+
+#[derive(Serialize, Deserialize, TS, Debug, Clone)]
+#[ts(export, export_to = "../../app/src/generated/")]
+pub struct LogsResponse {
+    pub id: String,
+    pub lines: Vec<LogLine>,
+}
+
+/// Frames the log WebSocket sends. Tagged so the client can switch on `type`.
+#[derive(Serialize, Deserialize, TS, Debug, Clone)]
+#[ts(export, export_to = "../../app/src/generated/")]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum LogFrame {
+    Line(LogLine),
+    /// The outbound buffer overflowed and we dropped the oldest lines rather
+    /// than let a firehose container grow the agent's memory without bound.
+    Truncated {
+        dropped: u32,
+    },
+    /// The container exited or the stream ended; no more lines are coming.
+    Closed {
+        reason: String,
+    },
+}

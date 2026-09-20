@@ -1,0 +1,387 @@
+//! Metrics history: a small SQLite store the agent writes to and queries.
+//!
+//! Layout: the sampler hands rows to a dedicated writer thread over a bounded
+//! channel, the writer batches them into one transaction per ~10s, and reads
+//! go through a separate read-only connection. `rusqlite::Connection` is
+//! `!Sync` and awkward to hold across an `.await`, so nothing here is async;
+//! handlers call `query` from `spawn_blocking`.
+
+pub mod rollup;
+pub mod schema;
+
+use crate::{ config::HistoryConfig, error::AgentError, sample::host::HostSample };
+use cosmos_common::types::{ MetricSeries, MetricStep };
+use rusqlite::{ Connection, OpenFlags };
+use std::{
+    sync::{ atomic::{ AtomicBool, Ordering }, mpsc, Arc, Mutex },
+    time::{ Duration, Instant },
+};
+
+/// One raw sample, flattened for storage.
+#[derive(Debug, Clone, Copy)]
+pub struct Row {
+    pub ts: i64,
+    pub cpu_pct: f64,
+    pub mem_used: i64,
+    pub swap_used: i64,
+    pub net_rx_bps: f64,
+    pub net_tx_bps: f64,
+    pub disk_read_bps: f64,
+    pub disk_write_bps: f64,
+    pub load1: f64,
+}
+
+impl From<&HostSample> for Row {
+    fn from(s: &HostSample) -> Self {
+        Self {
+            ts: s.sampled_at,
+            cpu_pct: s.cpu_pct as f64,
+            mem_used: s.mem_used_bytes as i64,
+            swap_used: s.swap_used_bytes as i64,
+            net_rx_bps: s.net_rx_bps,
+            net_tx_bps: s.net_tx_bps,
+            // Host-level disk IO is the sum across reported filesystems. The
+            // per-disk breakdown stays in the live sample only.
+            disk_read_bps: s.disk
+                .iter()
+                .map(|d| d.read_bps)
+                .sum(),
+            disk_write_bps: s.disk
+                .iter()
+                .map(|d| d.write_bps)
+                .sum(),
+            load1: s.load1,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct HistoryHandle {
+    tx: mpsc::SyncSender<Row>,
+    read: Arc<Mutex<Connection>>,
+    warned: Arc<AtomicBool>,
+}
+
+impl HistoryHandle {
+    /// Opens the database, applies the schema, and spawns the writer thread.
+    pub fn open(cfg: &HistoryConfig) -> rusqlite::Result<Self> {
+        if let Some(parent) = cfg.path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+
+        let mut writer = Connection::open(&cfg.path)?;
+        schema::init(&writer)?;
+
+        let read = Connection::open_with_flags(
+            &cfg.path,
+            OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX
+        )?;
+        read.execute_batch("PRAGMA busy_timeout = 5000; PRAGMA temp_store = MEMORY;")?;
+
+        // Bounded: if the writer ever wedges we drop samples rather than let
+        // the queue grow without limit behind the live stream.
+        let (tx, rx) = mpsc::sync_channel::<Row>(512);
+        let cfg = cfg.clone();
+
+        std::thread::Builder
+            ::new()
+            .name("history-writer".into())
+            .spawn(move || writer_loop(&mut writer, rx, cfg))
+            .expect("spawn history-writer");
+
+        Ok(Self {
+            tx,
+            read: Arc::new(Mutex::new(read)),
+            warned: Arc::new(AtomicBool::new(false)),
+        })
+    }
+
+    /// Called from the sampler thread. Never blocks: a backlogged writer costs
+    /// us a metrics point, which is much better than stalling the live stream.
+    pub fn push(&self, sample: &HostSample) {
+        if self.tx.try_send(Row::from(sample)).is_err() {
+            // Warn once rather than every second for as long as it lasts.
+            if !self.warned.swap(true, Ordering::Relaxed) {
+                tracing::warn!("history writer backlogged; dropping metric samples");
+            }
+        } else {
+            self.warned.store(false, Ordering::Relaxed);
+        }
+    }
+
+    pub fn query(
+        &self,
+        from: i64,
+        to: i64,
+        step: MetricStep,
+        max_points: usize
+    ) -> Result<MetricSeries, AgentError> {
+        if to <= from {
+            return Err(AgentError::BadRequest("`to` must be after `from`".into()));
+        }
+        let max_points = max_points.clamp(1, 20_000);
+        let step_secs = resolve_step(step, to - from, max_points);
+
+        let conn = self.read.lock().map_err(|_| {
+            AgentError::Unavailable("history database is unavailable".into())
+        })?;
+        read_series(&conn, from, to, step_secs).map_err(AgentError::internal)
+    }
+}
+
+/// Picks the finest tier whose point count fits inside `max_points`.
+fn resolve_step(step: MetricStep, span: i64, max_points: usize) -> u32 {
+    match step {
+        MetricStep::OneSec => 1,
+        MetricStep::OneMin => 60,
+        MetricStep::FiveMin => 300,
+        MetricStep::Auto => {
+            let fits = |secs: i64| (span / secs) as usize <= max_points;
+            if fits(1) {
+                1
+            } else if fits(60) {
+                60
+            } else {
+                300
+            }
+        }
+    }
+}
+
+fn read_series(
+    conn: &Connection,
+    from: i64,
+    to: i64,
+    step_secs: u32
+) -> rusqlite::Result<MetricSeries> {
+    // The raw tier has no avg/max distinction and exactly one sample per row;
+    // selecting the same column twice keeps one result shape for all tiers.
+    let sql = match step_secs {
+        1 =>
+            "SELECT ts, cpu_pct, cpu_pct, mem_used, swap_used,
+                    net_rx_bps, net_rx_bps, net_tx_bps, net_tx_bps,
+                    disk_read_bps, disk_read_bps, disk_write_bps, disk_write_bps,
+                    load1, 1
+             FROM metrics_1s WHERE ts >= ?1 AND ts <= ?2 ORDER BY ts",
+        60 =>
+            "SELECT ts, cpu_avg, cpu_max, mem_avg, swap_avg,
+                    net_rx_avg, net_rx_max, net_tx_avg, net_tx_max,
+                    disk_read_avg, disk_read_max, disk_write_avg, disk_write_max,
+                    load1_avg, n
+             FROM metrics_1m WHERE ts >= ?1 AND ts <= ?2 ORDER BY ts",
+        _ =>
+            "SELECT ts, cpu_avg, cpu_max, mem_avg, swap_avg,
+                    net_rx_avg, net_rx_max, net_tx_avg, net_tx_max,
+                    disk_read_avg, disk_read_max, disk_write_avg, disk_write_max,
+                    load1_avg, n
+             FROM metrics_5m WHERE ts >= ?1 AND ts <= ?2 ORDER BY ts",
+    };
+
+    let mut series = MetricSeries {
+        step_secs,
+        from,
+        to,
+        ts: Vec::new(),
+        cpu_pct: Vec::new(),
+        cpu_pct_max: Vec::new(),
+        mem_used_bytes: Vec::new(),
+        swap_used_bytes: Vec::new(),
+        net_rx_bps: Vec::new(),
+        net_rx_bps_max: Vec::new(),
+        net_tx_bps: Vec::new(),
+        net_tx_bps_max: Vec::new(),
+        disk_read_bps: Vec::new(),
+        disk_read_bps_max: Vec::new(),
+        disk_write_bps: Vec::new(),
+        disk_write_bps_max: Vec::new(),
+        load1: Vec::new(),
+        n: Vec::new(),
+    };
+
+    let mut stmt = conn.prepare_cached(sql)?;
+    let mut rows = stmt.query(rusqlite::params![from, to])?;
+    while let Some(r) = rows.next()? {
+        series.ts.push(r.get(0)?);
+        series.cpu_pct.push(r.get::<_, f64>(1)? as f32);
+        series.cpu_pct_max.push(r.get::<_, f64>(2)? as f32);
+        series.mem_used_bytes.push(r.get(3)?);
+        series.swap_used_bytes.push(r.get(4)?);
+        series.net_rx_bps.push(r.get(5)?);
+        series.net_rx_bps_max.push(r.get(6)?);
+        series.net_tx_bps.push(r.get(7)?);
+        series.net_tx_bps_max.push(r.get(8)?);
+        series.disk_read_bps.push(r.get(9)?);
+        series.disk_read_bps_max.push(r.get(10)?);
+        series.disk_write_bps.push(r.get(11)?);
+        series.disk_write_bps_max.push(r.get(12)?);
+        series.load1.push(r.get(13)?);
+        series.n.push(r.get::<_, i64>(14)? as u32);
+    }
+
+    Ok(series)
+}
+
+/// Batches incoming rows and runs the rollup/retention jobs.
+///
+/// Flushes on whichever comes first: a full batch, the flush interval, or
+/// shutdown. With WAL + `synchronous = NORMAL` this is roughly six disk
+/// touches a minute rather than sixty.
+fn writer_loop(conn: &mut Connection, rx: mpsc::Receiver<Row>, cfg: HistoryConfig) {
+    const MAX_BATCH: usize = 60;
+    let flush_every = Duration::from_secs(cfg.flush_interval_secs.max(1));
+
+    let mut batch: Vec<Row> = Vec::with_capacity(MAX_BATCH);
+    let mut last_flush = Instant::now();
+    let mut last_rollup = Instant::now();
+    let mut last_retain = Instant::now();
+
+    loop {
+        match rx.recv_timeout(Duration::from_millis(500)) {
+            Ok(row) => batch.push(row),
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            // Every sender dropped: the agent is shutting down. Flush what we
+            // have so `docker compose down` doesn't lose the batch.
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                flush(conn, &mut batch);
+                tracing::debug!("history writer stopped");
+                return;
+            }
+        }
+
+        if batch.len() >= MAX_BATCH || last_flush.elapsed() >= flush_every {
+            flush(conn, &mut batch);
+            last_flush = Instant::now();
+        }
+
+        let now = crate::sample::host::unix_now();
+
+        if last_rollup.elapsed() >= Duration::from_secs(60) {
+            last_rollup = Instant::now();
+            if let Err(e) = rollup::rollup_1m(conn, now) {
+                tracing::warn!(error = %e, "1m rollup failed");
+            }
+            if let Err(e) = rollup::rollup_5m(conn, now) {
+                tracing::warn!(error = %e, "5m rollup failed");
+            }
+        }
+
+        if last_retain.elapsed() >= Duration::from_secs(3600) {
+            last_retain = Instant::now();
+            match
+                rollup::retain(
+                    conn,
+                    now,
+                    cfg.retain_1s_secs,
+                    cfg.retain_1m_secs,
+                    cfg.retain_5m_secs
+                )
+            {
+                Ok(deleted) if deleted > 0 => {
+                    tracing::debug!(deleted, "trimmed metrics history");
+                    // Stop the -wal file creeping after a bulk delete.
+                    let _ = conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);");
+                }
+                Ok(_) => {}
+                Err(e) => tracing::warn!(error = %e, "retention pass failed"),
+            }
+        }
+    }
+}
+
+fn flush(conn: &mut Connection, batch: &mut Vec<Row>) {
+    if batch.is_empty() {
+        return;
+    }
+    let result = (|| -> rusqlite::Result<()> {
+        let tx = conn.transaction()?;
+        {
+            let mut stmt = tx.prepare_cached(
+                "INSERT OR REPLACE INTO metrics_1s
+                 (ts, cpu_pct, mem_used, swap_used, net_rx_bps, net_tx_bps,
+                  disk_read_bps, disk_write_bps, load1)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"
+            )?;
+            for r in batch.iter() {
+                stmt.execute(
+                    rusqlite::params![
+                        r.ts,
+                        r.cpu_pct,
+                        r.mem_used,
+                        r.swap_used,
+                        r.net_rx_bps,
+                        r.net_tx_bps,
+                        r.disk_read_bps,
+                        r.disk_write_bps,
+                        r.load1
+                    ]
+                )?;
+            }
+        }
+        tx.commit()
+    })();
+
+    if let Err(e) = result {
+        tracing::warn!(error = %e, rows = batch.len(), "failed to write metrics batch");
+    }
+    batch.clear();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn auto_step_picks_the_finest_tier_that_fits() {
+        // 10 minutes at 1s = 600 points, comfortably under the cap.
+        assert_eq!(resolve_step(MetricStep::Auto, 600, 1000), 1);
+        // 24 hours: 86400 at 1s and 1440 at 1m both blow the cap; 288 at 5m fits.
+        assert_eq!(resolve_step(MetricStep::Auto, 86_400, 1000), 300);
+        // 1 hour: 3600 at 1s is too many, 60 at 1m fits.
+        assert_eq!(resolve_step(MetricStep::Auto, 3_600, 1000), 60);
+    }
+
+    #[test]
+    fn explicit_step_is_honoured_regardless_of_span() {
+        assert_eq!(resolve_step(MetricStep::OneSec, 86_400, 10), 1);
+        assert_eq!(resolve_step(MetricStep::FiveMin, 60, 10_000), 300);
+    }
+
+    #[test]
+    fn query_returns_parallel_arrays_of_equal_length() {
+        let conn = Connection::open_in_memory().unwrap();
+        schema::init(&conn).unwrap();
+        for i in 0..10 {
+            conn.execute(
+                "INSERT INTO metrics_1s VALUES (?1, 50.0, 100, 0, 1.0, 2.0, 3.0, 4.0, 0.1)",
+                [i]
+            ).unwrap();
+        }
+
+        let s = read_series(&conn, 0, 9, 1).unwrap();
+        assert_eq!(s.ts.len(), 10);
+        // Every column must line up with `ts` or the client's zip silently
+        // misaligns the chart.
+        assert_eq!(s.cpu_pct.len(), 10);
+        assert_eq!(s.cpu_pct_max.len(), 10);
+        assert_eq!(s.mem_used_bytes.len(), 10);
+        assert_eq!(s.net_rx_bps.len(), 10);
+        assert_eq!(s.disk_write_bps_max.len(), 10);
+        assert_eq!(s.n.len(), 10);
+        assert_eq!(s.step_secs, 1);
+        assert!(s.n.iter().all(|&n| n == 1), "raw rows represent one sample each");
+    }
+
+    #[test]
+    fn range_is_inclusive_and_ordered() {
+        let conn = Connection::open_in_memory().unwrap();
+        schema::init(&conn).unwrap();
+        for i in [5i64, 1, 3, 9, 7] {
+            conn.execute(
+                "INSERT INTO metrics_1s VALUES (?1, 1.0, 1, 0, 0.0, 0.0, 0.0, 0.0, 0.0)",
+                [i]
+            ).unwrap();
+        }
+        let s = read_series(&conn, 3, 7, 1).unwrap();
+        assert_eq!(s.ts, vec![3, 5, 7]);
+    }
+}

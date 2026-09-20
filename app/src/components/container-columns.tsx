@@ -19,6 +19,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Dot, DotVariant } from './dot';
+import { formatBytes } from '@/lib/node-metrics';
+import { msToDuration } from '@/lib/time';
 
 // Containers are flattened across nodes for the table; nodeId keeps row ids
 // unique since container ids can theoretically collide across nodes.
@@ -38,6 +40,8 @@ function stateToVariant(state: string): DotVariant {
   }
 }
 
+// Uptime and size formatting live in lib/ so the table and the cards can't
+// drift apart; these were duplicated here before.
 function formatUptime(startedAt: string | null): string {
   if (!startedAt) return '—';
   const started = new Date(startedAt).getTime();
@@ -45,20 +49,7 @@ function formatUptime(startedAt: string | null): string {
 
   const diffMs = Date.now() - started;
   if (diffMs < 0) return '—';
-
-  const minutes = Math.floor(diffMs / 60000);
-  const hours = Math.floor(minutes / 60);
-  const days = Math.floor(hours / 24);
-
-  if (days > 0) return `${days}d ${hours % 24}h`;
-  if (hours > 0) return `${hours}h ${minutes % 60}m`;
-  if (minutes > 0) return `${minutes}m`;
-  return '<1m';
-}
-
-function formatMemory(mb: number): string {
-  if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
-  return `${mb.toFixed(0)} MB`;
+  return msToDuration(diffMs);
 }
 
 export const columns: ColumnDef<ContainerRow>[] = [
@@ -123,11 +114,11 @@ export const columns: ColumnDef<ContainerRow>[] = [
     ),
   },
   {
-    accessorKey: 'mem_mb',
+    accessorKey: 'mem_used_bytes',
     header: () => <div className='text-right'>Memory</div>,
     cell: ({ row }) => (
       <div className='text-right tabular-nums'>
-        {formatMemory(row.original.mem_mb)}
+        {formatBytes(row.original.mem_used_bytes)}
       </div>
     ),
   },

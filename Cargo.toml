@@ -1,7 +1,17 @@
 [workspace]
-members = [
-    "cosmos-common",
-    "cosmos-agent",
-    "app/src-tauri",
-]
+members = ["cosmos-common", "cosmos-agent", "app/src-tauri"]
 resolver = "2"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+
+# Agent-only. `panic = "abort"` is deliberately NOT in [profile.release]: that
+# would also apply to app/src-tauri, and Tauri relies on catch_unwind in places
+# (notably on mobile).
+[profile.release-agent]
+inherits = "release"
+lto = "fat"
+panic = "abort"
