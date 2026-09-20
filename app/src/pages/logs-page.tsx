@@ -149,7 +149,7 @@ export function LogsPage() {
         )}
       </div>
 
-      <Card className='flex-1 min-h-0'>
+      <Card className='h-[calc(100vh-17rem)] min-h-64'>
         <CardContent className='h-full p-0'>
           <div
             ref={viewport}
