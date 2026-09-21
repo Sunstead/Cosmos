@@ -275,6 +275,7 @@ impl HostProbe {
         }
 
         self.prev_disk = next_prev;
+        let mut disk = dedupe_shared_volumes(disk);
         disk.sort_by(|a, b| a.label.cmp(&b.label));
         disk
     }
@@ -288,9 +289,43 @@ pub fn unix_now() -> i64 {
         .unwrap_or(0)
 }
 
+/// Volumes that share one pool (APFS containers, btrfs subvolumes, bind
+/// mounts) each report the pool's size and I/O, so they would be counted
+/// twice. Identical total and used bytes mark a shared pool; keep the entry
+/// with the shortest label, usually `/`.
+fn dedupe_shared_volumes(mut disks: Vec<DiskInfo>) -> Vec<DiskInfo> {
+    disks.sort_by(|a, b| a.label.len().cmp(&b.label.len()).then_with(|| a.label.cmp(&b.label)));
+    let mut seen = std::collections::HashSet::with_capacity(disks.len());
+    disks.retain(|d| seen.insert((d.total_bytes, d.used_bytes)));
+    disks
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn disk(label: &str, total: u64, used: u64) -> DiskInfo {
+        DiskInfo {
+            mount: label.into(),
+            label: label.into(),
+            used_bytes: used,
+            total_bytes: total,
+            read_bps: 0.0,
+            write_bps: 0.0,
+            kind: DiskKind::Ssd,
+        }
+    }
+
+    #[test]
+    fn shared_volumes_count_once() {
+        let out = dedupe_shared_volumes(vec![
+            disk("/System/Volumes/Data", 1000, 900),
+            disk("/", 1000, 900),
+            disk("/mnt/backup", 4000, 100),
+        ]);
+        let labels: Vec<_> = out.iter().map(|d| d.label.as_str()).collect();
+        assert_eq!(labels, ["/", "/mnt/backup"]);
+    }
     use crate::config::HostConfig;
 
     fn probe() -> HostProbe {

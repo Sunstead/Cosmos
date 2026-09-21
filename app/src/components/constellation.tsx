@@ -4,6 +4,7 @@ import { getConnection, nodeDisplayName, useNodeStore } from '@/stores/nodes';
 import { useContainersStore } from '@/stores/containers';
 import { userFacingServices } from '@/lib/services';
 import { planetSprite } from '@/lib/planet-render';
+import { cn } from '@/lib/utils';
 import { canvasTokens, onThemeChange, CanvasTokens } from '@/lib/theme-tokens';
 import { buildStarfield, drawStarfield, Starfield } from '@/lib/starfield';
 
@@ -350,8 +351,9 @@ export function Constellation({ className }: { className?: string }) {
   }, []);
 
   return (
-    <div ref={wrapRef} className={className} data-constellation>
-      <canvas ref={canvasRef} className='block size-full' aria-label='Node map' role='img' />
+    <div ref={wrapRef} className={cn('relative', className)} data-constellation>
+      {/* Absolute: an in-flow canvas feeds its pixel size back into layout in WebKit. */}
+      <canvas ref={canvasRef} className='absolute inset-0 size-full' aria-label='Node map' role='img' />
     </div>
   );
 }

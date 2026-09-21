@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useUiStore } from '@/stores/ui';
@@ -13,11 +13,9 @@ const navigate = vi.fn();
 const toggleSidebar = vi.fn();
 const toggleTheme = vi.fn();
 const run = vi.fn();
-let pathname = '/nodes';
 
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => navigate,
-  useLocation: () => ({ pathname }),
   Link: ({ children, to, ...rest }: { children: React.ReactNode; to: string }) => (
     <a href={to} {...rest}>
       {children}
@@ -51,7 +49,6 @@ function seedNode(online = true) {
 beforeEach(() => {
   navigate.mockClear();
   run.mockClear();
-  pathname = '/nodes';
   useUiStore.setState({ paletteOpen: false, addNodeOpen: false });
   useNodeStore.setState({ nodes: [], meta: {}, onlineNodes: 0 });
   useContainersStore.setState({ nodeContainers: {}, nodeServices: {}, services: [] });
@@ -83,18 +80,16 @@ describe('TitleBar', () => {
     expect(container.querySelector('header')).toHaveAttribute('data-tauri-drag-region', 'deep');
   });
 
-  it('shows the node in the breadcrumb on a detail page', () => {
+  it('keeps constant chrome instead of echoing the page title', () => {
     seedNode();
-    pathname = '/nodes/n1';
     wrap(<TitleBar />);
-    const crumb = screen.getByRole('navigation', { name: 'Breadcrumb' });
-    expect(within(crumb).getByRole('link', { name: 'Nodes' })).toBeInTheDocument();
-    expect(crumb).toHaveTextContent('jupiter');
+    expect(screen.queryByRole('navigation', { name: 'Breadcrumb' })).toBeNull();
+    expect(screen.queryByText('jupiter')).toBeNull();
   });
 
   it('opens the palette from the search trigger and toggles the sidebar', async () => {
     wrap(<TitleBar />);
-    await userEvent.click(screen.getByRole('button', { name: /search or jump to/i }));
+    await userEvent.click(screen.getByRole('button', { name: 'Search' }));
     expect(useUiStore.getState().paletteOpen).toBe(true);
     await userEvent.click(screen.getByRole('button', { name: 'Toggle sidebar' }));
     expect(toggleSidebar).toHaveBeenCalled();

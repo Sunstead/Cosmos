@@ -13,7 +13,7 @@ test.describe('empty app', () => {
 
   test('command palette navigates', async ({ page }) => {
     await page.goto('/overview');
-    await page.getByRole('button', { name: /search or jump to/i }).click();
+    await page.getByRole('button', { name: 'Search', exact: true }).click();
     await page.getByRole('combobox').fill('volumes');
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/\/volumes$/);
@@ -134,12 +134,13 @@ test.describe('with a node', () => {
 
   test('screenshots of every page in both themes', async ({ page }, info) => {
     await addNodeOnline(page);
+    const detail = new URL(page.url()).pathname;
     for (const theme of ['dark', 'light']) {
       await page.evaluate((t) => localStorage.setItem('cosmos-theme', t), theme);
-      for (const path of PAGES) {
+      for (const path of [...PAGES, detail]) {
         await page.goto(path);
         await page.waitForTimeout(300);
-        await page.screenshot({ path: info.outputPath(`${theme}${path.replace('/', '-')}.png`) });
+        await page.screenshot({ path: info.outputPath(`${theme}${path.replaceAll('/', '-')}.png`) });
       }
     }
   });
