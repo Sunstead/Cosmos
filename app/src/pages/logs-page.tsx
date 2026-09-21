@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Logs, Pause, Play, Trash2 } from 'lucide-react';
-import { useNodeStore } from '@/stores/nodes';
+import { useNodeStore, nodeDisplayName } from '@/stores/nodes';
 import { useContainersStore } from '@/stores/containers';
 import { useNodeMeta } from '@/api/queries';
 import { useContainerLogs } from '@/hooks/use-container-logs';
@@ -94,7 +94,7 @@ export function LogsPage() {
               <SelectContent>
                 {nodes.map((n) => (
                   <SelectItem key={n.id} value={n.id}>
-                    {n.name}
+                    {nodeDisplayName(n)}
                   </SelectItem>
                 ))}
               </SelectContent>

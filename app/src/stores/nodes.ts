@@ -1,40 +1,46 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { NodeConnection, NodeMeta, NodeStatus } from '@/api/connection';
-import { LEGACY_CAPABILITIES } from '@/api/client';
+import { AgentRequestError, LEGACY_CAPABILITIES } from '@/api/client';
 import { normalizeAgentUrl } from '@/lib/agent-url';
 import { getToken, deleteToken, primeToken, setToken } from '@/lib/secrets';
+import { sumDisk, getMemUsagePct } from '@/lib/node-metrics';
 import { clearNodeSeries, pushSample, resetNodeSeries } from './metrics-history';
 import { useContainersStore } from './containers';
 import { useVolumesStore } from './volumes';
-import { sumDisk, getMemUsagePct } from '@/lib/node-metrics';
 
 export interface NodeConfig {
   id: string;
   url: string;
-  name: string;
+  /** Name the agent reports. */
+  agentName: string | null;
+  /** Local rename. Wins over `agentName`. */
+  alias: string | null;
 }
 
 export type { NodeStatus };
 
+export function nodeDisplayName(node: Pick<NodeConfig, 'alias' | 'agentName' | 'url'>): string {
+  return node.alias || node.agentName || node.url;
+}
+
+type AddResult = { ok: true; id: string } | { ok: false; error: string };
+
 interface NodeStore {
   nodes: NodeConfig[];
-  /** Live connection state, keyed by node id. Never persisted. */
+  /** Live connection state per node. Not persisted. */
   meta: Record<string, NodeMeta>;
   onlineNodes: number;
 
-  addNode: (url: string, token?: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+  addNode: (url: string, token?: string) => Promise<AddResult>;
   removeNode: (id: string) => void;
-  renameNode: (id: string, name: string) => void;
+  /** Pass null or an empty string to fall back to the agent's name. */
+  renameNode: (id: string, alias: string | null) => void;
   updateNodeToken: (id: string, token: string) => Promise<void>;
   reconnect: (id: string) => void;
 }
 
-/**
- * Connections live outside the store. They hold EventSources and timers, which
- * are not state React should diff — the store holds only what components
- * render.
- */
+// Connections hold EventSources and timers, so they live outside React state.
 const connections = new Map<string, NodeConnection>();
 
 export function getConnection(nodeId: string): NodeConnection | null {
@@ -45,7 +51,7 @@ export function getAllConnections(): NodeConnection[] {
   return [...connections.values()];
 }
 
-const DEFAULT_META: NodeMeta = {
+export const DEFAULT_META: NodeMeta = {
   status: 'connecting',
   capabilities: LEGACY_CAPABILITIES,
   agentVersion: null,
@@ -56,28 +62,32 @@ const DEFAULT_META: NodeMeta = {
 const countOnline = (meta: Record<string, NodeMeta>) =>
   Object.values(meta).filter((m) => m.status === 'online').length;
 
-/**
- * Wires one connection into the stores and starts it.
- *
- * Node status is driven by real stream events here. Previously it was only
- * written once at connect time, so a node that died later stayed "online"
- * forever and the Nodes page's counters were permanently stale.
- */
-function attach(node: NodeConfig, token: string | null): NodeConnection {
-  const conn = new NodeConnection(node.id, node.url, token);
-  connections.set(node.id, conn);
+/** Status transitions, for toasts. Registered by the UI layer. */
+type StatusListener = (nodeId: string, from: NodeStatus, to: NodeStatus) => void;
+const statusListeners = new Set<StatusListener>();
+
+export function onNodeStatusChange(fn: StatusListener): () => void {
+  statusListeners.add(fn);
+  return () => statusListeners.delete(fn);
+}
+
+function attach(nodeId: string, url: string, token: string | null): NodeConnection {
+  const conn = new NodeConnection(nodeId, url, token);
+  connections.set(nodeId, conn);
 
   conn.onMeta((meta) => {
+    const prev = useNodeStore.getState().meta[nodeId]?.status;
     useNodeStore.setState((s) => {
-      const next = { ...s.meta, [node.id]: meta };
+      const next = { ...s.meta, [nodeId]: meta };
       return { meta: next, onlineNodes: countOnline(next) };
     });
+    if (prev && prev !== meta.status) {
+      for (const fn of statusListeners) fn(nodeId, prev, meta.status);
+    }
   });
 
   conn.onHost((host) => {
-    // Raw units in, matching the wire format. Percentages are derived because
-    // a ratio is what a sparkline wants; byte rates stay raw.
-    pushSample(node.id, {
+    pushSample(nodeId, {
       cpu: host.cpu_pct,
       ram: getMemUsagePct(host),
       netRx: host.net_rx_bps,
@@ -86,25 +96,26 @@ function attach(node: NodeConfig, token: string | null): NodeConnection {
       diskWrite: sumDisk(host, 'write_bps'),
     });
 
-    // The node's display name comes from the agent, not from the URL.
-    if (host.name && host.name !== node.name) {
+    // Compare against current state, not a captured copy: a stale comparison
+    // rewrote `nodes` on every sample.
+    const current = useNodeStore.getState().nodes.find((n) => n.id === nodeId);
+    if (current && host.name && current.agentName !== host.name) {
       useNodeStore.setState((s) => ({
-        nodes: s.nodes.map((n) => (n.id === node.id ? { ...n, name: host.name } : n)),
+        nodes: s.nodes.map((n) => (n.id === nodeId ? { ...n, agentName: host.name } : n)),
       }));
     }
   });
 
   conn.onContainers((containers) => {
-    useContainersStore.getState().setNodeContainers(node.id, containers);
+    useContainersStore.getState().setNodeContainers(nodeId, containers);
   });
 
   conn.onVolumes((volumes) => {
-    useVolumesStore.getState().setNodeVolumes(node.id, volumes);
+    useVolumesStore.getState().setNodeVolumes(nodeId, volumes);
   });
 
-  // The agent restarted: its rate deltas restart from zero and the old points
-  // don't join up with the new ones.
-  conn.onReset(() => resetNodeSeries(node.id));
+  // Agent restarted: old points don't join up with the new deltas.
+  conn.onReset(() => resetNodeSeries(nodeId));
 
   conn.start();
   return conn;
@@ -118,6 +129,23 @@ function detach(nodeId: string) {
   useVolumesStore.getState().removeNode(nodeId);
 }
 
+/** Accepts both the current shape and the pre-alias `{ name }` shape. */
+export function migrateNode(raw: unknown): NodeConfig | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const n = raw as Record<string, unknown>;
+  if (typeof n.id !== 'string' || typeof n.url !== 'string') return null;
+
+  const str = (v: unknown) => (typeof v === 'string' && v ? v : null);
+  const legacyName = str(n.name);
+
+  return {
+    id: n.id,
+    url: n.url,
+    agentName: str(n.agentName) ?? (legacyName !== n.url ? legacyName : null),
+    alias: str(n.alias),
+  };
+}
+
 export const useNodeStore = create<NodeStore>()(
   persist(
     (set, get) => ({
@@ -127,44 +155,39 @@ export const useNodeStore = create<NodeStore>()(
 
       addNode: async (rawUrl, token) => {
         const url = normalizeAgentUrl(rawUrl);
-        if (!url) {
-          return { ok: false, error: 'That does not look like a host or URL.' };
-        }
+        if (!url) return { ok: false, error: 'Enter a host or URL.' };
         if (get().nodes.some((n) => n.url === url)) {
-          return { ok: false, error: 'That node has already been added.' };
+          return { ok: false, error: 'This node is already added.' };
         }
 
         const id = crypto.randomUUID();
 
-        // Verify before committing, so the dialog can report a bad address or
-        // a missing token instead of silently creating a dead node — which is
-        // what the old fire-and-forget version did.
+        // Probe first so a bad address or token is reported, not saved.
         const probe = new NodeConnection(id, url, token ?? null);
+        let agentName: string | null = null;
         try {
           const info = await probe.client.getInfo();
           if (info.auth_required && !token) {
             return { ok: false, error: 'This agent requires a token.' };
           }
-          await probe.client.getHost();
+          agentName = (await probe.client.getHost()).name || null;
         } catch (e) {
-          const message =
-            e && typeof e === 'object' && 'status' in e && (e as { status: number }).status === 401
-              ? 'The token was rejected by this agent.'
-              : `Could not reach an agent at ${url}.`;
-          return { ok: false, error: message };
+          if (e instanceof AgentRequestError && e.isUnauthorized) {
+            return { ok: false, error: 'Token rejected.' };
+          }
+          return { ok: false, error: `No agent reachable at ${url}.` };
         }
 
         if (token) await setToken(id, token);
         primeToken(id, token ?? null);
 
-        const node: NodeConfig = { id, url, name: url };
         set((s) => ({
-          nodes: [...s.nodes, node],
+          nodes: [...s.nodes, { id, url, agentName, alias: null }],
           meta: { ...s.meta, [id]: DEFAULT_META },
         }));
-        attach(node, token ?? null);
+        attach(id, url, token ?? null);
 
-        return { ok: true };
+        return { ok: true, id };
       },
 
       removeNode: (id) => {
@@ -180,9 +203,11 @@ export const useNodeStore = create<NodeStore>()(
         });
       },
 
-      renameNode: (id, name) =>
+      renameNode: (id, alias) =>
         set((s) => ({
-          nodes: s.nodes.map((n) => (n.id === id ? { ...n, name } : n)),
+          nodes: s.nodes.map((n) =>
+            n.id === id ? { ...n, alias: alias?.trim() || null } : n,
+          ),
         })),
 
       updateNodeToken: async (id, token) => {
@@ -194,35 +219,40 @@ export const useNodeStore = create<NodeStore>()(
         const node = get().nodes.find((n) => n.id === id);
         if (!node) return;
         detach(id);
-        void getToken(id).then((token) => attach(node, token));
+        void getToken(id).then((token) => attach(node.id, node.url, token));
       },
     }),
     {
       name: 'cosmos-nodes',
-      // Only the identity of each node is persisted. Tokens live in the
-      // keychain, and connection state is meaningless across restarts.
+      version: 1,
       partialize: (s) => ({ nodes: s.nodes }),
+      migrate: (persisted) => {
+        const nodes = (persisted as { nodes?: unknown[] } | null)?.nodes ?? [];
+        return { nodes: nodes.map(migrateNode).filter((n): n is NodeConfig => !!n) };
+      },
       onRehydrateStorage: () => (state) => {
         if (!state) return;
 
-        // Seed via the rehydrating draft, not `useNodeStore.setState`: this
-        // runs *during* `create()`, so the `useNodeStore` binding is still in
-        // its temporal dead zone and touching it throws.
+        // Runs inside `create()`, so `useNodeStore` isn't initialised yet.
+        // Seed through the draft and defer anything that touches the store.
         state.meta = Object.fromEntries(state.nodes.map((n) => [n.id, DEFAULT_META]));
         state.onlineNodes = 0;
 
         const nodes = state.nodes;
-
-        // Deferred for the same reason — `attach` publishes connection state
-        // through the store as soon as it subscribes.
         queueMicrotask(() => {
-          // Tokens come from the keychain, which is async; connect each node
-          // as soon as its own token resolves rather than waiting for all.
           for (const node of nodes) {
-            void getToken(node.id).then((token) => attach(node, token));
+            void getToken(node.id).then((token) => attach(node.id, node.url, token));
           }
         });
       },
     },
   ),
 );
+
+/** Display name for one node, re-rendering only when it changes. */
+export function useNodeName(nodeId: string | null): string | null {
+  return useNodeStore((s) => {
+    const n = nodeId ? s.nodes.find((x) => x.id === nodeId) : undefined;
+    return n ? nodeDisplayName(n) : null;
+  });
+}

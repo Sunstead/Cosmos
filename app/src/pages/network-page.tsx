@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { EthernetPort, Network } from 'lucide-react';
-import { useNodeStore } from '@/stores/nodes';
+import { useNodeStore, nodeDisplayName } from '@/stores/nodes';
 import { useContainersStore } from '@/stores/containers';
 import { useHostInfo } from '@/api/queries';
 import { PageHeader } from '@/components/page-header';
@@ -43,7 +43,7 @@ function NodeInterfaces({ nodeId }: { nodeId: string }) {
     <Card>
       <CardHeader>
         <CardTitle className='flex items-center gap-2 text-base'>
-          {node?.name ?? 'Node'}
+          {node ? nodeDisplayName(node) : 'Node'}
           <NodeStatusBadge nodeId={nodeId} />
         </CardTitle>
       </CardHeader>

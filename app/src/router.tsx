@@ -1,4 +1,5 @@
 import {
+  lazyRouteComponent,
   createRouter,
   createRootRoute,
   createRoute,
@@ -8,17 +9,6 @@ import {
   createBrowserHistory,
 } from '@tanstack/react-router';
 import { AppLayout } from './layouts/AppLayout';
-import OverviewPage from './pages/overview-page';
-import { NodesPage } from './pages/nodes-page';
-import { NodeDetailPage } from './pages/node-detail-page';
-import { ServicesPage } from './pages/services-page';
-import { VolumesPage } from './pages/volumes-page';
-import { NetworkPage } from './pages/network-page';
-import { MonitoringPage } from './pages/monitoring-page';
-import { LogsPage } from './pages/logs-page';
-import { BackupsPage } from './pages/backups-page';
-import { SettingsPage } from './pages/settings-page';
-import { ContainersPage } from './pages/containers-page';
 import { useNodeStore } from './stores/nodes';
 import { getDefaultNodes } from './config';
 import { isTauri } from './lib/tauri';
@@ -40,8 +30,8 @@ const rootRoute = createRootRoute({
   ),
 });
 
-// Defined one by one rather than through a helper: TanStack Router infers the
-// literal path types from these calls, and a wrapper function erases them.
+// Defined individually: a helper function would erase the router's literal
+// path types. Pages are lazy so heavy dependencies (recharts) load on demand.
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
@@ -53,71 +43,68 @@ const indexRoute = createRoute({
 const overviewRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/overview',
-  component: OverviewPage,
+  component: lazyRouteComponent(() => import('./pages/overview-page'), 'OverviewPage'),
 });
 
 const nodesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/nodes',
-  component: NodesPage,
+  component: lazyRouteComponent(() => import('./pages/nodes-page'), 'NodesPage'),
 });
 
 /** Reached from the Details button on a node card or row. */
 const nodeDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/nodes/$nodeId',
-  component: function NodeDetailRoute() {
-    const { nodeId } = nodeDetailRoute.useParams();
-    return <NodeDetailPage nodeId={nodeId} />;
-  },
+  component: lazyRouteComponent(() => import('./pages/node-detail-route'), 'NodeDetailRoute'),
 });
 
 const servicesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/services',
-  component: ServicesPage,
+  component: lazyRouteComponent(() => import('./pages/services-page'), 'ServicesPage'),
 });
 
 const containersRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/containers',
-  component: ContainersPage,
+  component: lazyRouteComponent(() => import('./pages/containers-page'), 'ContainersPage'),
 });
 
 const volumesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/volumes',
-  component: VolumesPage,
+  component: lazyRouteComponent(() => import('./pages/volumes-page'), 'VolumesPage'),
 });
 
 const networkRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/network',
-  component: NetworkPage,
+  component: lazyRouteComponent(() => import('./pages/network-page'), 'NetworkPage'),
 });
 
 const monitoringRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/monitoring',
-  component: MonitoringPage,
+  component: lazyRouteComponent(() => import('./pages/monitoring-page'), 'MonitoringPage'),
 });
 
 const logsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/logs',
-  component: LogsPage,
+  component: lazyRouteComponent(() => import('./pages/logs-page'), 'LogsPage'),
 });
 
 const backupsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/backups',
-  component: BackupsPage,
+  component: lazyRouteComponent(() => import('./pages/backups-page'), 'BackupsPage'),
 });
 
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings',
-  component: SettingsPage,
+  component: lazyRouteComponent(() => import('./pages/settings-page'), 'SettingsPage'),
 });
 
 const routeTree = rootRoute.addChildren([
