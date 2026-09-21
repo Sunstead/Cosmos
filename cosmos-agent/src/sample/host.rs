@@ -320,6 +320,7 @@ fn pool_key(d: &sysinfo::Disk) -> String {
 }
 
 /// `/dev/disk3s1s1` and `/dev/disk3s5` are volumes of container `disk3`.
+#[cfg(any(target_os = "macos", test))]
 fn apfs_container(dev: &str) -> Option<String> {
     let rest = dev.strip_prefix("/dev/disk")?;
     let n: String = rest.chars().take_while(char::is_ascii_digit).collect();
