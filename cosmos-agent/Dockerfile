@@ -29,13 +29,18 @@ COPY . .
 RUN --mount=type=cache,id=cosmos-agent-registry,sharing=locked,target=/usr/local/cargo/registry \
     --mount=type=cache,id=cosmos-agent-target,sharing=locked,target=/src/target \
     cargo build --locked --profile release-agent -p cosmos-agent \
- && cp /src/target/release-agent/cosmos-agent /cosmos-agent
+ && cp /src/target/release-agent/cosmos-agent /cosmos-agent \
+ && mkdir -p /data
 
 # distroless/cc: glibc and libgcc, no shell and no package manager. No CA
 # certificates are needed (the agent only talks to a unix socket and SQLite,
 # which is compiled in via rusqlite's `bundled` feature).
 FROM gcr.io/distroless/cc-debian12:nonroot
 COPY --from=build /cosmos-agent /usr/local/bin/cosmos-agent
+# The history volume mounts here. Docker seeds a new named volume with this
+# directory's ownership, so without it the volume is root-owned and the
+# non-root agent can't create its database.
+COPY --from=build --chown=65532:65532 /data /var/lib/cosmos-agent
 COPY --from=web /src/app/dist /usr/share/cosmos-agent/web
 ENV COSMOS_AGENT_WEB_DIR=/usr/share/cosmos-agent/web
 USER 65532:65532
