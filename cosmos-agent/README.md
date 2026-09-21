@@ -1,7 +1,8 @@
 # cosmos-agent
 
 The per-node half of Cosmos. Serves host metrics, Docker containers and
-volumes, metrics history and read-only restic status to the Cosmos desktop app.
+volumes, metrics history and read-only restic status to the Cosmos desktop app,
+and (in the Docker image) the Cosmos web UI from the same address.
 
 **Design in one line: sample on a schedule, never on the request path.**
 Background samplers publish to `watch` channels and HTTP handlers hand out the
@@ -21,14 +22,26 @@ a filled-in one.
 
 ## Deploying to a Docker host
 
-Build from the **repository root**:
+GitHub Actions publishes `ghcr.io/sunstead/cosmos-agent` (linux/amd64) on every
+push to `main` (`:latest`, `:main`, `:sha-<short>`) and on `v*` tags
+(`:1.2.3`, `:1.2`). To build it yourself, from the **repository root**:
 
 ```bash
-docker build -f cosmos-agent/Dockerfile -t cosmos-agent:0.2.0 .
+docker build -f cosmos-agent/Dockerfile -t cosmos-agent .
+# from an Apple Silicon Mac for an x86_64 server:
+docker buildx build --platform linux/amd64 -f cosmos-agent/Dockerfile -t cosmos-agent .
 ```
 
-Then use [`compose.example.yaml`](compose.example.yaml). Two things are easy to
-get wrong:
+Then use [`compose.example.yaml`](compose.example.yaml).
+
+**Web UI.** The image bundles the web build and sets
+`COSMOS_AGENT_WEB_DIR`, so `http://<host>:7700/` (or the Caddy address in
+front of it) opens Cosmos. Static files are public; every API route still needs
+the token, which the page asks for on first visit and keeps in that browser.
+Unset `COSMOS_AGENT_WEB_DIR` (or `[web] dir`) for an API-only agent. The desktop
+app connects to the same address.
+
+Two things are easy to get wrong:
 
 **`network_mode: host` is required, not a convenience.** `/proc/net/dev` is
 rendered from the reading process's network namespace, and `sysinfo` has no

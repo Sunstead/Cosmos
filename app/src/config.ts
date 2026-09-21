@@ -20,14 +20,19 @@ export async function getDefaultNodes(): Promise<DefaultNode[]> {
     // Hand-written file: validate rather than trust the shape.
     if (!Array.isArray(parsed)) return [];
     return parsed.flatMap((entry) => {
-      if (typeof entry === 'string') return [{ url: entry }];
+      if (typeof entry === 'string') return [{ url: resolveUrl(entry) }];
       if (entry && typeof entry === 'object' && typeof (entry as DefaultNode).url === 'string') {
         const { url, token } = entry as DefaultNode;
-        return [{ url, token: typeof token === 'string' ? token : undefined }];
+        return [{ url: resolveUrl(url), token: typeof token === 'string' ? token : undefined }];
       }
       return [];
     });
   } catch {
     return [];
   }
+}
+
+/** `/` means the origin serving this page, as the agent's bundled UI writes it. */
+function resolveUrl(url: string): string {
+  return url.startsWith('/') ? new URL(url, window.location.origin).origin : url;
 }

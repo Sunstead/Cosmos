@@ -10,6 +10,7 @@ import {
 } from '@tanstack/react-router';
 import { AppLayout } from './layouts/AppLayout';
 import { useNodeStore } from './stores/nodes';
+import { useUiStore } from './stores/ui';
 import { getDefaultNodes } from './config';
 import { isDesktop } from './lib/platform';
 
@@ -23,10 +24,14 @@ const rootRoute = createRootRoute({
     const store = useNodeStore.getState();
     if (store.nodes.length > 0) return;
 
-    // Seeded in parallel: the previous sequential loop blocked first paint on
-    // one round trip per configured node.
     const defaults = await getDefaultNodes();
-    await Promise.allSettled(defaults.map((n) => store.addNode(n.url, n.token)));
+    const results = await Promise.all(defaults.map((n) => store.addNode(n.url, n.token)));
+    // A configured node that wants a token: ask for it with the address filled in.
+    const locked = defaults.find((_, i) => {
+      const r = results[i];
+      return !r.ok && r.error === 'This agent requires a token.';
+    });
+    if (locked) useUiStore.getState().setAddNodeOpen(true, locked.url);
   },
   component: () => (
     <AppLayout>

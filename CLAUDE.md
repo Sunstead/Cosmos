@@ -38,10 +38,14 @@ history DB, token `e2e-token`) and Vite on :1431, then drives system Chrome
 (`PW_CHANNEL` overrides). Docker-dependent specs skip when no daemon is up.
 Screenshots of every page in both themes land in `app/e2e/.results/`.
 
-Agent container:
+Agent container (agent + bundled web UI):
 ```bash
-docker build -f cosmos-agent/Dockerfile -t cosmos-agent:0.2.0 .   # build from the REPO ROOT
+docker build -f cosmos-agent/Dockerfile -t cosmos-agent .   # build from the REPO ROOT
 ```
+`.github/workflows/agent-image.yml` publishes `ghcr.io/sunstead/cosmos-agent`
+(linux/amd64): `:latest` from `main`, semver tags from `v*`. `ci.yml` runs the
+agent/common tests, clippy (`-D warnings`) and the frontend lint/test/build;
+the Tauri crate is skipped in CI because it needs WebKitGTK.
 
 ## Type sharing (Rust → TS)
 
@@ -88,6 +92,13 @@ Background samplers publish to `tokio::sync::watch` channels; handlers hand out 
 - **`:ro` on `docker.sock` is not a security control** — it applies to the inode, not the protocol. Anyone who can `connect()` has the full Docker API, which is root-equivalent. The real controls are `allow_actions = false` and network isolation.
 
 Disk mounts need `[[host.disks]]` entries to filter overlayfs noise and remap `/host/rootfs` → `/`.
+
+**Web UI from the agent.** The image sets `COSMOS_AGENT_WEB_DIR`, and
+`api/web.rs` serves `app/dist` as a public fallback after the API routes:
+SPA fallback to `index.html`, 404 for unknown `/v1/*` and missing `/assets/*`,
+immutable caching for hashed assets. `/config.json` returns `[{"url":"/"}]`,
+which the frontend resolves to its own origin; a seeded node that needs a token
+opens Add node prefilled. Same origin, so no CORS entry is needed.
 
 Workspace `[profile.release-agent]` adds `panic = "abort"`; it is deliberately *not* in `[profile.release]`, which would also apply to `app/src-tauri` where Tauri uses `catch_unwind`.
 

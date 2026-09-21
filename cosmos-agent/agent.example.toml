@@ -28,9 +28,15 @@ allow_anonymous = false
 
 [cors]
 # tauri://localhost, http(s)://tauri.localhost and localhost:1420 are always
-# allowed. Add anything else you serve the web build from.
+# allowed, and the UI served by the agent itself is same-origin. Only add
+# origins that serve the web build from somewhere else.
 extra_origins = []
 allow_null_origin = false
+
+[web]
+# A built web UI (app/dist) to serve at /. The Docker image sets this through
+# COSMOS_AGENT_WEB_DIR; leave unset for an API-only agent.
+# dir = "/usr/share/cosmos-agent/web"
 
 [host]
 interval_ms = 1000
