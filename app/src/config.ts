@@ -1,14 +1,38 @@
-import { isTauri } from "@tauri-apps/api/core";
-import { NodeConfig } from "./stores/nodes";
+import { isDesktop } from './lib/platform';
 
-export async function getDefaultNodes(): Promise<NodeConfig[]> {
-  if (isTauri()) {
-    return []; // On desktop: no default, user adds manually
-  }
+export interface DefaultNode {
+  url: string;
+  token?: string;
+}
+
+/**
+ * Nodes to seed on first run. The browser build can ship a `config.json`;
+ * the desktop app starts empty.
+ */
+export async function getDefaultNodes(): Promise<DefaultNode[]> {
+  if (isDesktop()) return [];
+
   try {
-    const res = await fetch("/config.json");
-    return await res.json();
+    const res = await fetch('/config.json');
+    if (!res.ok) return [];
+    const parsed: unknown = await res.json();
+
+    // Hand-written file: validate rather than trust the shape.
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((entry) => {
+      if (typeof entry === 'string') return [{ url: resolveUrl(entry) }];
+      if (entry && typeof entry === 'object' && typeof (entry as DefaultNode).url === 'string') {
+        const { url, token } = entry as DefaultNode;
+        return [{ url: resolveUrl(url), token: typeof token === 'string' ? token : undefined }];
+      }
+      return [];
+    });
   } catch {
     return [];
   }
+}
+
+/** `/` means the origin serving this page, as the agent's bundled UI writes it. */
+function resolveUrl(url: string): string {
+  return url.startsWith('/') ? new URL(url, window.location.origin).origin : url;
 }

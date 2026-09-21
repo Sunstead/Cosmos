@@ -1,15 +1,7 @@
-import {
-  ArrowDown,
-  ArrowUp,
-  BookOpen,
-  Info,
-  PencilLine,
-  Server,
-} from 'lucide-react';
-import NodeOptionsDropdown from './node-options-dropdown';
-import { Button } from './ui/button';
-import { TableCell, TableRow } from './ui/table';
-import { useContainers, useHostInfo } from '@/api/queries';
+import { memo } from 'react';
+import { Link } from '@tanstack/react-router';
+import { useHostInfo, useNodeMeta } from '@/api/queries';
+import { useNodeName } from '@/stores/nodes';
 import {
   getCpuPct,
   getDiskReadMbps,
@@ -19,87 +11,76 @@ import {
   getNetTxMbps,
 } from '@/lib/node-metrics';
 import { secondsToDuration } from '@/lib/time';
-import DualStatDisplay from './dual-stat-display';
+import { TableCell, TableRow } from './ui/table';
+import { LiveValue } from './live-value';
+import NodeOptionsDropdown from './node-options-dropdown';
+import { NodeAvatar } from './node-planet';
+import { NodeStatusBadge } from './node-status-badge';
+import { Sparkline } from './sparkline';
 
-export default function NodeTableRow({ nodeId }: { nodeId: string }) {
-  const { data: host, isLoading } = useHostInfo(nodeId);
-  useContainers(nodeId);
+/** Columns, for the header in nodes-page. */
+export const NODE_TABLE_COLUMNS = ['Node', 'CPU', 'Memory', 'Network', 'Disk', 'Uptime', ''] as const;
 
-  if (isLoading) {
-    return (
-      <TableRow>
-        <TableCell colSpan={8} className='text-muted-foreground text-sm'>
-          Connecting...
-        </TableCell>
-        <TableCell>
-          <NodeOptionsDropdown nodeId={nodeId} />
-        </TableCell>
-      </TableRow>
-    );
-  }
-
-  if (!host) {
-    return (
-      <TableRow>
-        <TableCell colSpan={8} className='text-muted-foreground text-sm'>
-          Node unreachable
-        </TableCell>
-        <TableCell>
-          <NodeOptionsDropdown nodeId={nodeId} />
-        </TableCell>
-      </TableRow>
-    );
-  }
+export const NodeTableRow = memo(function NodeTableRow({ nodeId }: { nodeId: string }) {
+  const meta = useNodeMeta(nodeId);
+  const { data: host } = useHostInfo(nodeId);
+  const name = useNodeName(nodeId);
 
   return (
     <TableRow>
       <TableCell>
-        <div className='size-full flex items-center justify-center'>
-          <Server />
+        <div className='flex min-w-0 items-center gap-3'>
+          <NodeAvatar nodeId={nodeId} size={28} />
+          <div className='min-w-0'>
+            <Link
+              to='/nodes/$nodeId'
+              params={{ nodeId }}
+              className='block truncate font-medium hover:underline'
+            >
+              {name}
+            </Link>
+            {host ? (
+              host.hostname !== name && (
+                <p className='truncate text-xs text-muted-foreground'>{host.hostname}</p>
+              )
+            ) : (
+              <NodeStatusBadge nodeId={nodeId} />
+            )}
+          </div>
         </div>
       </TableCell>
-      <TableCell className='max-w-0'>
-        <p className='text-base font-medium truncate'>{host.name}</p>
-        <p className='text-sm font-normal text-muted-foreground truncate'>
-          {host.hostname}
-        </p>
-      </TableCell>
-      <TableCell className='tabular-nums'>
-        {getCpuPct(host)}%
-      </TableCell>
-      <TableCell className='tabular-nums whitespace-nowrap'>
-        {getMemUsagePct(host)}%
-      </TableCell>
-      <TableCell>
-        <DualStatDisplay
-          icon1={ArrowUp}
-          icon2={ArrowDown}
-          value1={`${getNetTxMbps(host)} Mbps`}
-          value2={`${getNetRxMbps(host)} Mbps`}
-          color='var(--color-network)'
-        />
-      </TableCell>
-      <TableCell>
-        <DualStatDisplay
-          icon1={BookOpen}
-          icon2={PencilLine}
-          value1={`${getDiskReadMbps(host)} MB/s`}
-          value2={`${getDiskWriteMbps(host)} MB/s`}
-          color='var(--color-disk)'
-        />
-      </TableCell>
-      <TableCell className='text-success tabular-nums whitespace-nowrap'>
-        {secondsToDuration(host.uptime_secs)}
-      </TableCell>
-      <TableCell>
-        <Button className='w-full' variant='outline' size='lg'>
-          <Info />
-          Details
-        </Button>
-      </TableCell>
-      <TableCell>
+      {host ? (
+        <>
+          <TableCell>
+            <div className='flex items-center gap-2'>
+              <Sparkline nodeId={nodeId} metric='cpu' color='var(--color-cpu)' scale='percent' className='h-6 w-16' />
+              <LiveValue nodeId={nodeId} className='w-10 tabular-nums' format={(h) => `${getCpuPct(h)}%`} />
+            </div>
+          </TableCell>
+          <TableCell>
+            <div className='flex items-center gap-2'>
+              <Sparkline nodeId={nodeId} metric='ram' color='var(--color-ram)' scale='percent' className='h-6 w-16' />
+              <LiveValue nodeId={nodeId} className='w-10 tabular-nums' format={(h) => `${getMemUsagePct(h)}%`} />
+            </div>
+          </TableCell>
+          <TableCell className='text-xs tabular-nums text-muted-foreground'>
+            <LiveValue nodeId={nodeId} format={(h) => `${getNetTxMbps(h)} / ${getNetRxMbps(h)} Mbps`} />
+          </TableCell>
+          <TableCell className='text-xs tabular-nums text-muted-foreground'>
+            <LiveValue nodeId={nodeId} format={(h) => `${getDiskReadMbps(h)} / ${getDiskWriteMbps(h)} MB/s`} />
+          </TableCell>
+          <TableCell className='tabular-nums text-muted-foreground'>
+            <LiveValue nodeId={nodeId} format={(h) => secondsToDuration(h.uptime_secs)} />
+          </TableCell>
+        </>
+      ) : (
+        <TableCell colSpan={5} className='text-xs text-muted-foreground'>
+          {meta?.error ?? 'Waiting for data'}
+        </TableCell>
+      )}
+      <TableCell className='w-12 text-right'>
         <NodeOptionsDropdown nodeId={nodeId} />
       </TableCell>
     </TableRow>
   );
-}
+});

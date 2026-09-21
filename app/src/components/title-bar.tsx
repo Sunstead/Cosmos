@@ -1,176 +1,116 @@
-import { useEffect, useRef, useState } from 'react';
-import { SidebarTrigger } from '@/components/ui/resizable-sidebar';
+import { memo } from 'react';
+import { Link } from '@tanstack/react-router';
+import { Copy, Minus, PanelLeft, Search, Square, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useSidebar } from '@/components/ui/resizable-sidebar';
+import { useNodeStore } from '@/stores/nodes';
+import { useUiStore } from '@/stores/ui';
+import { getPlatform } from '@/lib/platform';
+import { cn } from '@/lib/utils';
+import { useWindowState, windowAction } from '@/hooks/use-window-state';
+import { Hint, ShortcutKeys } from './hint';
+import { ThemeToggle } from './theme-toggle';
+import { Dot } from './dot';
 
-const isTauri = () => '__TAURI_INTERNALS__' in window;
-
-export default function TitleBar() {
-  const [isMac, setIsMac] = useState(false);
-  const [isDesktop, setIsDesktop] = useState(false);
-  const [isMaximized, setIsMaximized] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const appWindowRef = useRef<any>(null);
-
-  useEffect(() => {
-    if (!isTauri()) return;
-    setIsDesktop(true);
-
-    let unlisten: (() => void) | null = null;
-
-    const init = async () => {
-      const { getCurrentWindow } = await import('@tauri-apps/api/window');
-      const appWindow = getCurrentWindow();
-      appWindowRef.current = appWindow;
-
-      setIsMaximized(await appWindow.isMaximized());
-      setIsFullscreen(await appWindow.isFullscreen());
-
-      unlisten = await appWindow.onResized(async () => {
-        setIsMaximized(await appWindow.isMaximized());
-        setIsFullscreen(await appWindow.isFullscreen());
-      });
-    };
-
-    init();
-
-    return () => {
-      unlisten?.();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!isTauri()) return;
-    import('@tauri-apps/plugin-os').then(({ platform }) => {
-      setIsMac(platform() === 'macos');
-    });
-  }, []);
-
-  const appWindow = appWindowRef.current;
-
+function SearchTrigger() {
+  const setPaletteOpen = useUiStore((s) => s.setPaletteOpen);
   return (
-    <header className='bg-sidebar w-full h-12 min-h-9 draggable relative flex items-center'>
-      <div data-tauri-drag-region className='size-full absolute inset-0' />
-
-      <div className='flex items-center z-0 w-max h-max'>
-        <div className='flex items-center pl-2 gap-x-2 select-none'>
-          {isDesktop && isMac ? (
-            <>
-              {!isFullscreen && <span className='w-16' />}
-              <SidebarTrigger className='size-10 no-drag z-50 select-all' />
-            </>
-          ) : (
-            <SidebarTrigger className='size-10 no-drag z-50 select-all' />
-          )}
-        </div>
-      </div>
-
-      {isDesktop && !isMac && (
-        <div className='flex ml-auto select-all text-muted-foreground'>
-          {/* Minimize */}
-          <Button
-            className='flex items-center justify-center rounded-none w-12 h-12 select-all z-50 no-drag'
-            variant='ghost'
-            onClick={() => appWindow.minimize()}
-          >
-            <svg
-              xmlns='http://www.w3.org/2000/svg'
-              width='18'
-              height='18'
-              viewBox='0 0 24 24'
-              strokeWidth='2'
-              stroke='currentColor'
-              fill='none'
-              strokeLinecap='round'
-              strokeLinejoin='round'
-            >
-              <path stroke='none' d='M0 0h24v24H0z' fill='none' />
-              <line x1='5' y1='12' x2='19' y2='12' />
-            </svg>
-          </Button>
-          {/* Maximize / Restore */}
-          <Button
-            className='flex items-center justify-center rounded-none w-12 h-12 select-all z-50 no-drag'
-            variant='ghost'
-            onClick={() => appWindow.toggleMaximize()}
-          >
-            {isMaximized ? (
-              <svg
-                xmlns='http://www.w3.org/2000/svg'
-                width='18'
-                height='18'
-                viewBox='0 0 16 16'
-              >
-                <rect
-                  style={{
-                    fill: 'none',
-                    stroke: 'currentColor',
-                    strokeWidth: 1.5,
-                    strokeLinejoin: 'round',
-                  }}
-                  width='8'
-                  height='8'
-                  x='2.5'
-                  y='5.5'
-                  ry='1.5'
-                />
-                <path
-                  style={{
-                    fill: 'none',
-                    stroke: 'currentColor',
-                    strokeWidth: 1.5,
-                    strokeLinecap: 'round',
-                    strokeLinejoin: 'round',
-                  }}
-                  d='M 5 2.5 h 5.5 A 2.5 2.5 0 0 1 13 5 v 5.5'
-                />
-              </svg>
-            ) : (
-              <svg
-                xmlns='http://www.w3.org/2000/svg'
-                width='18'
-                height='18'
-                viewBox='0 0 16 16'
-              >
-                <rect
-                  style={{
-                    fill: 'none',
-                    stroke: 'currentColor',
-                    strokeWidth: 1.55298,
-                    strokeLinejoin: 'round',
-                  }}
-                  width='9'
-                  height='9'
-                  x='3.5'
-                  y='3.5'
-                  ry='2.2857144'
-                />
-              </svg>
-            )}
-          </Button>
-          {/* Close */}
-          <Button
-            className='flex items-center justify-center rounded-none w-12 h-12 select-all z-50 no-drag'
-            variant='ghost'
-            onClick={() => appWindow.close()}
-          >
-            <svg
-              xmlns='http://www.w3.org/2000/svg'
-              width='18'
-              height='18'
-              viewBox='0 0 24 24'
-              strokeWidth='2'
-              stroke='currentColor'
-              fill='none'
-              strokeLinecap='round'
-              strokeLinejoin='round'
-            >
-              <path stroke='none' d='M0 0h24v24H0z' fill='none' />
-              <path d='M18 6l-12 12' />
-              <path d='M6 6l12 12' />
-            </svg>
-          </Button>
-        </div>
-      )}
-    </header>
+    <button
+      type='button'
+      onClick={() => setPaletteOpen(true)}
+      aria-label='Search'
+      className='flex h-8 w-full items-center gap-2 rounded-md border border-input bg-muted/40 px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'
+    >
+      <Search className='size-4 shrink-0' />
+      <span className='flex-1 truncate text-left'>Search</span>
+      <ShortcutKeys id='palette' className='hidden sm:inline-flex' />
+    </button>
   );
 }
+
+function NodesOnline() {
+  const total = useNodeStore((s) => s.nodes.length);
+  const online = useNodeStore((s) => s.onlineNodes);
+  if (total === 0) return null;
+
+  const healthy = online === total;
+  return (
+    <Hint label={healthy ? 'All nodes online' : `${total - online} offline`}>
+      <Link
+        to='/nodes'
+        className='hidden h-8 items-center gap-2 rounded-md px-2 text-xs text-muted-foreground tabular-nums transition-colors hover:bg-muted hover:text-foreground md:flex'
+      >
+        <Dot variant={healthy ? 'success' : 'error'} pulse={healthy} />
+        {online}/{total}
+      </Link>
+    </Hint>
+  );
+}
+
+function WindowControls({ maximized }: { maximized: boolean }) {
+  const base =
+    'flex h-12 w-11 items-center justify-center text-muted-foreground transition-colors';
+  return (
+    <div className='flex self-stretch'>
+      <button
+        type='button'
+        aria-label='Minimize'
+        className={cn(base, 'hover:bg-muted hover:text-foreground')}
+        onClick={() => void windowAction('minimize')}
+      >
+        <Minus className='size-4' />
+      </button>
+      <button
+        type='button'
+        aria-label={maximized ? 'Restore' : 'Maximize'}
+        className={cn(base, 'hover:bg-muted hover:text-foreground')}
+        onClick={() => void windowAction('toggleMaximize')}
+      >
+        {maximized ? <Copy className='size-3.5 -scale-x-100' /> : <Square className='size-3.5' />}
+      </button>
+      <button
+        type='button'
+        aria-label='Close'
+        className={cn(base, 'hover:bg-destructive hover:text-white')}
+        onClick={() => void windowAction('close')}
+      >
+        <X className='size-4' />
+      </button>
+    </div>
+  );
+}
+
+export const TitleBar = memo(function TitleBar() {
+  const platform = getPlatform();
+  const { fullscreen, maximized } = useWindowState();
+  const { toggleSidebar } = useSidebar();
+  const customControls = platform === 'windows' || platform === 'linux';
+
+  return (
+    <header
+      // Descendants drag too; buttons and links are excluded automatically.
+      data-tauri-drag-region='deep'
+      data-fullscreen={fullscreen || undefined}
+      className='titlebar chrome grid h-(--titlebar-height) shrink-0 grid-cols-[1fr_minmax(0,28rem)_1fr] items-center gap-3 bg-sidebar'
+    >
+      <div className='flex min-w-0 items-center gap-2 pl-2'>
+        <span className='titlebar-inset shrink-0' aria-hidden='true' />
+        <Hint label='Toggle sidebar' shortcut='sidebar'>
+          <Button variant='ghost' size='icon' onClick={toggleSidebar} aria-label='Toggle sidebar'>
+            <PanelLeft />
+          </Button>
+        </Hint>
+      </div>
+
+      <SearchTrigger />
+
+      <div className={cn('flex items-center justify-end gap-1', !customControls && 'pr-2')}>
+        <NodesOnline />
+        <ThemeToggle />
+        {customControls && <WindowControls maximized={maximized} />}
+      </div>
+    </header>
+  );
+});
+
+export default TitleBar;

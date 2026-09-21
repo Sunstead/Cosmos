@@ -1,4 +1,5 @@
 import {
+  lazyRouteComponent,
   createRouter,
   createRootRoute,
   createRoute,
@@ -8,39 +9,39 @@ import {
   createBrowserHistory,
 } from '@tanstack/react-router';
 import { AppLayout } from './layouts/AppLayout';
-import OverviewPage from './pages/overview-page';
-import { NodesPage } from './pages/nodes-page';
-import { ServicesPage } from './pages/services-page';
-import { VolumesPage } from './pages/volumes-page';
-import { NetworkPage } from './pages/network-page';
-import { MonitoringPage } from './pages/monitoring-page';
-import { LogsPage } from './pages/logs-page';
-import { BackupsPage } from './pages/backups-page';
-import { SettingsPage } from './pages/settings-page';
 import { useNodeStore } from './stores/nodes';
+import { useUiStore } from './stores/ui';
 import { getDefaultNodes } from './config';
-import { isTauri } from './lib/tauri';
-import { ContainersPage } from './pages/containers-page';
+import { isDesktop } from './lib/platform';
+
+export interface LogsSearch {
+  node?: string;
+  container?: string;
+}
 
 const rootRoute = createRootRoute({
   beforeLoad: async () => {
     const store = useNodeStore.getState();
-    if (store.nodes.length === 0) {
-      const defaults = await getDefaultNodes();
-      for (const node of defaults) {
-        await store.addNode(node.url);
-      }
-    }
+    if (store.nodes.length > 0) return;
+
+    const defaults = await getDefaultNodes();
+    const results = await Promise.all(defaults.map((n) => store.addNode(n.url, n.token)));
+    // A configured node that wants a token: ask for it with the address filled in.
+    const locked = defaults.find((_, i) => {
+      const r = results[i];
+      return !r.ok && r.error === 'This agent requires a token.';
+    });
+    if (locked) useUiStore.getState().setAddNodeOpen(true, locked.url);
   },
   component: () => (
-    <>
-      <AppLayout>
-        <Outlet />
-      </AppLayout>
-    </>
+    <AppLayout>
+      <Outlet />
+    </AppLayout>
   ),
 });
 
+// Defined individually: a helper function would erase the router's literal
+// path types. Pages are lazy so heavy dependencies (recharts) load on demand.
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
@@ -49,70 +50,83 @@ const indexRoute = createRoute({
   },
 });
 
-const dashboardRoute = createRoute({
+const overviewRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/overview',
-  component: () => <OverviewPage />,
+  component: lazyRouteComponent(() => import('./pages/overview-page'), 'OverviewPage'),
 });
 
 const nodesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/nodes',
-  component: () => <NodesPage />,
+  component: lazyRouteComponent(() => import('./pages/nodes-page'), 'NodesPage'),
+});
+
+/** Reached from the Details button on a node card or row. */
+const nodeDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/nodes/$nodeId',
+  component: lazyRouteComponent(() => import('./pages/node-detail-route'), 'NodeDetailRoute'),
 });
 
 const servicesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/services',
-  component: () => <ServicesPage />,
+  component: lazyRouteComponent(() => import('./pages/services-page'), 'ServicesPage'),
 });
 
 const containersRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/containers',
-  component: () => <ContainersPage />,
+  component: lazyRouteComponent(() => import('./pages/containers-page'), 'ContainersPage'),
 });
 
 const volumesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/volumes',
-  component: () => <VolumesPage />,
+  component: lazyRouteComponent(() => import('./pages/volumes-page'), 'VolumesPage'),
 });
 
 const networkRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/network',
-  component: () => <NetworkPage />,
+  component: lazyRouteComponent(() => import('./pages/network-page'), 'NetworkPage'),
 });
 
 const monitoringRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/monitoring',
-  component: () => <MonitoringPage />,
+  component: lazyRouteComponent(() => import('./pages/monitoring-page'), 'MonitoringPage'),
 });
 
 const logsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/logs',
-  component: () => <LogsPage />,
+  staticData: { layout: 'fill' },
+  validateSearch: (s: Record<string, unknown>): LogsSearch => ({
+    node: typeof s.node === 'string' ? s.node : undefined,
+    container: typeof s.container === 'string' ? s.container : undefined,
+  }),
+  component: lazyRouteComponent(() => import('./pages/logs-page'), 'LogsPage'),
 });
 
 const backupsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/backups',
-  component: () => <BackupsPage />,
+  component: lazyRouteComponent(() => import('./pages/backups-page'), 'BackupsPage'),
 });
 
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings',
-  component: () => <SettingsPage />,
+  component: lazyRouteComponent(() => import('./pages/settings-page'), 'SettingsPage'),
 });
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
-  dashboardRoute,
+  overviewRoute,
   nodesRoute,
+  nodeDetailRoute,
   servicesRoute,
   containersRoute,
   volumesRoute,
@@ -123,12 +137,11 @@ const routeTree = rootRoute.addChildren([
   settingsRoute,
 ]);
 
-// Hash history for Tauri — works fine in browser too
-const history = isTauri() ? createHashHistory() : createBrowserHistory();
+// Hash history under Tauri: the custom protocol doesn't serve arbitrary paths.
+const history = isDesktop() ? createHashHistory() : createBrowserHistory();
 
-export const router = createRouter({ routeTree, history: history });
+export const router = createRouter({ routeTree, history });
 
-// Global type registration for full type inference
 declare module '@tanstack/react-router' {
   interface Register {
     router: typeof router;

@@ -1,46 +1,26 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { Box, Container, Cpu, MemoryStick, SearchX } from 'lucide-react';
 import { useContainersStore } from '@/stores/containers';
-import { columns, ContainerRow } from '@/components/container-columns';
-import { DataTable } from '@/components/containers-data-table';
-import SimpleStatCard from '@/components/simple-stat-card';
-import { Container, Cpu, MemoryStick } from 'lucide-react';
-import { formatMemoryGb } from '@/lib/service-utils';
+import { useNodeStore } from '@/stores/nodes';
+import { formatBytes } from '@/lib/node-metrics';
+import { matchesQuery } from '@/lib/format';
+import { PageHeader } from '@/components/page-header';
+import { SearchInput } from '@/components/search-input';
+import { SegmentedControl } from '@/components/segmented-control';
+import { StatCard, StatRow } from '@/components/stat-card';
+import { EmptyState, NoNodesState } from '@/components/empty-state';
+import { DataTable } from '@/components/data-table';
+import { containerColumns, ContainerRow } from '@/components/container-columns';
 
-interface ContainerStats {
-  total: number;
-  active: number;
-  cpuPct: number;
-  memMb: number;
-}
-
-function summarizeContainers(containers: ContainerRow[]): ContainerStats {
-  const { active, cpuPct, memMb } = containers.reduce(
-    (acc, c) => ({
-      active: acc.active + (c.state === 'running' ? 1 : 0),
-      cpuPct: acc.cpuPct + c.cpu_pct,
-      memMb: acc.memMb + c.mem_mb,
-    }),
-    { active: 0, cpuPct: 0, memMb: 0 },
-  );
-
-  return {
-    total: containers.length,
-    active,
-    cpuPct: Math.round(cpuPct * 100) / 100,
-    memMb,
-  };
-}
-
-function activeStatusColor(active: number, total: number) {
-  if (active === 0) return 'error';
-  if (active < total) return 'warn';
-  return 'success';
-}
+type Filter = 'all' | 'running' | 'stopped';
 
 export function ContainersPage() {
+  const nodeCount = useNodeStore((s) => s.nodes.length);
   const nodeContainers = useContainersStore((s) => s.nodeContainers);
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<Filter>('all');
 
-  const containers = useMemo<ContainerRow[]>(
+  const all = useMemo<ContainerRow[]>(
     () =>
       Object.entries(nodeContainers)
         .flatMap(([nodeId, list]) => list.map((c) => ({ ...c, nodeId })))
@@ -48,44 +28,87 @@ export function ContainersPage() {
     [nodeContainers],
   );
 
-  const stats = useMemo(() => summarizeContainers(containers), [containers]);
+  const visible = useMemo(
+    () =>
+      all.filter((c) => {
+        if (filter === 'running' && c.state !== 'running') return false;
+        if (filter === 'stopped' && c.state === 'running') return false;
+        return matchesQuery(query, c.name, c.image, c.cosmos_service, c.compose_project);
+      }),
+    [all, filter, query],
+  );
+
+  const stats = useMemo(() => {
+    const running = all.filter((c) => c.state === 'running');
+    return {
+      running: running.length,
+      cpu: running.reduce((s, c) => s + c.cpu_pct, 0),
+      mem: running.reduce((s, c) => s + c.mem_used_bytes, 0),
+    };
+  }, [all]);
+
+  const columns = useMemo(() => containerColumns(nodeCount > 1), [nodeCount]);
+  const filtered = query !== '' || filter !== 'all';
 
   return (
     <>
-      <div className='min-h-9 flex items-center'>
-        <h1 className='text-muted-foreground text-xl'>CONTAINERS</h1>
-      </div>
-      <div className='flex flex-wrap gap-4 max-w-full'>
-        <SimpleStatCard
-          value={stats.total}
-          label='CONTAINERS'
-          status={`${stats.active} Active`}
-          statusColor={activeStatusColor(stats.active, stats.total)}
-          icon={Container}
-        />
-        <SimpleStatCard
-          value={`${stats.cpuPct}%`}
-          label='CONTAINER CPU USAGE'
-          status=''
-          statusColor='default'
-          icon={Cpu}
-        />
-        <SimpleStatCard
-          value={formatMemoryGb(stats.memMb)}
-          label='CONTAINER MEMORY'
-          status=''
-          statusColor='default'
-          icon={MemoryStick}
-        />
-      </div>
-      <div className='gap-4'>
-        <DataTable
-          columns={columns}
-          data={containers}
-          getRowId={(row) => `${row.nodeId}:${row.id}`}
-          emptyMessage='No containers found.'
-        />
-      </div>
+      <PageHeader
+        title='Containers'
+        count={all.length ? visible.length : undefined}
+        actions={
+          all.length > 0 && (
+            <>
+              <SearchInput value={query} onChange={setQuery} placeholder='Search containers' />
+              <SegmentedControl
+                label='Filter by state'
+                value={filter}
+                onChange={setFilter}
+                options={[
+                  { value: 'all', label: 'All' },
+                  { value: 'running', label: 'Running' },
+                  { value: 'stopped', label: 'Stopped' },
+                ]}
+              />
+            </>
+          )
+        }
+      />
+
+      {nodeCount === 0 ? (
+        <NoNodesState />
+      ) : (
+        <>
+          {all.length > 0 && (
+            <StatRow>
+              <StatCard
+                icon={Container}
+                label='Running'
+                value={`${stats.running} / ${all.length}`}
+                sublabel={all.length - stats.running ? `${all.length - stats.running} stopped` : null}
+                tone='warning'
+              />
+              <StatCard icon={Cpu} label='CPU' value={`${stats.cpu.toFixed(1)}%`} />
+              <StatCard icon={MemoryStick} label='Memory' value={formatBytes(stats.mem)} />
+            </StatRow>
+          )}
+          <DataTable
+            columns={columns}
+            data={visible}
+            getRowId={(r) => `${r.nodeId}:${r.id}`}
+            empty={
+              filtered ? (
+                <EmptyState size='inline' icon={SearchX} title='No matching containers' />
+              ) : (
+                <EmptyState
+                  icon={Box}
+                  title='No containers'
+                  description='Nothing is running under Docker on your nodes.'
+                />
+              )
+            }
+          />
+        </>
+      )}
     </>
   );
 }

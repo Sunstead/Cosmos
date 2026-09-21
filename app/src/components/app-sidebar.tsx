@@ -1,65 +1,66 @@
+import { Link, useLocation } from '@tanstack/react-router';
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
 } from '@/components/ui/resizable-sidebar';
-import { Link, useLocation } from '@tanstack/react-router';
-import {
-  Container,
-  Database,
-  Hexagon,
-  LayoutDashboard,
-  Network,
-  Server,
-  Settings,
-} from 'lucide-react';
-
-const NAV_ITEMS = [
-  { label: 'Overview', icon: LayoutDashboard, href: '/overview' },
-  { label: 'Nodes', icon: Server, href: '/nodes' },
-  { label: 'Services', icon: Hexagon, href: '/services' },
-  { label: 'Containers', icon: Container, href: '/containers' },
-  { label: 'Volumes', icon: Database, href: '/volumes' },
-  { label: 'Network', icon: Network, href: '/network' },
-  { label: 'Settings', icon: Settings, href: '/settings' },
-] as const;
+import { NAV_GROUPS, PAGES, pageFor } from '@/lib/navigation';
+import { ShortcutKeys } from './hint';
 
 export function AppSidebar() {
-  const location = useLocation();
+  const { pathname } = useLocation();
+  const active = pageFor(pathname)?.path;
 
   return (
-    <Sidebar collapsible='icon'>
-      {/* <SidebarHeader /> */}
-      <SidebarContent>
-        <SidebarGroup className='pl-0'>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {NAV_ITEMS.map(({ label, icon: Icon, href }) => (
-                <SidebarMenuItem key={label}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location.pathname == href}
-                    className='rounded-l-none data-[active=true]:shadow-[inset_2px_0_0_0_var(--color-primary)] space-x-3 pl-5'
-                    size='lg'
-                  >
-                    <Link to={href}>
-                      <Icon className='size-5!' />
-                      <span>{label}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+    <Sidebar collapsible='icon' className='chrome'>
+      <SidebarContent className='pt-1'>
+        {NAV_GROUPS.map((group, i) => (
+          <SidebarGroup key={group.label ?? i} className='pl-0'>
+            {group.label && (
+              <SidebarGroupLabel className='label-hud pl-5 text-2xs'>
+                {group.label}
+              </SidebarGroupLabel>
+            )}
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {group.paths.map((path) => {
+                  const page = PAGES.find((p) => p.path === path)!;
+                  const Icon = page.icon;
+                  return (
+                    <SidebarMenuItem key={path}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={active === path}
+                        size='lg'
+                        tooltip={{
+                          children: (
+                            <span className='flex items-center gap-2'>
+                              {page.label}
+                              <ShortcutKeys id={page.shortcut} />
+                            </span>
+                          ),
+                        }}
+                        className='space-x-3 rounded-l-none pl-5 data-[active=true]:shadow-[inset_2px_0_0_0_var(--color-primary)]'
+                      >
+                        <Link to={path}>
+                          <Icon className='size-5!' />
+                          <span>{page.label}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
       </SidebarContent>
-      <SidebarFooter />
       <SidebarRail className='mt-3' />
     </Sidebar>
   );

@@ -21,12 +21,29 @@ import { useSidebarResize } from '@/hooks/use-sidebar-resize';
 import { mergeButtonRefs } from '@/lib/merge-button-refs';
 import { cn } from '@/lib/utils';
 
-const SIDEBAR_COOKIE_NAME = 'sidebar:state';
-const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
+// localStorage, not a cookie: cookies don't persist under Tauri's custom protocol.
+const SIDEBAR_OPEN_KEY = 'cosmos-sidebar-open';
+const SIDEBAR_WIDTH_KEY = 'cosmos-sidebar-width';
+
+function readStored<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw === null ? fallback : (JSON.parse(raw) as T);
+  } catch {
+    return fallback;
+  }
+}
+
+function writeStored(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* non-fatal */
+  }
+}
 const SIDEBAR_WIDTH = '18rem';
 const SIDEBAR_WIDTH_MOBILE = '18rem';
 const SIDEBAR_WIDTH_ICON = '4rem';
-// const SIDEBAR_KEYBOARD_SHORTCUT = "b";
 
 //* new constants for sidebar resizing
 const MIN_SIDEBAR_WIDTH = '12rem';
@@ -84,14 +101,18 @@ const SidebarProvider = React.forwardRef<
   ) => {
     const isMobile = useIsMobile();
     //* new state for sidebar width
-    const [width, setWidth] = React.useState(defaultWidth);
+    const [width, setWidthState] = React.useState(() => readStored(SIDEBAR_WIDTH_KEY, defaultWidth));
+    const setWidth = React.useCallback((next: string) => {
+      setWidthState(next);
+      writeStored(SIDEBAR_WIDTH_KEY, next);
+    }, []);
     const [openMobile, setOpenMobile] = React.useState(false);
     //* new state for tracking is dragging rail
     const [isDraggingRail, setIsDraggingRail] = React.useState(false);
 
     // This is the internal state of the sidebar.
     // We use openProp and setOpenProp for control from outside the component.
-    const [_open, _setOpen] = React.useState(defaultOpen);
+    const [_open, _setOpen] = React.useState(() => readStored(SIDEBAR_OPEN_KEY, defaultOpen));
     const open = openProp ?? _open;
     const setOpen = React.useCallback(
       (value: boolean | ((value: boolean) => boolean)) => {
@@ -102,8 +123,7 @@ const SidebarProvider = React.forwardRef<
           _setOpen(openState);
         }
 
-        // This sets the cookie to keep the sidebar state.
-        document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`;
+        writeStored(SIDEBAR_OPEN_KEY, openState);
       },
       [setOpenProp, open],
     );
@@ -120,21 +140,7 @@ const SidebarProvider = React.forwardRef<
       // setOpenMobile
     ]);
 
-    // Adds a keyboard shortcut to toggle the sidebar.
-    /* React.useEffect(() => {
-			const handleKeyDown = (event: KeyboardEvent) => {
-				if (
-					event.key === SIDEBAR_KEYBOARD_SHORTCUT &&
-					(event.metaKey || event.ctrlKey)
-				) {
-					event.preventDefault();
-					toggleSidebar();
-				}
-			};
-
-			window.addEventListener("keydown", handleKeyDown);
-			return () => window.removeEventListener("keydown", handleKeyDown);
-		}, [toggleSidebar]); */
+    // Keyboard shortcut lives in CommandHost.
 
     // We add a state so that we can do data-state="expanded" or "collapsed".
     // This makes it easier to style the sidebar with Tailwind classes.
@@ -362,8 +368,6 @@ const SidebarRail = React.forwardRef<
     minResizeWidth: MIN_SIDEBAR_WIDTH,
     maxResizeWidth: MAX_SIDEBAR_WIDTH,
     setIsDraggingRail,
-    widthCookieName: 'sidebar:width',
-    widthCookieMaxAge: 60 * 60 * 24 * 7, // 1 week
   });
 
   //* Merge external ref with our dragRef
@@ -602,7 +606,7 @@ const sidebarMenuButtonVariants = cva(
       variant: {
         default: 'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
         outline:
-          'bg-background shadow-[0_0_0_1px_hsl(var(--sidebar-border))] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:shadow-[0_0_0_1px_hsl(var(--sidebar-accent))]',
+          'bg-background shadow-[0_0_0_1px_var(--sidebar-border)] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:shadow-[0_0_0_1px_hsl(var(--sidebar-accent))]',
       },
       size: {
         default: 'h-8 text-sm',

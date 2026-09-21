@@ -1,21 +1,87 @@
+import { useMemo, useState } from 'react';
+import { Hexagon, SearchX } from 'lucide-react';
 import { ServiceCard } from '@/components/service-card';
+import { PageHeader } from '@/components/page-header';
+import { SearchInput } from '@/components/search-input';
+import { SegmentedControl } from '@/components/segmented-control';
+import { EmptyState, NoNodesState } from '@/components/empty-state';
+import { SETUP } from '@/components/setup-hint';
 import { useContainersStore } from '@/stores/containers';
+import { useNodeStore } from '@/stores/nodes';
+import { ServiceStatus, userFacingServices } from '@/lib/services';
+import { matchesQuery } from '@/lib/format';
+
+type Filter = 'all' | ServiceStatus;
 
 export function ServicesPage() {
-  const services = useContainersStore((s) => s.services);
+  const nodeCount = useNodeStore((s) => s.nodes.length);
+  const allServices = useContainersStore((s) => s.services);
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<Filter>('all');
+
+  const services = useMemo(() => userFacingServices(allServices), [allServices]);
+
+  const visible = useMemo(
+    () =>
+      services.filter(
+        (s) =>
+          (filter === 'all' || s.status === filter) &&
+          matchesQuery(
+            query,
+            s.name,
+            s.key,
+            s.description,
+            s.url,
+            ...s.containers.map((c) => c.name),
+          ),
+      ),
+    [services, query, filter],
+  );
 
   return (
     <>
-      <div className='min-h-9 flex items-center'>
-        <h1 className='text-muted-foreground text-xl'>SERVICES</h1>
-      </div>
-      <div className='grid grid-cols-[repeat(auto-fill,minmax(350px,1fr))] gap-4'>
-        {services
-          .filter((service) => service.key !== 'system')
-          .map((service) => (
-            <ServiceCard serviceInfo={service} />
+      <PageHeader
+        title='Services'
+        count={services.length ? visible.length : undefined}
+        actions={
+          services.length > 0 && (
+            <>
+              <SearchInput value={query} onChange={setQuery} placeholder='Search services' />
+              <SegmentedControl
+                label='Filter by status'
+                value={filter}
+                onChange={setFilter}
+                options={[
+                  { value: 'all', label: 'All' },
+                  { value: 'running', label: 'Healthy' },
+                  { value: 'partial', label: 'Degraded' },
+                  { value: 'stopped', label: 'Stopped' },
+                ]}
+              />
+            </>
+          )
+        }
+      />
+
+      {nodeCount === 0 ? (
+        <NoNodesState />
+      ) : services.length === 0 ? (
+        <EmptyState
+          size='page'
+          icon={Hexagon}
+          title='No services yet'
+          description='Label containers to group them into services.'
+          setup={SETUP.services}
+        />
+      ) : visible.length === 0 ? (
+        <EmptyState size='page' icon={SearchX} title='No matching services' />
+      ) : (
+        <div className='grid grid-cols-[repeat(auto-fill,minmax(20rem,1fr))] gap-4'>
+          {visible.map((s) => (
+            <ServiceCard key={`${s.nodeId}:${s.key}`} service={s} showNode={nodeCount > 1} />
           ))}
-      </div>
+        </div>
+      )}
     </>
   );
 }

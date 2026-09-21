@@ -4,41 +4,197 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Cosmos is a homelab/server management dashboard. A Cargo workspace holds three crates, plus a React frontend that lives inside the Tauri crate's parent directory:
+Cosmos is a homelab dashboard. A Cargo workspace holds three crates, plus a React frontend inside the Tauri crate's parent directory:
 
-- `cosmos-agent` — axum HTTP server that runs on each node (port 7700). Reports host metrics (sysinfo), Docker containers (bollard) and volumes.
-- `cosmos-common` — shared serde types used by the agent's JSON responses. Derives `ts-rs::TS`.
-- `app/src-tauri` — thin Tauri 2 shell (`lib.rs`/`main.rs`) around the frontend; also targets Android (`gen/android`).
-- `app/` — Vite + React 19 + TypeScript frontend (Tailwind v4, shadcn/Radix UI, TanStack Router/Query/Table, zustand, recharts).
+- `cosmos-agent` — axum server that runs on each node (port 7700). Host metrics (sysinfo), Docker containers/volumes (bollard), metrics history (SQLite), restic backup status.
+- `cosmos-common` — shared serde types, exported to TypeScript via `ts-rs`.
+- `app/src-tauri` — Tauri 2 shell around the frontend; also targets Android (`gen/android`).
+- `app/` — Vite + React 19 + TypeScript (Tailwind v4, shadcn/Radix, TanStack Router/Query/Table, zustand, recharts).
 
 ## Commands
 
 Rust (from repo root):
 ```bash
-cargo run -p cosmos-agent          # agent on 0.0.0.0:7700; COSMOS_NODE_NAME overrides hostname
-cargo test -p cosmos-common        # regenerates TS bindings (see below)
+cargo test -p cosmos-common                      # ALSO regenerates the TS bindings
+cargo test --workspace
+cargo clippy --workspace --all-targets           # expected to be warning-free
+COSMOS_AGENT_TOKEN=dev cargo run -p cosmos-agent
+cargo build --profile release-agent -p cosmos-agent
 ```
 
 Frontend (from `app/`):
 ```bash
-npm run dev                        # Vite dev server on :1420 (browser only)
-npm run tauri dev                  # desktop app (runs `npm run dev` via beforeDevCommand)
+npm run dev                        # Vite on :1420 (browser build)
+npm run tauri dev                  # desktop app
 npm run build                      # tsc && vite build
+npm run lint                       # 0 errors expected; ui/ is vendored and exempt
+npm test                           # vitest + jsdom + Testing Library
+npx vitest run src/lib/lib.test.ts # single file
+npm run test:e2e                   # Playwright, see below
 ```
 
-There is no lint config and no test suite beyond ts-rs export tests.
+`npm run test:e2e` builds and starts a real `cosmos-agent` (random port, temp
+history DB, token `e2e-token`) and Vite on :1431, then drives system Chrome
+(`PW_CHANNEL` overrides). Docker-dependent specs skip when no daemon is up.
+Screenshots of every page in both themes land in `app/e2e/.results/`.
 
-## Architecture
+Agent container (agent + bundled web UI):
+```bash
+docker build -f cosmos-agent/Dockerfile -t cosmos-agent .   # build from the REPO ROOT
+```
+`.github/workflows/agent-image.yml` publishes `ghcr.io/sunstead/cosmos-agent`
+(linux/amd64): `:latest` from `main`, semver tags from `v*`. `ci.yml` runs the
+agent/common tests, clippy (`-D warnings`) and the frontend lint/test/build;
+the Tauri crate is skipped in CI because it needs WebKitGTK.
 
-**Type sharing (Rust → TS).** Types in `cosmos-common/src/types.rs` carry `#[ts(export, export_to = "../../app/src/generated/")]`. Running `cargo test -p cosmos-common` writes `.ts` files into `app/src/generated/`, which is gitignored (except `.gitignore`/`.gitkeep`). Frontend imports them as `@/generated/HostInfo` etc. After changing a shared type, regenerate before running `tsc`/`npm run build`; a fresh clone has no generated types.
+## Type sharing (Rust → TS)
 
-**Agent API.** Routes in `cosmos-agent/src/main.rs`: `GET /v1/host`, `GET /v1/host/stream` (SSE, 1s interval), `GET /v1/containers`, `GET /v1/volumes`. Handlers delegate to `metrics.rs`, `docker.rs`, `volumes.rs`. `AppState` keeps previous net/disk snapshots so rates (Mbps, MB/s) are computed as deltas between calls. CORS is fully permissive.
+Types live in `cosmos-common/src/types/` (`host`, `docker`, `history`, `backups`, `meta`, `error`), flat-re-exported from `types/mod.rs`. Each derives `ts_rs::TS` with `#[ts(export, export_to = "../../app/src/generated/")]`.
 
-**Frontend data flow.** The app talks directly to agents from the webview (no Tauri IPC for data):
-- `stores/nodes.ts` (zustand, persisted) holds `NodeConfig[]`, an `AgentClient` per node (`api/client.ts`), per-node status and latest `HostInfo`.
-- `api/queries.ts` wraps clients in hooks: host info via SSE (`useHostInfo`), containers/volumes via react-query polling (5s), mirrored into `stores/containers.ts` / `stores/volumes.ts` for cross-page aggregation. `stores/metrics-history.ts` and `node-metrics-collector.tsx` accumulate history for sparklines.
-- Adding a new agent endpoint means: type in `cosmos-common` → route + module in `cosmos-agent` → method on `AgentClient` → hook in `queries.ts` → store/page.
+Two things to know:
 
-**Nodes bootstrap.** `router.tsx` root `beforeLoad` seeds nodes when the store is empty via `config.ts`: on Tauri, no defaults (user adds manually); in a browser, it fetches `/config.json` for a default node list. Router uses hash history under Tauri (`lib/tauri.ts` `isTauri`).
+- **`export_to` resolves against `cosmos-common/bindings/`, not the source file.** That's why every module uses the identical path string, and why the types can be reorganised freely.
+- **64-bit integers carry `#[ts(type = "number")]`.** ts-rs maps `u64`/`i64` to `bigint`, but serde writes plain JSON numbers and `JSON.parse` yields `number` — without the annotation the generated type never matches the value at runtime. Every such field here is a byte count, timestamp or counter, all far below `Number.MAX_SAFE_INTEGER`.
 
-**UI.** Pages in `src/pages/`, route table in `src/router.tsx`, layout with sidebar/custom title bar in `layouts/AppLayout.tsx` and `components/`. `components/ui/` is shadcn-generated (`components.json`); prefer adding via the shadcn CLI. Path alias `@/` → `app/src/`. Service icons/metadata live in `lib/service-icons.tsx`, `lib/services.ts`.
+`app/src/generated/` is gitignored, so **a fresh clone has no types until you run `cargo test -p cosmos-common`** — `npm run build` fails until you do.
+
+**Units on the wire are raw: bytes and bytes/second.** Formatting belongs in `app/src/lib/node-metrics.ts`. The pre-0.2 format mixed MB/s for disk with megabits/s for network in one struct.
+
+## Agent architecture
+
+**The one rule: sample on a schedule, never on the request path.**
+
+Background samplers publish to `tokio::sync::watch` channels; handlers hand out the latest value, already serialized. A request does no collection, no serde and takes no locks — `/v1/host` is ~0.3 ms.
+
+- `sample/host.rs` — `HostProbe` owns persistent `System`/`Disks`/`Networks`, refreshed in place, on a dedicated OS thread (sysinfo does blocking `/proc` reads, and the loop owns `&mut System` for its lifetime). It exclusively owns `prev_net`/`prev_disk`, which is why rate deltas are correct with any number of clients. Absolute-deadline scheduling avoids drift and catch-up bursts. The one `MINIMUM_CPU_UPDATE_INTERVAL` sleep happens once at startup.
+- `sample/docker.rs` — `DockerProbe` computes container CPU % by differencing absolute counters across *our own* ticks (`one_shot: true` zeroes `precpu_stats`, so differencing against those is meaningless). `started_at` is cached against state transitions, so steady state costs zero inspect calls. `stats` calls are bounded by `buffer_unordered`.
+- `sample/mod.rs` — spawns everything. Host 1 s, containers 2 s, volumes 60 s, backups 30 s. A Docker event watcher pokes a `Notify` so the container list refreshes immediately after an action.
+- `watch` not `broadcast`: subscribers only want the newest sample, and `watch` coalesces by construction.
+- Snapshots carry `json: Arc<str>` — serialization happens once per tick, not once per request per client.
+
+**Routes.** `/healthz` and `/v1/info` are public; everything else needs a token; `POST/DELETE /v1/containers/*` additionally needs `docker.allow_actions`. Logs use a WebSocket (`/v1/containers/:id/logs/ws`) because Docker log frames contain embedded newlines, `EventSource` reconnects uncontrollably against crash-looping containers, and browsers cap ~6 HTTP/1.1 connections per origin.
+
+`/v1/info` is unauthenticated so the add-node flow can distinguish "nothing here" from "needs a token", but `node_name` stays `null` until authenticated. A **404 there means a pre-0.2 agent** → assume `api_version: 0`.
+
+**Auth** (`auth.rs`). Constant-time bearer compare; accepts the `Authorization` header or `?token=` (browser `EventSource`/`WebSocket` cannot set headers, and the web build is supported). The trace layer records `uri.path()` only so query tokens never reach the logs. **CORS must stay the outermost layer** — axum applies layers bottom-up, and an unauthenticated `OPTIONS` preflight that 401s without CORS headers surfaces as an opaque browser failure. The agent refuses to start with no token unless `auth.allow_anonymous = true`.
+
+**Errors** (`error.rs`). Every handler returns `Result<T, AgentError>` rendering `ApiError { code, message, detail }`. The `not_enabled` (501, hide the feature) vs `unavailable`/`docker_unavailable` (503, retry) split is load-bearing for the UI. `/v1/containers` returns 503 when Docker is down — never an empty list.
+
+**History** (`history/`). SQLite, WAL + `synchronous = NORMAL` + `temp_store = MEMORY` (the last is required for `read_only: true` containers). Tiers: `metrics_1s` (1 h), `metrics_1m` (7 d), `metrics_5m` (90 d), each rolled-up tier carrying avg *and* max. A writer thread batches one transaction per 60 rows or 10 s; the sampler's `push` is `try_send` and drops rather than stalling the live stream. **Rollups only touch fully-closed buckets**, which makes them idempotent and crash-safe via a cursor in `meta`; retention never deletes rows the rollup hasn't consumed. `/v1/metrics` returns columnar parallel arrays (~4× smaller than row objects at 10k points).
+
+**Backups** (`backups.rs`). The agent **does not run restic**. It reads a status JSON that `scripts/cosmos-backup-status.sh` writes on the host, so the repo password never enters a network-facing process and nothing can contend for the repository lock. `BackupsStatus.stale` and `timer_last_fired` exist to catch the case a snapshot list can't: a timer that fired but whose job died before writing status.
+
+## Deployment
+
+`cosmos-agent/compose.example.yaml` and `agent.example.toml`. Two things are easy to get wrong:
+
+- **`network_mode: host` is required, not optional.** `/proc/net/dev` renders from the reading process's network namespace and sysinfo has no `HOST_PROC` escape hatch, so without it the agent reports the container's veth. Consequence: `ports:` does not apply, and `[host] net_exclude` becomes load-bearing.
+- **`:ro` on `docker.sock` is not a security control** — it applies to the inode, not the protocol. Anyone who can `connect()` has the full Docker API, which is root-equivalent. The real controls are `allow_actions = false` and network isolation.
+
+Disk mounts need `[[host.disks]]` entries to filter overlayfs noise and remap `/host/rootfs` → `/`.
+
+**Web UI from the agent.** The image sets `COSMOS_AGENT_WEB_DIR`, and
+`api/web.rs` serves `app/dist` as a public fallback after the API routes:
+SPA fallback to `index.html`, 404 for unknown `/v1/*` and missing `/assets/*`,
+immutable caching for hashed assets. `/config.json` returns `[{"url":"/"}]`,
+which the frontend resolves to its own origin; a seeded node that needs a token
+opens Add node prefilled. Same origin, so no CORS entry is needed.
+
+Workspace `[profile.release-agent]` adds `panic = "abort"`; it is deliberately *not* in `[profile.release]`, which would also apply to `app/src-tauri` where Tauri uses `catch_unwind`.
+
+## Frontend architecture
+
+The app talks directly to agents from the webview; no Tauri IPC for data.
+
+**One connection per node, owned by the store.** `api/connection.ts`
+`NodeConnection` owns an agent's host stream, container stream, volume polling,
+capability negotiation, backoff reconnect and status (`connecting | online |
+offline | unauthorized`). Connections live in a `Map` outside React state
+(`stores/nodes.ts`), so navigation never tears a stream down. EventSource gives
+up permanently on a non-2xx and never exposes the status, so `connect()` probes
+with `getHost()` first and reconnects explicitly.
+
+**The node store must not churn.** `NodeConfig` is `{ id, url, agentName,
+alias }`; display name is `alias ?? agentName ?? url` (`nodeDisplayName`,
+`useNodeName`). `attach()` compares against *current* state and writes only on
+a real change. A per-sample write re-renders the sidebar and every page and
+rebuilds the constellation (the old "flash" bug; there's a regression test).
+
+**Keep 1 Hz data out of React.** `<LiveValue>` and `<Sparkline>` subscribe to
+the stream and write through refs inside a shared animation frame
+(`lib/frame-scheduler.ts`), fed by ring buffers (`lib/ring-buffer.ts`,
+`stores/metrics-history.ts`). `useHostInfo` re-renders every second; use it
+only where the whole view changes. Recharts is only on `/monitoring`, which is
+lazy-loaded.
+
+**Adding an endpoint:** type in `cosmos-common` → route + module in
+`cosmos-agent` → method on `AgentClient` → subscription in `NodeConnection` or
+hook in `queries.ts` → store/page. Gate the UI on the `capabilities` flag so
+older agents degrade instead of erroring.
+
+**Service model.** Services come from the `cosmos.service` Docker label,
+grouped per node in `lib/services.ts`. `cosmos.service: system` marks
+infrastructure (filtered by `userFacingServices()`). `cosmos.service.url` holds
+bare hostnames; always route them through `serviceHref()`.
+
+**Nodes bootstrap.** `router.tsx` root `beforeLoad` seeds from `config.ts`
+(nothing under Tauri; `/config.json` in a browser). `onRehydrateStorage` runs
+*during* `create()`, so it seeds through the draft and defers `attach()` to a
+microtask.
+
+## UI conventions
+
+**Shell.** `layouts/AppLayout.tsx` mounts the title bar, sidebar, command
+palette, add-node dialog and `CommandHost` (shortcuts + native menu events).
+Routes are lazy (`lazyRouteComponent`) and pick a layout through
+`staticData.layout`: `scroll` (default) or `fill` (logs). The body never
+scrolls; `<main>` does. Content is a `@container`, so layouts use container
+queries (`@xl`, `@3xl`, `@5xl`), not viewport breakpoints.
+
+**Pages are built from shared primitives**, not bespoke markup:
+`PageHeader` (always rendered, even when empty; the row is `h-8` and every
+header control is `h-8` so titles align), `SegmentedControl`, `SearchInput`
+(`/` focuses it), `NodeSelect`, `StatCard`/`StatRow`, `Section`, `DataTable`,
+`EmptyState` (`page | card | inline`) with an optional `SetupHint` (`?`
+popover holding the config snippet), and sonner toasts. Use shadcn components
+(`components/ui/`, generated by the CLI and lint-exempt) before writing new
+ones. An e2e spec checks header height and title position on every page.
+
+**Copy.** Short, sentence case, no em dashes or curly quotes. An ESLint rule
+rejects them in JSX text and string literals under `pages/` and
+`components/`. Missing values render as `NO_VALUE` (`n/a`).
+
+**Tokens.** Everything is themed through CSS variables in `App.css`, defined
+for both themes: semantic colours, `--text-2xs`, `--titlebar-height`,
+`--titlebar-inset`, and canvas tokens (`--space`, `--star`, `--orbit`,
+`--planet-*`). Canvas code never uses literal colours; it reads them through
+`lib/theme-tokens.ts`, which caches per theme and fires `onThemeChange`.
+`.glass` is applied deliberately, `.label-hud` is the small-caps label, and
+`.chrome` disables text selection on UI chrome (content stays selectable).
+
+**Planets.** `lib/planet.ts` gives each node name a deterministic style
+(presets for jupiter, saturn, mars, etc.; seeded otherwise).
+`lib/planet-render.ts` draws it and caches sprites. `NodePlanet` and the
+constellation share that renderer. The constellation keeps bodies in a ref
+`Map` reconciled by node id, runs one render loop capped at 30fps, pauses
+off-screen and draws a static frame under reduced motion.
+
+**Platforms.** Tauri builds the window in Rust (`src-tauri/src/window.rs`),
+not `tauri.conf.json`. An init script sets `window.__COSMOS_PLATFORM__`;
+`main.tsx` copies it to `html[data-platform]` (`macos | windows | linux |
+web`) before render. macOS: overlay title bar, traffic lights positioned by
+`TRAFFIC_LIGHTS`, a native menu (must keep the Edit items or ⌘C/⌘V break in
+inputs) that emits `menu` events, and `CommandHost` skips its own keydown
+handling there to avoid double-firing. Windows/Linux: `decorations(false)` with
+custom controls in `TitleBar`. The Rust side emits `window-state` (fullscreen,
+maximized). Shortcuts live in `lib/shortcuts.ts` and feed the palette, key
+hints and menu.
+
+## Gotchas worth knowing
+
+- **SSE events must stay unnamed.** The agent emits `Event::default().data(..)`
+  with no `.event(..)`. A named event is only delivered to a matching
+  `addEventListener`, never to `EventSource.onmessage` — which looks like a
+  perfectly healthy open stream that no handler ever sees.
+- `npm run build` fails on a fresh clone until `cargo test -p cosmos-common`
+  has generated `app/src/generated/`.
