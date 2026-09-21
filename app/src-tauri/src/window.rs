@@ -11,7 +11,7 @@ const TITLEBAR_HEIGHT: f64 = 48.0;
 /// Traffic-light inset. The strip height is button height + y, and AppKit
 /// centres the buttons in it, so y = 2 * (bar / 2) - button height.
 #[cfg(target_os = "macos")]
-const TRAFFIC_LIGHTS: (f64, f64) = (18.0, TITLEBAR_HEIGHT - 16.0);
+const TRAFFIC_LIGHTS: (f64, f64) = (16.0, TITLEBAR_HEIGHT - 22.0);
 
 pub const PLATFORM: &str = if cfg!(target_os = "macos") {
     "macos"

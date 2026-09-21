@@ -1,11 +1,10 @@
 import { memo } from 'react';
-import { Link, useLocation } from '@tanstack/react-router';
-import { ChevronRight, Copy, Minus, PanelLeft, Search, Square, X } from 'lucide-react';
+import { Link } from '@tanstack/react-router';
+import { Copy, Minus, PanelLeft, Search, Square, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSidebar } from '@/components/ui/resizable-sidebar';
-import { useNodeName, useNodeStore } from '@/stores/nodes';
+import { useNodeStore } from '@/stores/nodes';
 import { useUiStore } from '@/stores/ui';
-import { pageFor } from '@/lib/navigation';
 import { getPlatform } from '@/lib/platform';
 import { cn } from '@/lib/utils';
 import { useWindowState, windowAction } from '@/hooks/use-window-state';
@@ -13,43 +12,17 @@ import { Hint, ShortcutKeys } from './hint';
 import { ThemeToggle } from './theme-toggle';
 import { Dot } from './dot';
 
-function Breadcrumb() {
-  const { pathname } = useLocation();
-  const page = pageFor(pathname);
-  const nodeId = pathname.startsWith('/nodes/') ? pathname.split('/')[2] : null;
-  const nodeName = useNodeName(nodeId);
-
-  if (!page) return null;
-  return (
-    <nav aria-label='Breadcrumb' className='flex min-w-0 items-center gap-1 text-sm'>
-      {nodeName ? (
-        <>
-          <Link
-            to={page.path}
-            className='text-muted-foreground transition-colors hover:text-foreground'
-          >
-            {page.label}
-          </Link>
-          <ChevronRight className='size-3.5 shrink-0 text-muted-foreground' />
-          <span className='truncate font-medium'>{nodeName}</span>
-        </>
-      ) : (
-        <span className='truncate font-medium'>{page.label}</span>
-      )}
-    </nav>
-  );
-}
-
 function SearchTrigger() {
   const setPaletteOpen = useUiStore((s) => s.setPaletteOpen);
   return (
     <button
       type='button'
       onClick={() => setPaletteOpen(true)}
+      aria-label='Search'
       className='flex h-8 w-full items-center gap-2 rounded-md border border-input bg-muted/40 px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'
     >
       <Search className='size-4 shrink-0' />
-      <span className='flex-1 truncate text-left'>Search or jump to</span>
+      <span className='flex-1 truncate text-left'>Search</span>
       <ShortcutKeys id='palette' className='hidden sm:inline-flex' />
     </button>
   );
@@ -127,7 +100,6 @@ export const TitleBar = memo(function TitleBar() {
             <PanelLeft />
           </Button>
         </Hint>
-        <Breadcrumb />
       </div>
 
       <SearchTrigger />

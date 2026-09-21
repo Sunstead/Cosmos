@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Box, RefreshCw, ServerOff } from 'lucide-react';
+import { Box, ChevronLeft, RefreshCw, ServerOff } from 'lucide-react';
 import { useHostInfo, useNodeMeta } from '@/api/queries';
 import { useNodeName, useNodeStore } from '@/stores/nodes';
 import { useContainersStore } from '@/stores/containers';
@@ -26,6 +26,7 @@ import { EmptyState } from '@/components/empty-state';
 import { DataTable } from '@/components/data-table';
 import { containerColumns, ContainerRow } from '@/components/container-columns';
 import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/hint';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -93,6 +94,15 @@ export function NodeDetailPage({ nodeId }: { nodeId: string }) {
     <>
       <PageHeader
         title={name ?? 'Node'}
+        leading={
+          <Hint label='All nodes'>
+            <Button asChild variant='ghost' size='icon' className='-ml-2' aria-label='All nodes'>
+              <Link to='/nodes'>
+                <ChevronLeft />
+              </Link>
+            </Button>
+          </Hint>
+        }
         actions={<NodeOptionsDropdown nodeId={nodeId} showDetails={false} />}
       />
 
