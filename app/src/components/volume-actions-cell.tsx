@@ -1,8 +1,10 @@
 import { memo, useState } from 'react';
-import { Copy, MoreVertical, Trash } from 'lucide-react';
+import { Copy, MoreHorizontal, Trash } from 'lucide-react';
+import { toast } from 'sonner';
 import { VolumeRow } from './volume-columns';
 import { useNodeMeta } from '@/api/queries';
 import { getConnection } from '@/stores/nodes';
+import { copyText } from '@/lib/clipboard';
 import { Button } from './ui/button';
 import {
   DropdownMenu,
@@ -13,14 +15,8 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
 import { ConfirmDialog } from './confirm-dialog';
+import { ReadOnlyNote } from './read-only-note';
 
-/**
- * Volume actions.
- *
- * "Remove" rendered with no handler before. It's wired now, and stays
- * disabled while a container still mounts the volume — Docker would refuse
- * anyway, and the intent here is to make that obvious before the click.
- */
 export const VolumeActionsCell = memo(function VolumeActionsCell({
   volume,
 }: {
@@ -28,8 +24,6 @@ export const VolumeActionsCell = memo(function VolumeActionsCell({
 }) {
   const meta = useNodeMeta(volume.nodeId);
   const [removing, setRemoving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
   const inUse = volume.in_use_by.length > 0;
   const canAct = meta?.capabilities.volume_actions ?? false;
 
@@ -38,26 +32,32 @@ export const VolumeActionsCell = memo(function VolumeActionsCell({
     if (!conn) return;
     try {
       await conn.client.removeVolume(volume.name);
-      setError(null);
+      toast.success(`Deleted ${volume.name}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'could not remove volume');
+      toast.error(`Could not delete ${volume.name}`, {
+        description: e instanceof Error ? e.message : undefined,
+      });
     }
   };
 
   return (
-    <div className='text-right'>
+    <div className='flex justify-end'>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant='ghost' size='icon-lg'>
-            <MoreVertical />
-            <span className='sr-only'>Open menu</span>
+          <Button variant='ghost' size='icon' aria-label={`Actions for ${volume.name}`}>
+            <MoreHorizontal />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align='end' className='w-max min-w-52'>
-          <DropdownMenuLabel className='truncate max-w-56'>{volume.name}</DropdownMenuLabel>
+        <DropdownMenuContent align='end' className='w-52'>
+          <DropdownMenuLabel className='truncate'>{volume.name}</DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => void navigator.clipboard.writeText(volume.name)}>
-            <Copy /> Copy volume name
+          <DropdownMenuItem onSelect={() => void copyText(volume.name, 'Volume name copied')}>
+            <Copy /> Copy name
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => void copyText(volume.mountpoint, 'Mountpoint copied')}
+          >
+            <Copy /> Copy mountpoint
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
@@ -68,28 +68,21 @@ export const VolumeActionsCell = memo(function VolumeActionsCell({
               setRemoving(true);
             }}
           >
-            <Trash /> Remove
+            <Trash /> Delete
           </DropdownMenuItem>
-          {inUse && (
-            <p className='px-2 py-1.5 text-xs text-muted-foreground max-w-56'>
-              In use by {volume.in_use_by.join(', ')}.
-            </p>
+          {inUse && canAct && (
+            <p className='px-2 py-1 text-xs text-muted-foreground'>In use, can't delete</p>
           )}
-          {!inUse && !canAct && (
-            <p className='px-2 py-1.5 text-xs text-muted-foreground max-w-56'>
-              This agent is read-only.
-            </p>
-          )}
-          {error && <p className='px-2 py-1.5 text-xs text-error max-w-56'>{error}</p>}
+          {!canAct && <ReadOnlyNote />}
         </DropdownMenuContent>
       </DropdownMenu>
 
       <ConfirmDialog
         open={removing}
         onOpenChange={setRemoving}
-        title={`Delete volume ${volume.name}?`}
-        description='This permanently deletes the data in this volume. It cannot be undone.'
-        confirmLabel='Delete volume'
+        title={`Delete ${volume.name}?`}
+        description='This permanently deletes its data.'
+        confirmLabel='Delete'
         onConfirm={remove}
       />
     </div>

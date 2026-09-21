@@ -1,110 +1,72 @@
-import { memo, useId, useState } from 'react';
-import { planetStyle } from '@/lib/planet';
+import { memo, useEffect, useRef } from 'react';
+import { planetExtent, planetStyle } from '@/lib/planet';
+import { planetSprite } from '@/lib/planet-render';
+import { onThemeChange } from '@/lib/theme-tokens';
 import { cn } from '@/lib/utils';
-
-interface Props {
-  name: string;
-  className?: string;
-  /** Dims the planet for a node that isn't reporting. */
-  dimmed?: boolean;
-}
+import { useNodeName, useNodeStore } from '@/stores/nodes';
 
 /**
- * A node, drawn as a planet.
- *
- * Uses `/public/<name>.png` when one exists — Jupiter has a real image — and
- * otherwise generates a deterministic one from the node's name, so a new node
- * looks distinct immediately without anyone having to supply artwork.
+ * A node drawn as a planet. Same renderer as the constellation, so a node
+ * looks identical everywhere. Redraws only on size or theme change.
  */
-export const NodePlanet = memo(function NodePlanet({ name, className, dimmed }: Props) {
-  const [imageFailed, setImageFailed] = useState(false);
-  const id = useId();
-  const style = planetStyle(name);
+export const NodePlanet = memo(function NodePlanet({
+  name,
+  size,
+  dimmed,
+  className,
+}: {
+  name: string;
+  /** Box size in CSS pixels. */
+  size: number;
+  dimmed?: boolean;
+  className?: string;
+}) {
+  const ref = useRef<HTMLCanvasElement>(null);
 
-  if (!imageFailed) {
-    return (
-      <img
-        src={`/${name}.png`}
-        alt=''
-        aria-hidden='true'
-        // The fallback is the normal case, not an error path: most nodes will
-        // never have a bundled image.
-        onError={() => setImageFailed(true)}
-        className={cn(
-          'object-contain drop-shadow-xl drop-shadow-black/50',
-          dimmed && 'opacity-40 saturate-0',
-          className,
-        )}
-      />
-    );
-  }
+  useEffect(() => {
+    const canvas = ref.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
 
-  const base = `hsl(${style.hue} ${style.saturation}% 52%)`;
-  const dark = `hsl(${style.hue} ${style.saturation}% 16%)`;
-  const accent = `hsl(${style.accentHue} ${style.saturation}% 62%)`;
+    const draw = () => {
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.round(size * dpr);
+      canvas.height = Math.round(size * dpr);
+
+      // Fit the whole drawing, rings included, inside the box.
+      const r = size / 2 / planetExtent(planetStyle(name));
+      const sprite = planetSprite(name, r, dpr);
+      const px = sprite.size * dpr;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(sprite.canvas, (canvas.width - px) / 2, (canvas.height - px) / 2, px, px);
+    };
+
+    draw();
+    // Observes the <html> class itself, so tokens are read after the switch.
+    return onThemeChange(draw);
+  }, [name, size]);
 
   return (
-    <svg
-      viewBox='0 0 100 100'
-      className={cn(
-        'overflow-visible drop-shadow-xl drop-shadow-black/50',
-        dimmed && 'opacity-40 saturate-0',
-        className,
-      )}
+    <canvas
+      ref={ref}
       aria-hidden='true'
-    >
-      <defs>
-        {/* Off-centre so the sphere reads as lit from the upper left. */}
-        <radialGradient id={`${id}-body`} cx='35%' cy='30%' r='75%'>
-          <stop offset='0%' stopColor={base} />
-          <stop offset='55%' stopColor={base} />
-          <stop offset='100%' stopColor={dark} />
-        </radialGradient>
-        <clipPath id={`${id}-clip`}>
-          <circle cx='50' cy='50' r='34' />
-        </clipPath>
-      </defs>
-
-      {style.ring && (
-        <ellipse
-          cx='50'
-          cy='50'
-          rx='48'
-          ry='13'
-          fill='none'
-          stroke={accent}
-          strokeWidth='3'
-          opacity='0.45'
-          transform={`rotate(${style.ringTilt} 50 50)`}
-        />
-      )}
-
-      <circle cx='50' cy='50' r='34' fill={`url(#${id}-body)`} />
-
-      <g clipPath={`url(#${id}-clip)`}>
-        {style.bands.map((band, i) => (
-          <rect
-            key={i}
-            x='16'
-            y={band.y}
-            width='68'
-            height={band.height}
-            fill={i % 2 === 0 ? accent : dark}
-            opacity={band.opacity}
-          />
-        ))}
-      </g>
-
-      {/* Rim light along the terminator. */}
-      <circle
-        cx='50'
-        cy='50'
-        r='34'
-        fill='none'
-        stroke={accent}
-        strokeWidth='0.8'
-        opacity='0.35'
-      />
-    </svg>
+      style={{ width: size, height: size }}
+      className={cn('shrink-0 transition-[opacity,filter]', dimmed && 'opacity-40 grayscale', className)}
+    />
   );
+});
+
+/** A node's planet, keyed by its display name. */
+export const NodeAvatar = memo(function NodeAvatar({
+  nodeId,
+  size,
+  className,
+}: {
+  nodeId: string;
+  size: number;
+  className?: string;
+}) {
+  const name = useNodeName(nodeId);
+  const online = useNodeStore((s) => s.meta[nodeId]?.status === 'online');
+  return <NodePlanet name={name ?? nodeId} size={size} dimmed={!online} className={className} />;
 });

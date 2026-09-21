@@ -1,15 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Logs, Pause, Play, Trash2 } from 'lucide-react';
-import { useNodeStore, nodeDisplayName } from '@/stores/nodes';
+import { useNavigate, useSearch } from '@tanstack/react-router';
+import { Download, Eraser, Logs, Pause, Play, ScrollText, SearchX } from 'lucide-react';
+import { useNodeStore } from '@/stores/nodes';
 import { useContainersStore } from '@/stores/containers';
 import { useNodeMeta } from '@/api/queries';
 import { useContainerLogs } from '@/hooks/use-container-logs';
+import { LogLine } from '@/generated/LogLine';
 import { PageHeader } from '@/components/page-header';
-import { FeatureDisabled, NoNodes } from '@/components/feature-state';
-import { Card, CardContent } from '@/components/ui/card';
+import { NodeSelect, useSelectedNode } from '@/components/node-select';
+import { SearchInput } from '@/components/search-input';
+import { SegmentedControl } from '@/components/segmented-control';
+import { EmptyState, NoNodesState } from '@/components/empty-state';
+import { SETUP } from '@/components/setup-hint';
+import { Hint } from '@/components/hint';
+import { Dot } from '@/components/dot';
+import { containerStateVariant } from '@/components/container-columns';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -19,173 +26,199 @@ import {
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 
+type Stream = 'all' | 'stdout' | 'stderr';
+
+function download(lines: LogLine[], name: string) {
+  const text = lines.map((l) => (l.ts ? `${l.ts} ${l.text}` : l.text)).join('\n');
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+  const a = Object.assign(document.createElement('a'), { href: url, download: `${name}.log` });
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+const STATE_LABEL = {
+  idle: 'Idle',
+  connecting: 'Connecting',
+  streaming: 'Live',
+  closed: 'Ended',
+  error: 'Error',
+} as const;
+
 export function LogsPage() {
-  const nodes = useNodeStore((s) => s.nodes);
+  const nodeCount = useNodeStore((s) => s.nodes.length);
+  const search = useSearch({ from: '/logs' });
+  const navigate = useNavigate({ from: '/logs' });
+  const [storedNode, setStoredNode] = useSelectedNode();
   const nodeContainers = useContainersStore((s) => s.nodeContainers);
 
-  const [nodeId, setNodeId] = useState<string | null>(nodes[0]?.id ?? null);
-  const [containerId, setContainerId] = useState<string | null>(null);
+  const nodeId = search.node ?? storedNode;
+  const containers = useMemo(
+    () => [...(nodeId ? (nodeContainers[nodeId] ?? []) : [])].sort((a, b) => a.name.localeCompare(b.name)),
+    [nodeContainers, nodeId],
+  );
+  const containerId =
+    search.container && containers.some((c) => c.id === search.container)
+      ? search.container
+      : (containers.find((c) => c.state === 'running') ?? containers[0])?.id ?? null;
+  const container = containers.find((c) => c.id === containerId);
+
+  const meta = useNodeMeta(nodeId);
   const [follow, setFollow] = useState(true);
-  const [filter, setFilter] = useState('');
+  const [query, setQuery] = useState('');
+  const [stream, setStream] = useState<Stream>('all');
 
-  // Derived, not synced: the selection falls back to the first available
-  // option whenever the stored one is gone, without an effect writing state.
-  const effectiveNodeId = nodeId ?? nodes[0]?.id ?? null;
-  const meta = useNodeMeta(effectiveNodeId);
-  const containers = effectiveNodeId ? (nodeContainers[effectiveNodeId] ?? []) : [];
+  const { lines, state, dropped, clear } = useContainerLogs({ nodeId, containerId, follow });
 
-  const effectiveContainerId =
-    containerId && containers.some((c) => c.id === containerId)
-      ? containerId
-      : (containers[0]?.id ?? null);
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return lines.filter(
+      (l) => (stream === 'all' || l.stream === stream) && (!q || l.text.toLowerCase().includes(q)),
+    );
+  }, [lines, query, stream]);
 
-  const { lines, state, dropped, clear } = useContainerLogs({
-    nodeId: effectiveNodeId,
-    containerId: effectiveContainerId,
-    follow,
-  });
-
-  const filtered = useMemo(() => {
-    const needle = filter.trim().toLowerCase();
-    if (!needle) return lines;
-    return lines.filter((l) => l.text.toLowerCase().includes(needle));
-  }, [lines, filter]);
-
-  // Stick to the bottom while following, but don't fight the user scrolling up.
+  // Stay pinned to the bottom while following, unless the user scrolled up.
   const viewport = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
-
   useEffect(() => {
     const el = viewport.current;
-    if (!el || !follow || !pinned.current) return;
-    el.scrollTop = el.scrollHeight;
-  }, [filtered, follow]);
+    if (el && follow && pinned.current) el.scrollTop = el.scrollHeight;
+  }, [visible, follow]);
 
-  if (nodes.length === 0) return <NoNodes what='container logs' />;
+  const selectNode = (id: string) => {
+    setStoredNode(id);
+    void navigate({ search: { node: id } });
+  };
+  const selectContainer = (id: string) =>
+    void navigate({ search: { node: nodeId ?? undefined, container: id } });
 
-  if (meta && !meta.capabilities.container_logs) {
-    return (
-      <>
-        <PageHeader title='LOGS' />
-        <FeatureDisabled
+  const enabled = meta?.capabilities.container_logs ?? true;
+
+  const body = () => {
+    if (nodeCount === 0) return <NoNodesState />;
+    if (meta?.status === 'online' && !enabled) {
+      return (
+        <EmptyState
+          size='page'
           icon={Logs}
-          title='Logs are disabled on this agent'
-          description={
-            <>
-              Set <code>allow_logs = true</code> in the agent&rsquo;s{' '}
-              <code>agent.toml</code> and restart it.
-            </>
-          }
+          title='Logs not enabled'
+          description='This agent does not stream container logs.'
+          setup={SETUP.logs}
         />
-      </>
+      );
+    }
+    if (containers.length === 0) {
+      return <EmptyState size='page' icon={ScrollText} title='No containers on this node' />;
+    }
+    return (
+      <Card className='min-h-0 flex-1 gap-0 py-0'>
+        <div className='flex h-10 shrink-0 items-center gap-2 border-b px-3 text-xs text-muted-foreground'>
+          <Dot variant={state === 'streaming' ? 'success' : state === 'error' ? 'error' : 'disabled'} pulse={state === 'streaming'} />
+          {STATE_LABEL[state]}
+          <span className='tabular-nums'>
+            {visible.length.toLocaleString()}
+            {visible.length !== lines.length && ` of ${lines.length.toLocaleString()}`} lines
+          </span>
+          {dropped > 0 && <span className='text-warning'>{dropped.toLocaleString()} dropped</span>}
+        </div>
+        <div
+          ref={viewport}
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+          }}
+          className='selectable min-h-0 flex-1 overflow-auto p-3 font-mono text-xs leading-relaxed'
+        >
+          {visible.length === 0 ? (
+            lines.length === 0 ? (
+              <p className='text-muted-foreground'>Waiting for output</p>
+            ) : (
+              <EmptyState size='inline' icon={SearchX} title='No matching lines' />
+            )
+          ) : (
+            visible.map((line, i) => (
+              <div
+                key={i}
+                className={cn('break-all whitespace-pre-wrap', line.stream === 'stderr' && 'text-error')}
+              >
+                {line.ts && (
+                  <span className='mr-3 text-muted-foreground/60 select-none'>
+                    {line.ts.slice(11, 19)}
+                  </span>
+                )}
+                {line.text}
+              </div>
+            ))
+          )}
+        </div>
+      </Card>
     );
-  }
+  };
 
   return (
     <>
       <PageHeader
-        title='LOGS'
+        title='Logs'
         actions={
-          <div className='flex items-center gap-2'>
-            <Select value={effectiveNodeId ?? ''} onValueChange={setNodeId}>
-              <SelectTrigger className='w-40'>
-                <SelectValue placeholder='Node' />
-              </SelectTrigger>
-              <SelectContent>
-                {nodes.map((n) => (
-                  <SelectItem key={n.id} value={n.id}>
-                    {nodeDisplayName(n)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={effectiveContainerId ?? ''} onValueChange={setContainerId}>
-              <SelectTrigger className='w-56'>
-                <SelectValue placeholder='Container' />
-              </SelectTrigger>
-              <SelectContent>
-                {containers.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Button
-              variant={follow ? 'default' : 'outline'}
-              size='icon'
-              onClick={() => setFollow((f) => !f)}
-              title={follow ? 'Pause' : 'Follow'}
-            >
-              {follow ? <Pause /> : <Play />}
-            </Button>
-            <Button variant='outline' size='icon' onClick={clear} title='Clear'>
-              <Trash2 />
-            </Button>
-          </div>
+          nodeCount > 0 &&
+          containers.length > 0 && (
+            <>
+              <NodeSelect value={nodeId} onChange={selectNode} />
+              <Select value={containerId ?? ''} onValueChange={selectContainer}>
+                <SelectTrigger className='w-52' aria-label='Container'>
+                  <SelectValue placeholder='Container' />
+                </SelectTrigger>
+                <SelectContent>
+                  {containers.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      <Dot variant={containerStateVariant(c.state)} />
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <SearchInput value={query} onChange={setQuery} placeholder='Filter lines' />
+              <SegmentedControl<Stream>
+                label='Stream'
+                value={stream}
+                onChange={setStream}
+                options={[
+                  { value: 'all', label: 'All' },
+                  { value: 'stdout', label: 'Out' },
+                  { value: 'stderr', label: 'Err' },
+                ]}
+              />
+              <Hint label={follow ? 'Pause' : 'Follow'}>
+                <Button
+                  variant='outline'
+                  size='icon'
+                  aria-label={follow ? 'Pause' : 'Follow'}
+                  aria-pressed={follow}
+                  onClick={() => setFollow((f) => !f)}
+                >
+                  {follow ? <Pause /> : <Play />}
+                </Button>
+              </Hint>
+              <Hint label='Clear'>
+                <Button variant='outline' size='icon' aria-label='Clear' onClick={clear}>
+                  <Eraser />
+                </Button>
+              </Hint>
+              <Hint label='Download'>
+                <Button
+                  variant='outline'
+                  size='icon'
+                  aria-label='Download'
+                  disabled={lines.length === 0}
+                  onClick={() => download(lines, container?.name ?? 'logs')}
+                >
+                  <Download />
+                </Button>
+              </Hint>
+            </>
+          )
         }
       />
-
-      <div className='flex items-center gap-2'>
-        <Input
-          placeholder='Filter lines…'
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          className='max-w-sm'
-        />
-        <Badge variant='outline' className='font-mono text-[10px]'>
-          {state}
-        </Badge>
-        <span className='text-xs text-muted-foreground tabular-nums'>
-          {filtered.length.toLocaleString()} line{filtered.length === 1 ? '' : 's'}
-          {filter && ` of ${lines.length.toLocaleString()}`}
-        </span>
-        {dropped > 0 && (
-          <span className='text-xs text-warning'>
-            {dropped.toLocaleString()} dropped (output faster than the stream)
-          </span>
-        )}
-      </div>
-
-      <Card className='h-[calc(100vh-17rem)] min-h-64'>
-        <CardContent className='h-full p-0'>
-          <div
-            ref={viewport}
-            onScroll={(e) => {
-              const el = e.currentTarget;
-              pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
-            }}
-            className='h-full overflow-auto font-mono text-xs leading-relaxed p-3'
-          >
-            {filtered.length === 0 ? (
-              <p className='text-muted-foreground'>
-                {effectiveContainerId ? 'No output yet.' : 'Select a container.'}
-              </p>
-            ) : (
-              filtered.map((line, i) => (
-                <div
-                  key={`${line.ts ?? ''}-${i}`}
-                  className={cn(
-                    'whitespace-pre-wrap break-all',
-                    line.stream === 'stderr' && 'text-error',
-                  )}
-                >
-                  {line.ts && (
-                    <span className='text-muted-foreground/60 mr-2 select-none'>
-                      {line.ts.slice(11, 19)}
-                    </span>
-                  )}
-                  {line.text}
-                </div>
-              ))
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      {body()}
     </>
   );
 }
-
-export default LogsPage;

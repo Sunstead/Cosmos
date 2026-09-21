@@ -13,6 +13,11 @@ import { useNodeStore } from './stores/nodes';
 import { getDefaultNodes } from './config';
 import { isTauri } from './lib/tauri';
 
+export interface LogsSearch {
+  node?: string;
+  container?: string;
+}
+
 const rootRoute = createRootRoute({
   beforeLoad: async () => {
     const store = useNodeStore.getState();
@@ -93,6 +98,10 @@ const logsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/logs',
   staticData: { layout: 'fill' },
+  validateSearch: (s: Record<string, unknown>): LogsSearch => ({
+    node: typeof s.node === 'string' ? s.node : undefined,
+    container: typeof s.container === 'string' ? s.container : undefined,
+  }),
   component: lazyRouteComponent(() => import('./pages/logs-page'), 'LogsPage'),
 });
 

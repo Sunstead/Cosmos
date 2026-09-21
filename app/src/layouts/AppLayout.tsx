@@ -2,6 +2,7 @@ import { useMatches } from '@tanstack/react-router';
 import { AppSidebar } from '@/components/app-sidebar';
 import { TitleBar } from '@/components/title-bar';
 import { CommandHost } from '@/components/command-host';
+import { AddNodeDialog } from '@/components/add-node';
 import { SidebarInset, SidebarProvider } from '@/components/ui/resizable-sidebar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useStatusToasts } from '@/hooks/use-status-toasts';
@@ -25,6 +26,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <SidebarProvider className='h-full flex-col'>
       <CommandHost />
+      <AddNodeDialog />
       <TitleBar />
       <div className='relative flex min-h-0 w-full max-w-full flex-1'>
         <AppSidebar />

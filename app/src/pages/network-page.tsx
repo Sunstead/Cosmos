@@ -1,13 +1,21 @@
-import { useMemo } from 'react';
-import { EthernetPort, Network } from 'lucide-react';
-import { useNodeStore, nodeDisplayName } from '@/stores/nodes';
+import { memo, useMemo, useState } from 'react';
+import { ArrowUpRight, EthernetPort, SearchX, Unplug } from 'lucide-react';
+import { useNodeStore } from '@/stores/nodes';
 import { useContainersStore } from '@/stores/containers';
 import { useHostInfo } from '@/api/queries';
+import { PortInfo } from '@/generated/PortInfo';
+import { formatBytes } from '@/lib/node-metrics';
+import { serviceHref } from '@/lib/agent-url';
+import { openExternal } from '@/lib/open-external';
+import { matchesQuery, NO_VALUE } from '@/lib/format';
 import { PageHeader } from '@/components/page-header';
-import { NoNodes, NothingHere } from '@/components/feature-state';
+import { SearchInput } from '@/components/search-input';
+import { EmptyState, NoNodesState } from '@/components/empty-state';
 import { NodeStatusBadge } from '@/components/node-status-badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { NodeName } from '@/components/node-name';
+import { Section } from '@/components/section';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   Table,
   TableBody,
@@ -16,13 +24,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { PortInfo } from '@/generated/PortInfo';
-import { formatBytes } from '@/lib/node-metrics';
-import { serviceHref } from '@/lib/agent-url';
-import { openExternal } from '@/lib/open-external';
-import { Button } from '@/components/ui/button';
 
 interface PortRow {
+  key: string;
   nodeId: string;
   container: string;
   service: string | null;
@@ -30,76 +34,58 @@ interface PortRow {
   url: string | null;
 }
 
-function portKey(r: PortRow) {
-  return `${r.nodeId}:${r.container}:${r.port.private_port}:${r.port.public_port ?? 'x'}`;
-}
-
-/** Per-interface throughput for one node. */
-function NodeInterfaces({ nodeId }: { nodeId: string }) {
+const Interfaces = memo(function Interfaces({ nodeId }: { nodeId: string }) {
   const { data: host } = useHostInfo(nodeId);
-  const node = useNodeStore((s) => s.nodes.find((n) => n.id === nodeId));
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className='flex items-center gap-2 text-base'>
-          {node ? nodeDisplayName(node) : 'Node'}
-          <NodeStatusBadge nodeId={nodeId} />
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {!host || host.nets.length === 0 ? (
-          <p className='text-sm text-muted-foreground'>No interfaces reported.</p>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Interface</TableHead>
-                <TableHead className='text-right'>Down</TableHead>
-                <TableHead className='text-right'>Up</TableHead>
-                <TableHead className='text-right'>Total in</TableHead>
-                <TableHead className='text-right'>Total out</TableHead>
+    <Section title={<NodeName nodeId={nodeId} />} actions={<NodeStatusBadge nodeId={nodeId} />}>
+      {!host || host.nets.length === 0 ? (
+        <EmptyState size='inline' icon={Unplug} title='No interfaces reported' />
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow className='hover:bg-transparent'>
+              <TableHead className='h-9 text-xs'>Interface</TableHead>
+              <TableHead className='h-9 text-right text-xs'>Down</TableHead>
+              <TableHead className='h-9 text-right text-xs'>Up</TableHead>
+              <TableHead className='h-9 text-right text-xs'>Received</TableHead>
+              <TableHead className='h-9 text-right text-xs'>Sent</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody className='tabular-nums'>
+            {host.nets.map((n) => (
+              <TableRow key={n.name}>
+                <TableCell className='font-mono text-xs'>{n.name}</TableCell>
+                <TableCell className='text-right'>{formatBytes(n.rx_bps)}/s</TableCell>
+                <TableCell className='text-right'>{formatBytes(n.tx_bps)}/s</TableCell>
+                <TableCell className='text-right text-muted-foreground'>
+                  {formatBytes(n.rx_total_bytes)}
+                </TableCell>
+                <TableCell className='text-right text-muted-foreground'>
+                  {formatBytes(n.tx_total_bytes)}
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {host.nets.map((n) => (
-                <TableRow key={n.name}>
-                  <TableCell className='font-mono text-xs'>{n.name}</TableCell>
-                  <TableCell className='text-right tabular-nums'>
-                    {formatBytes(n.rx_bps)}/s
-                  </TableCell>
-                  <TableCell className='text-right tabular-nums'>
-                    {formatBytes(n.tx_bps)}/s
-                  </TableCell>
-                  <TableCell className='text-right tabular-nums text-muted-foreground'>
-                    {formatBytes(n.rx_total_bytes)}
-                  </TableCell>
-                  <TableCell className='text-right tabular-nums text-muted-foreground'>
-                    {formatBytes(n.tx_total_bytes)}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </CardContent>
-    </Card>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+    </Section>
   );
-}
+});
 
 export function NetworkPage() {
   const nodes = useNodeStore((s) => s.nodes);
   const nodeContainers = useContainersStore((s) => s.nodeContainers);
+  const [query, setQuery] = useState('');
 
-  // Port mappings have been plumbed through the agent and typed since the
-  // start; nothing in the UI had ever rendered them.
-  const rows = useMemo(() => {
+  const ports = useMemo(() => {
     const out: PortRow[] = [];
     for (const [nodeId, containers] of Object.entries(nodeContainers)) {
       for (const c of containers) {
         for (const port of c.ports) {
-          if (port.public_port == null) continue; // not reachable from outside
+          if (port.public_port == null) continue;
           out.push({
+            key: `${nodeId}:${c.id}:${port.private_port}:${port.public_port}:${port.port_type}`,
             nodeId,
             container: c.name,
             service: c.cosmos_service ?? null,
@@ -112,92 +98,93 @@ export function NetworkPage() {
     return out.sort((a, b) => (a.port.public_port ?? 0) - (b.port.public_port ?? 0));
   }, [nodeContainers]);
 
-  if (nodes.length === 0) return <NoNodes what='network activity' />;
+  const visible = ports.filter((p) =>
+    matchesQuery(query, p.container, p.service, String(p.port.public_port), String(p.port.private_port)),
+  );
 
   return (
     <>
       <PageHeader
-        title='NETWORK'
-        description='Published container ports and per-interface throughput.'
+        title='Network'
+        actions={
+          ports.length > 0 && (
+            <SearchInput value={query} onChange={setQuery} placeholder='Search ports' />
+          )
+        }
       />
 
-      <Card>
-        <CardHeader>
-          <CardTitle className='flex items-center gap-2 text-base'>
-            <EthernetPort className='size-4' />
-            Published ports
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {rows.length === 0 ? (
-            <p className='text-sm text-muted-foreground'>
-              No containers publish a port to the host.
-            </p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Host port</TableHead>
-                  <TableHead>Container port</TableHead>
-                  <TableHead>Protocol</TableHead>
-                  <TableHead>Container</TableHead>
-                  <TableHead>Service</TableHead>
-                  <TableHead className='text-right'>URL</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((r) => {
-                  const href = serviceHref(r.url);
-                  return (
-                    <TableRow key={portKey(r)}>
-                      <TableCell className='font-mono tabular-nums'>
-                        {r.port.public_port}
-                      </TableCell>
-                      <TableCell className='font-mono tabular-nums text-muted-foreground'>
-                        {r.port.private_port}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant='outline' className='uppercase text-[10px]'>
-                          {r.port.port_type ?? 'tcp'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className='truncate max-w-48'>{r.container}</TableCell>
-                      <TableCell className='text-muted-foreground'>
-                        {r.service ?? '—'}
-                      </TableCell>
-                      <TableCell className='text-right'>
-                        {href ? (
-                          <Button
-                            variant='link'
-                            className='h-auto p-0 text-xs'
-                            onClick={() => openExternal(href)}
-                          >
-                            Open
-                          </Button>
-                        ) : (
-                          <span className='text-muted-foreground text-xs'>—</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-
       {nodes.length === 0 ? (
-        <NothingHere
-          icon={Network}
-          title='No interfaces'
-          description='Nodes will report their interfaces once connected.'
-        />
+        <NoNodesState />
       ) : (
-        nodes.map((n) => <NodeInterfaces key={n.id} nodeId={n.id} />)
+        <>
+          <Section title='Published ports' count={ports.length || undefined}>
+            {ports.length === 0 ? (
+              <EmptyState size='inline' icon={EthernetPort} title='No ports published to the host' />
+            ) : visible.length === 0 ? (
+              <EmptyState size='inline' icon={SearchX} title='No matching ports' />
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow className='hover:bg-transparent'>
+                    <TableHead className='h-9 text-xs'>Host port</TableHead>
+                    <TableHead className='h-9 text-xs'>Container port</TableHead>
+                    <TableHead className='h-9 text-xs'>Protocol</TableHead>
+                    <TableHead className='h-9 text-xs'>Container</TableHead>
+                    {nodes.length > 1 && <TableHead className='h-9 text-xs'>Node</TableHead>}
+                    <TableHead className='h-9 text-xs'>Service</TableHead>
+                    <TableHead className='h-9 text-xs'>
+                      <span className='sr-only'>Open</span>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {visible.map((r) => {
+                    const href = serviceHref(r.url);
+                    return (
+                      <TableRow key={r.key}>
+                        <TableCell className='font-mono tabular-nums'>{r.port.public_port}</TableCell>
+                        <TableCell className='font-mono tabular-nums text-muted-foreground'>
+                          {r.port.private_port}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant='outline' className='text-2xs uppercase'>
+                            {r.port.port_type ?? 'tcp'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className='max-w-48 truncate'>{r.container}</TableCell>
+                        {nodes.length > 1 && (
+                          <TableCell>
+                            <NodeName nodeId={r.nodeId} />
+                          </TableCell>
+                        )}
+                        <TableCell className='text-muted-foreground'>{r.service ?? NO_VALUE}</TableCell>
+                        <TableCell className='text-right'>
+                          {href && (
+                            <Button
+                              variant='ghost'
+                              size='icon'
+                              aria-label={`Open ${r.container}`}
+                              onClick={() => void openExternal(href)}
+                            >
+                              <ArrowUpRight />
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
+          </Section>
+
+          <div className='grid gap-4 @5xl:grid-cols-2'>
+            {nodes.map((n) => (
+              <Interfaces key={n.id} nodeId={n.id} />
+            ))}
+          </div>
+        </>
       )}
     </>
   );
 }
-
-export default NetworkPage;

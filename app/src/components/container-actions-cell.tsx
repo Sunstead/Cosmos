@@ -1,7 +1,9 @@
 import { memo, useState } from 'react';
-import { Copy, Logs, MoreVertical, Play, RotateCcw, Square, Trash } from 'lucide-react';
+import { Link } from '@tanstack/react-router';
+import { Copy, Logs, MoreHorizontal, Play, RotateCcw, Square, Trash } from 'lucide-react';
 import { ContainerRow } from './container-columns';
 import { useContainerActions, useNodeMeta } from '@/api/queries';
+import { copyText } from '@/lib/clipboard';
 import { Button } from './ui/button';
 import {
   DropdownMenu,
@@ -12,16 +14,8 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
 import { ConfirmDialog } from './confirm-dialog';
-import { Link } from '@tanstack/react-router';
+import { ReadOnlyNote } from './read-only-note';
 
-/**
- * The container action menu.
- *
- * Every item here except "copy ID" used to render with no handler at all —
- * there were no agent endpoints behind them. They're wired now, and disabled
- * with an explanation when the agent is read-only rather than silently doing
- * nothing.
- */
 export const ContainerActionsCell = memo(function ContainerActionsCell({
   container,
 }: {
@@ -36,70 +30,55 @@ export const ContainerActionsCell = memo(function ContainerActionsCell({
   const busy = !!pending;
 
   return (
-    <div className='text-right'>
+    <div className='flex justify-end'>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant='ghost' size='icon-lg'>
-            <MoreVertical />
-            <span className='sr-only'>Open menu</span>
+          <Button variant='ghost' size='icon' aria-label={`Actions for ${container.name}`}>
+            <MoreHorizontal />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align='end' className='w-max min-w-52'>
-          <DropdownMenuLabel className='truncate max-w-56'>
-            {container.name}
-          </DropdownMenuLabel>
+        <DropdownMenuContent align='end' className='w-52'>
+          <DropdownMenuLabel className='truncate'>{container.name}</DropdownMenuLabel>
           <DropdownMenuSeparator />
-
-          <DropdownMenuItem
-            onSelect={() => void navigator.clipboard.writeText(container.id)}
-          >
-            <Copy /> Copy container ID
-          </DropdownMenuItem>
           <DropdownMenuItem asChild>
-            <Link to='/logs'>
+            <Link to='/logs' search={{ node: container.nodeId, container: container.id }}>
               <Logs /> View logs
             </Link>
           </DropdownMenuItem>
-
+          <DropdownMenuItem onSelect={() => void copyText(container.id, 'Container ID copied')}>
+            <Copy /> Copy ID
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
             disabled={!canAct || busy || running}
-            onSelect={() => void run(container.id, 'start')}
+            onSelect={() => void run(container.id, 'start', container.name)}
           >
             <Play /> Start
           </DropdownMenuItem>
           <DropdownMenuItem
             disabled={!canAct || busy || !running}
-            onSelect={() => void run(container.id, 'stop')}
-          >
-            <Square /> Stop
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            disabled={!canAct || busy || !running}
-            onSelect={() => void run(container.id, 'restart')}
+            onSelect={() => void run(container.id, 'restart', container.name)}
           >
             <RotateCcw /> Restart
           </DropdownMenuItem>
-
+          <DropdownMenuItem
+            disabled={!canAct || busy || !running}
+            onSelect={() => void run(container.id, 'stop', container.name)}
+          >
+            <Square /> Stop
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
             variant='destructive'
             disabled={!canAct || busy}
             onSelect={(e) => {
-              // Keep the menu from unmounting the dialog with it.
               e.preventDefault();
               setRemoving(true);
             }}
           >
             <Trash /> Remove
           </DropdownMenuItem>
-
-          {!canAct && (
-            <p className='px-2 py-1.5 text-xs text-muted-foreground max-w-56'>
-              This agent is read-only. Set <code>allow_actions = true</code> in{' '}
-              <code>agent.toml</code>.
-            </p>
-          )}
+          {!canAct && <ReadOnlyNote />}
         </DropdownMenuContent>
       </DropdownMenu>
 
@@ -109,12 +88,12 @@ export const ContainerActionsCell = memo(function ContainerActionsCell({
         title={`Remove ${container.name}?`}
         description={
           running
-            ? 'This container is running and will be killed before removal. Data in named volumes is kept.'
-            : 'The container will be removed. Data in named volumes is kept.'
+            ? 'The container will be stopped and removed. Named volumes are kept.'
+            : 'Named volumes are kept.'
         }
         confirmLabel='Remove'
         onConfirm={async () => {
-          await run(container.id, 'remove', { force: running });
+          await run(container.id, 'remove', container.name, { force: running });
         }}
       />
     </div>

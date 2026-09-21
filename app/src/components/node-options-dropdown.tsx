@@ -1,7 +1,7 @@
 import { memo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Info, KeyRound, MoreVertical, PencilLine, RefreshCw, Trash } from 'lucide-react';
-import { useNodeStore, nodeDisplayName } from '@/stores/nodes';
+import { Info, KeyRound, MoreHorizontal, PencilLine, RefreshCw, Trash } from 'lucide-react';
+import { useNodeStore, useNodeName } from '@/stores/nodes';
 import { useNodeMeta } from '@/api/queries';
 import { Button } from './ui/button';
 import {
@@ -17,77 +17,59 @@ import { RenameNodeDialog } from './rename-node-dialog';
 
 export const NodeOptionsDropdown = memo(function NodeOptionsDropdown({
   nodeId,
+  showDetails = true,
 }: {
   nodeId: string;
+  showDetails?: boolean;
 }) {
-  // Selecting the individual actions rather than the whole store: this is
-  // rendered inside every card and every table row.
   const removeNode = useNodeStore((s) => s.removeNode);
   const reconnect = useNodeStore((s) => s.reconnect);
-  const node = useNodeStore((s) => s.nodes.find((n) => n.id === nodeId));
+  const name = useNodeName(nodeId) ?? 'this node';
   const meta = useNodeMeta(nodeId);
-
-  const [renaming, setRenaming] = useState(false);
-  const [editingToken, setEditingToken] = useState(false);
+  const [dialog, setDialog] = useState<'rename' | 'token' | 'remove' | null>(null);
+  const close = (o: boolean) => !o && setDialog(null);
 
   return (
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant='ghost' size='icon-lg' aria-label='Node options'>
-            <MoreVertical />
+          <Button variant='ghost' size='icon' aria-label={`Options for ${name}`}>
+            <MoreHorizontal />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align='end' className='w-48'>
-          <DropdownMenuItem asChild>
-            <Link to='/nodes/$nodeId' params={{ nodeId }}>
-              <Info />
-              Details
-            </Link>
+          {showDetails && (
+            <DropdownMenuItem asChild>
+              <Link to='/nodes/$nodeId' params={{ nodeId }}>
+                <Info /> Details
+              </Link>
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem onSelect={() => setDialog('rename')}>
+            <PencilLine /> Rename
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setRenaming(true)}>
-            <PencilLine />
-            Rename
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setEditingToken(true)}>
-            <KeyRound />
-            {meta?.status === 'unauthorized' ? 'Set token' : 'Change token'}
+          <DropdownMenuItem onSelect={() => setDialog('token')}>
+            <KeyRound /> {meta?.status === 'unauthorized' ? 'Set token' : 'Change token'}
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => reconnect(nodeId)}>
-            <RefreshCw />
-            Reconnect
+            <RefreshCw /> Reconnect
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <ConfirmDialog
-            trigger={
-              <DropdownMenuItem
-                variant='destructive'
-                // Without this the menu closes and unmounts the dialog with it.
-                onSelect={(e) => e.preventDefault()}
-              >
-                <Trash />
-                Remove node
-              </DropdownMenuItem>
-            }
-            title={`Remove ${node ? nodeDisplayName(node) : 'this node'}?`}
-            description={
-              <>
-                Cosmos will stop monitoring this node and forget its saved token.
-                Nothing on the node itself is changed, and you can add it back at
-                any time.
-              </>
-            }
-            confirmLabel='Remove'
-            onConfirm={() => removeNode(nodeId)}
-          />
+          <DropdownMenuItem variant='destructive' onSelect={() => setDialog('remove')}>
+            <Trash /> Remove
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <RenameNodeDialog nodeId={nodeId} open={renaming} onOpenChange={setRenaming} />
-      <NodeCredentialsDialog
-        nodeId={nodeId}
-        open={editingToken}
-        onOpenChange={setEditingToken}
+      <RenameNodeDialog nodeId={nodeId} open={dialog === 'rename'} onOpenChange={close} />
+      <NodeCredentialsDialog nodeId={nodeId} open={dialog === 'token'} onOpenChange={close} />
+      <ConfirmDialog
+        open={dialog === 'remove'}
+        onOpenChange={close}
+        title={`Remove ${name}?`}
+        description='Cosmos forgets this node and its token. The node itself is unchanged.'
+        confirmLabel='Remove'
+        onConfirm={() => removeNode(nodeId)}
       />
     </>
   );

@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { Link } from '@tanstack/react-router';
-import { ArrowDown, ArrowUp, BookOpen, Info, PencilLine } from 'lucide-react';
 import { useHostInfo, useNodeMeta } from '@/api/queries';
+import { useNodeName } from '@/stores/nodes';
 import {
   getCpuPct,
   getDiskReadMbps,
@@ -12,97 +12,73 @@ import {
 } from '@/lib/node-metrics';
 import { secondsToDuration } from '@/lib/time';
 import { TableCell, TableRow } from './ui/table';
-import { Button } from './ui/button';
-import DualStatDisplay from './dual-stat-display';
 import { LiveValue } from './live-value';
 import NodeOptionsDropdown from './node-options-dropdown';
-import { NodePlanet } from './node-planet';
+import { NodeAvatar } from './node-planet';
 import { NodeStatusBadge } from './node-status-badge';
+import { Sparkline } from './sparkline';
 
-/** Matches the 9 `<TableHead>` cells in nodes-page. */
-const DATA_COLUMNS = 8;
+/** Columns, for the header in nodes-page. */
+export const NODE_TABLE_COLUMNS = ['Node', 'CPU', 'Memory', 'Network', 'Disk', 'Uptime', ''] as const;
 
 export const NodeTableRow = memo(function NodeTableRow({ nodeId }: { nodeId: string }) {
   const meta = useNodeMeta(nodeId);
   const { data: host } = useHostInfo(nodeId);
-
-  if (!host) {
-    const connecting = !meta || meta.status === 'connecting';
-    return (
-      <TableRow>
-        {/* Was colSpan={8} against a 9-column header, leaving the row short. */}
-        <TableCell colSpan={DATA_COLUMNS} className='text-sm'>
-          {connecting ? (
-            <span className='text-muted-foreground'>Connecting…</span>
-          ) : (
-            <span className='flex items-center gap-2'>
-              <NodeStatusBadge nodeId={nodeId} />
-              {meta?.error && (
-                <span className='text-muted-foreground text-xs truncate'>{meta.error}</span>
-              )}
-            </span>
-          )}
-        </TableCell>
-        <TableCell>
-          <NodeOptionsDropdown nodeId={nodeId} />
-        </TableCell>
-      </TableRow>
-    );
-  }
+  const name = useNodeName(nodeId);
 
   return (
     <TableRow>
       <TableCell>
-        <div className='size-full flex items-center justify-center'>
-          <NodePlanet name={host.name} className='size-8' />
+        <div className='flex min-w-0 items-center gap-3'>
+          <NodeAvatar nodeId={nodeId} size={28} />
+          <div className='min-w-0'>
+            <Link
+              to='/nodes/$nodeId'
+              params={{ nodeId }}
+              className='block truncate font-medium hover:underline'
+            >
+              {name}
+            </Link>
+            {host ? (
+              <p className='truncate text-xs text-muted-foreground'>{host.hostname}</p>
+            ) : (
+              <NodeStatusBadge nodeId={nodeId} />
+            )}
+          </div>
         </div>
       </TableCell>
-      <TableCell className='max-w-0'>
-        <p className='text-base font-medium truncate'>{host.name}</p>
-        <p className='text-sm font-normal text-muted-foreground truncate'>{host.hostname}</p>
-      </TableCell>
-      <TableCell className='tabular-nums'>
-        <LiveValue nodeId={nodeId} format={(h) => `${getCpuPct(h)}%`} />
-      </TableCell>
-      <TableCell className='tabular-nums whitespace-nowrap'>
-        <LiveValue nodeId={nodeId} format={(h) => `${getMemUsagePct(h)}%`} />
-      </TableCell>
-      <TableCell>
-        <DualStatDisplay
-          nodeId={nodeId}
-          icon1={ArrowUp}
-          icon2={ArrowDown}
-          format1={(h) => `${getNetTxMbps(h)} Mbps`}
-          format2={(h) => `${getNetRxMbps(h)} Mbps`}
-          color='var(--color-network)'
-        />
-      </TableCell>
-      <TableCell>
-        <DualStatDisplay
-          nodeId={nodeId}
-          icon1={BookOpen}
-          icon2={PencilLine}
-          format1={(h) => `${getDiskReadMbps(h)} MB/s`}
-          format2={(h) => `${getDiskWriteMbps(h)} MB/s`}
-          color='var(--color-disk)'
-        />
-      </TableCell>
-      <TableCell className='text-success tabular-nums whitespace-nowrap'>
-        <LiveValue nodeId={nodeId} format={(h) => secondsToDuration(h.uptime_secs)} />
-      </TableCell>
-      <TableCell>
-        <Button asChild className='w-full' variant='outline' size='lg'>
-          <Link to='/nodes/$nodeId' params={{ nodeId }}>
-            <Info />
-            Details
-          </Link>
-        </Button>
-      </TableCell>
-      <TableCell>
+      {host ? (
+        <>
+          <TableCell>
+            <div className='flex items-center gap-2'>
+              <Sparkline nodeId={nodeId} metric='cpu' color='var(--color-cpu)' scale='percent' className='h-6 w-16' />
+              <LiveValue nodeId={nodeId} className='w-10 tabular-nums' format={(h) => `${getCpuPct(h)}%`} />
+            </div>
+          </TableCell>
+          <TableCell>
+            <div className='flex items-center gap-2'>
+              <Sparkline nodeId={nodeId} metric='ram' color='var(--color-ram)' scale='percent' className='h-6 w-16' />
+              <LiveValue nodeId={nodeId} className='w-10 tabular-nums' format={(h) => `${getMemUsagePct(h)}%`} />
+            </div>
+          </TableCell>
+          <TableCell className='text-xs tabular-nums text-muted-foreground'>
+            <LiveValue nodeId={nodeId} format={(h) => `${getNetTxMbps(h)} / ${getNetRxMbps(h)} Mbps`} />
+          </TableCell>
+          <TableCell className='text-xs tabular-nums text-muted-foreground'>
+            <LiveValue nodeId={nodeId} format={(h) => `${getDiskReadMbps(h)} / ${getDiskWriteMbps(h)} MB/s`} />
+          </TableCell>
+          <TableCell className='tabular-nums text-muted-foreground'>
+            <LiveValue nodeId={nodeId} format={(h) => secondsToDuration(h.uptime_secs)} />
+          </TableCell>
+        </>
+      ) : (
+        <TableCell colSpan={5} className='text-xs text-muted-foreground'>
+          {meta?.error ?? 'Waiting for data'}
+        </TableCell>
+      )}
+      <TableCell className='w-12 text-right'>
         <NodeOptionsDropdown nodeId={nodeId} />
       </TableCell>
     </TableRow>
   );
 });
-
-export default NodeTableRow;
