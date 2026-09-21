@@ -26,8 +26,6 @@ fn main() -> ExitCode {
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
-            // Actionable message instead of the old bare `.unwrap()` panic on
-            // a port collision.
             eprintln!("cosmos-agent: fatal: {e}");
             ExitCode::FAILURE
         }

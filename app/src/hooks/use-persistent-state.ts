@@ -3,9 +3,7 @@ import { useCallback, useState } from 'react';
 /**
  * `useState` that survives a reload.
  *
- * For small per-viewer preferences — a chosen view mode, a collapsed panel.
- * Every access is guarded: `localStorage` throws in a private window and can
- * be blocked entirely, and a UI preference is never worth an exception.
+ * For small UI preferences. Storage access is guarded because it can throw.
  */
 export function usePersistentState<T>(
   key: string,

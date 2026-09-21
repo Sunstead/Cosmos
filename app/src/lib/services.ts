@@ -32,8 +32,7 @@ export type ServiceInfo = {
 };
 
 /**
- * Label value used for infrastructure that shouldn't appear as a user-facing
- * service — Caddy, Postgres, Redis, Tailscale all carry it.
+ * Label value marking infrastructure (proxy, database) hidden from services.
  */
 export const SYSTEM_SERVICE_KEY = 'system';
 
@@ -104,7 +103,7 @@ export function deriveNodeServices(
   return services;
 }
 
-/** Services a user would actually click on — infrastructure filtered out. */
+/** Services worth clicking on, with infrastructure filtered out. */
 export function userFacingServices(services: ServiceInfo[]): ServiceInfo[] {
   return services.filter((s) => s.key !== SYSTEM_SERVICE_KEY);
 }

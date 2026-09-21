@@ -13,18 +13,13 @@ interface LiveValueProps {
 }
 
 /**
- * A number from the host stream that updates without re-rendering.
- *
- * Subscribes straight to the node's connection and writes `textContent`
- * through a ref inside the shared animation frame. The alternative —
- * threading the sample through React state — re-rendered the entire card
- * subtree every second, including a full Radix dropdown menu, four charts and
- * a set of specs that never change.
+ * A live value from the host stream, written through a ref so the parent
+ * never re-renders.
  */
 export const LiveValue = memo(function LiveValue({
   nodeId,
   format,
-  placeholder = '—',
+  placeholder = '…',
   className,
 }: LiveValueProps) {
   const ref = useRef<HTMLSpanElement>(null);
@@ -48,8 +43,7 @@ export const LiveValue = memo(function LiveValue({
       } catch {
         return;
       }
-      // Skip the DOM write entirely when the text hasn't changed — true for
-      // uptime and most byte counts most of the time.
+      // Skip the DOM write when the text is unchanged.
       if (value === next) return;
       next = value;
       requestDraw(paint);

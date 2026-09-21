@@ -1,14 +1,7 @@
 import { DiskKind } from '@/generated/DiskKind';
 import { HostInfo } from '@/generated/HostInfo';
 
-/**
- * Adapts a raw `HostInfo` sample into display values.
- *
- * The agent ships raw units — bytes and bytes-per-second — and all formatting
- * happens here. That split is deliberate: the previous wire format mixed MB/s
- * for disk with megabits/s for network inside the same struct, which is the
- * kind of thing that silently produces charts that are wrong by a factor of 8.
- */
+/** Display values from a raw `HostInfo`. The wire format is bytes and bytes/sec. */
 
 const BYTES_PER_GIB = 1024 ** 3;
 const BYTES_PER_MIB = 1024 ** 2;
@@ -58,11 +51,7 @@ function formatDiskKind(kind: DiskKind): string {
   return kind.toUpperCase();
 }
 
-/**
- * Network rates, displayed in megabits per second — the convention for
- * network throughput, and what the UI showed before. The wire value is
- * bytes/sec, hence the factor of 8.
- */
+/** Network rates in megabits per second (wire value is bytes/sec). */
 export function getNetRxMbps(host: HostInfo | undefined): number {
   return round1(((host?.net_rx_bps ?? 0) * 8) / 1_000_000);
 }
@@ -71,13 +60,7 @@ export function getNetTxMbps(host: HostInfo | undefined): number {
   return round1(((host?.net_tx_bps ?? 0) * 8) / 1_000_000);
 }
 
-/**
- * Disk throughput, displayed in MiB/s.
- *
- * Summed across every reported filesystem. The previous version read only
- * `disk[0]` while the history collector summed all of them, so on a
- * multi-disk host the card's number and its own sparkline disagreed.
- */
+/** Disk throughput in MiB/s, summed across filesystems to match history. */
 export function getDiskReadMbps(host: HostInfo | undefined): number {
   return round1(sumDisk(host, 'read_bps') / BYTES_PER_MIB);
 }

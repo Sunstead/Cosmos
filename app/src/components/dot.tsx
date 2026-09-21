@@ -16,7 +16,7 @@ export function Dot({
   className,
 }: {
   variant?: DotVariant;
-  /** Native tooltip — used to name the container a dot represents. */
+  /** Native tooltip, used to name the container a dot represents. */
   title?: string;
   /** Soft glow for something live. */
   pulse?: boolean;

@@ -26,9 +26,6 @@ interface Props {
 
 /**
  * Confirmation for an action that can't be undone.
- *
- * Removing a node, a container or a volume all used to fire on a single click
- * with no way back.
  */
 export function ConfirmDialog({
   trigger,
@@ -80,7 +77,7 @@ export function ConfirmDialog({
             disabled={busy}
             className='min-w-24'
           >
-            {busy ? 'Working…' : confirmLabel}
+            {confirmLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

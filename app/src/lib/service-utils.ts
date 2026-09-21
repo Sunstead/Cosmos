@@ -4,8 +4,7 @@ export function formatCpuPercent(cpuPct: number): string {
   return `${Math.round(cpuPct * 100) / 100}%`;
 }
 
-// Running containers first, stable otherwise. Returns a new array —
-// never mutates the input (it may be coming straight from a store).
+// Running containers first, otherwise stable. Never mutates the input.
 export function sortContainersByState(
   containers: ContainerSummary[],
 ): ContainerSummary[] {

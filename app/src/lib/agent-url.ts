@@ -34,10 +34,8 @@ export function normalizeAgentUrl(input: string): string | null {
 /**
  * Makes a service URL safe to put in an `href`.
  *
- * Docker labels carry bare hostnames — `portainer.jupiter.sunstead.net` — and
- * a bare hostname in an href is a *relative path*, so clicking it navigates
- * the app to `/portainer.jupiter.sunstead.net` instead of the service. Assume
- * https, which is what a reverse proxy in front of a homelab serves.
+ * Labels often carry bare hostnames, which an href treats as a relative path.
+ * Assume https, as served by a reverse proxy.
  */
 export function serviceHref(url: string | null | undefined): string | null {
   const trimmed = url?.trim();

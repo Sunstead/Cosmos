@@ -1,9 +1,8 @@
 //! The one Docker client, plus the mutating operations.
 //!
-//! Previously every request built a fresh `Docker`, which rebuilt the
-//! underlying hyper connection pool each time. It's constructed once here and
-//! shared. If Docker is unreachable at startup the agent still runs — host
-//! metrics don't need it — and the sampler retries the connection.
+//! Built once and shared, so the connection pool is reused. If Docker is
+//! unreachable at startup the agent still runs (host metrics don't need it)
+//! and the sampler retries the connection.
 
 use crate::error::{ from_docker, AgentError };
 use bollard::{

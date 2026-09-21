@@ -1,15 +1,6 @@
-//! Sampler orchestration.
-//!
-//! Each data source is sampled on exactly one schedule and published to a
-//! `watch` channel that every subscriber reads from. The old design sampled
-//! once per connected SSE client, which cost N times the work and — because
-//! the clients shared the rate snapshots — produced wrong numbers as soon as
-//! a second viewer connected.
-//!
-//! `watch` rather than `broadcast`: subscribers only ever want the newest
-//! sample. `watch` coalesces by construction, so a client that stalls for five
-//! seconds wakes to the current value rather than five stale ones, and there's
-//! no `Lagged` case to handle.
+//! Sampler orchestration. Each source is sampled on one schedule and published
+//! to a `watch` channel, so cost and rate deltas are independent of client
+//! count. `watch` over `broadcast`: subscribers only want the latest value.
 
 pub mod docker;
 pub mod facts;

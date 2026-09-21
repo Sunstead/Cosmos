@@ -30,8 +30,7 @@ export class AgentRequestError extends Error {
   }
 
   /**
-   * 501 means the feature is switched off on this agent and never will be —
-   * hide it. 503 means it's configured but failing right now — retry.
+   * 501: feature disabled on this agent, so hide it. 503: failing now, retry.
    */
   get isPermanentlyUnavailable() {
     return this.status === 501;
@@ -87,8 +86,7 @@ export class AgentClient {
       try {
         body = (await res.json()) as ApiError;
       } catch {
-        // Not every failure comes from the agent — a proxy in front of it may
-        // return HTML.
+        // A proxy in front of the agent may return HTML.
       }
       throw new AgentRequestError(res.status, body);
     }

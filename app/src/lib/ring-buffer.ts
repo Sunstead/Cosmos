@@ -1,16 +1,6 @@
 /**
- * Fixed-capacity time series backed by preallocated typed arrays.
- *
- * The previous store rebuilt six arrays per node per second with
- * `[...points, next].slice(-60)` — roughly 720 element copies and 19
- * allocations every second, forever, for a window that never grows. This
- * pushes in O(1) with zero allocation after construction.
- *
- * Values are `Float32Array`: a percentage or a byte rate has nowhere near 24
- * bits of meaningful precision, and halving the footprint helps when a
- * sparkline reads the whole buffer every frame. Timestamps need the full
- * double, since epoch milliseconds exceed what a float32 can represent
- * exactly.
+ * Fixed-capacity time series on preallocated typed arrays: O(1) push, no
+ * allocation. Timestamps are Float64 because epoch ms exceed float32 precision.
  */
 export class RingBuffer {
   private readonly values: Float32Array;
