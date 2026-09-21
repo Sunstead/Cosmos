@@ -52,6 +52,8 @@ export function ConfirmDialog({
     try {
       await onConfirm();
       setOpen(false);
+    } catch {
+      // The caller reports the error; stay open so the user can retry.
     } finally {
       setBusy(false);
     }
