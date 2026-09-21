@@ -37,3 +37,6 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 thiserror = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+libc = "0.2"
