@@ -32,3 +32,14 @@ export function secondsToDuration(totalSeconds: number): string {
 export function msToDuration(ms: number): string {
   return formatDuration(ms / 1000);
 }
+
+/** "3h ago" / "in 5h" for an ISO timestamp, or null when unparseable. */
+export function relativeTime(iso: string | null | undefined, now = Date.now()): string | null {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return null;
+  const delta = now - t;
+  const span = msToDuration(Math.abs(delta)).split(' ')[0];
+  if (Math.abs(delta) < 60_000) return 'just now';
+  return delta >= 0 ? `${span} ago` : `in ${span}`;
+}

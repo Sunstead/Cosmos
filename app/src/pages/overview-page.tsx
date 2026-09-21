@@ -1,194 +1,136 @@
 import { useMemo } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Boxes, HardDrive, Layers, Server } from 'lucide-react';
+import { Boxes, ChevronRight, Database, Hexagon, Server } from 'lucide-react';
 import { useNodeStore } from '@/stores/nodes';
 import { useContainersStore } from '@/stores/containers';
 import { useVolumesStore } from '@/stores/volumes';
 import { userFacingServices } from '@/lib/services';
-import { formatBytes } from '@/lib/node-metrics';
+import { getServiceStatusDisplay } from '@/lib/service-utils';
 import { PageHeader } from '@/components/page-header';
-import { NoNodes } from '@/components/feature-state';
+import { NoNodesState } from '@/components/empty-state';
 import { Constellation } from '@/components/constellation';
 import { ClusterLoad } from '@/components/cluster-load';
 import { QuickLaunchServiceButton } from '@/components/quick-launch-service-button';
-import SimpleStatCard from '@/components/simple-stat-card';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { StatCard, StatRow } from '@/components/stat-card';
+import { Section } from '@/components/section';
+import { GetStarted, useSetupSteps } from '@/components/get-started';
 import { Dot } from '@/components/dot';
-import { getServiceStatusDisplay } from '@/lib/service-utils';
+import { ServiceIcon } from '@/lib/service-icons';
+
+const QUICK_LAUNCH_MAX = 9;
 
 export function OverviewPage() {
   const nodes = useNodeStore((s) => s.nodes);
   const onlineNodes = useNodeStore((s) => s.onlineNodes);
-  const meta = useNodeStore((s) => s.meta);
   const nodeContainers = useContainersStore((s) => s.nodeContainers);
   const allServices = useContainersStore((s) => s.services);
   const nodeVolumes = useVolumesStore((s) => s.nodeVolumes);
+  const steps = useSetupSteps();
 
   const services = useMemo(() => userFacingServices(allServices), [allServices]);
 
-  // Every one of these was a hardcoded literal before — "1 node", "28
-  // services", "2.14 TB" — while the stores already held the real values.
   const stats = useMemo(() => {
     const containers = Object.values(nodeContainers).flat();
-    const running = containers.filter((c) => c.state === 'running').length;
     const volumes = Object.values(nodeVolumes).flat();
-    const degraded = services.filter((s) => s.status !== 'running').length;
-
     return {
       containers: containers.length,
-      running,
+      running: containers.filter((c) => c.state === 'running').length,
       volumes: volumes.length,
       volumesInUse: volumes.filter((v) => v.in_use_by.length > 0).length,
-      services: services.length,
-      degraded,
+      healthy: services.filter((s) => s.status === 'running').length,
     };
   }, [nodeContainers, nodeVolumes, services]);
 
-  const offline = nodes.length - onlineNodes;
-  const unauthorized = Object.values(meta).filter((m) => m.status === 'unauthorized').length;
+  if (nodes.length === 0) {
+    return (
+      <>
+        <PageHeader title='Overview' />
+        <NoNodesState />
+      </>
+    );
+  }
 
-  if (nodes.length === 0) return <NoNodes what='your homelab at a glance' />;
+  const offline = nodes.length - onlineNodes;
+  const setupDone = steps.every((s) => s.done);
+  const launchable = services.filter((s) => s.url).slice(0, QUICK_LAUNCH_MAX);
 
   return (
     <>
-      <PageHeader title='OVERVIEW' />
+      <PageHeader title='Overview' />
 
-      <div className='flex flex-wrap gap-4'>
-        <SimpleStatCard
-          value={nodes.length}
-          label={nodes.length === 1 ? 'Node' : 'Nodes'}
+      <StatRow>
+        <StatCard
           icon={Server}
-          status={
-            offline === 0
-              ? 'All online'
-              : unauthorized > 0
-                ? `${unauthorized} need a token`
-                : `${offline} offline`
-          }
-          statusColor={offline === 0 ? 'success' : 'error'}
+          label='Nodes'
+          value={`${onlineNodes} / ${nodes.length}`}
+          sublabel={offline ? `${offline} offline` : null}
+          tone='error'
         />
-        <SimpleStatCard
-          value={stats.services}
-          label={stats.services === 1 ? 'Service' : 'Services'}
-          icon={Layers}
-          status={stats.degraded === 0 ? 'All healthy' : `${stats.degraded} degraded`}
-          statusColor={stats.degraded === 0 ? 'success' : 'warn'}
+        <StatCard
+          icon={Hexagon}
+          label='Services'
+          value={`${stats.healthy} / ${services.length}`}
+          sublabel={services.length - stats.healthy ? `${services.length - stats.healthy} degraded` : null}
+          tone='warning'
         />
-        <SimpleStatCard
-          value={stats.containers}
-          label='Containers'
-          icon={Boxes}
-          status={`${stats.running} running`}
-          statusColor={
-            stats.containers === 0
-              ? 'default'
-              : stats.running === stats.containers
-                ? 'success'
-                : 'warn'
-          }
-        />
-        <SimpleStatCard
-          value={stats.volumes}
-          label='Volumes'
-          icon={HardDrive}
-          status={`${stats.volumesInUse} in use`}
-          statusColor='default'
-        />
+        <StatCard icon={Boxes} label='Containers' value={`${stats.running} / ${stats.containers}`} />
+        <StatCard icon={Database} label='Volumes' value={`${stats.volumesInUse} / ${stats.volumes}`} />
+      </StatRow>
+
+      <div className='grid gap-4 @5xl:grid-cols-3'>
+        <Section title='Constellation' className='@5xl:col-span-2' contentClassName='p-0'>
+          <Constellation className='aspect-[2/1] max-h-[28rem] min-h-64 w-full overflow-hidden rounded-b-xl' />
+        </Section>
+
+        <div className='flex flex-col gap-4'>
+          {!setupDone && <GetStarted steps={steps} />}
+          {launchable.length > 0 && (
+            <Section
+              title='Quick launch'
+              actions={
+                <Link to='/services' className='flex items-center text-xs text-muted-foreground hover:text-foreground'>
+                  All <ChevronRight className='size-3.5' />
+                </Link>
+              }
+              contentClassName='grid grid-cols-3 gap-2 p-3'
+            >
+              {launchable.map((s) => (
+                <QuickLaunchServiceButton key={`${s.nodeId}:${s.key}`} serviceInfo={s} />
+              ))}
+            </Section>
+          )}
+        </div>
       </div>
 
-      <div className='grid gap-4 @6xl:grid-cols-3'>
-        <Card className='@6xl:col-span-2 overflow-hidden'>
-          <CardHeader>
-            <CardTitle className='label-hud text-muted-foreground text-sm'>
-              CONSTELLATION
-            </CardTitle>
-          </CardHeader>
-          <CardContent className='p-0'>
-            <Constellation className='h-96 w-full' />
-          </CardContent>
-        </Card>
+      <div className='grid gap-4 @5xl:grid-cols-3'>
+        <Section
+          title='Resource usage'
+          className={services.length ? '@5xl:col-span-2' : '@5xl:col-span-3'}
+          contentClassName='divide-y'
+        >
+          {nodes.map((n) => (
+            <ClusterLoad key={n.id} nodeId={n.id} />
+          ))}
+        </Section>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className='label-hud text-muted-foreground text-sm'>
-              QUICK LAUNCH
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {services.length === 0 ? (
-              <p className='text-sm text-muted-foreground'>
-                Label a container with <code>cosmos.service</code> to see it here.
-              </p>
-            ) : (
-              <div className='grid grid-cols-3 gap-2'>
-                {services.slice(0, 9).map((service) => (
-                  <QuickLaunchServiceButton
-                    key={`${service.nodeId}:${service.key}`}
-                    serviceInfo={service}
-                  />
-                ))}
-              </div>
-            )}
-            {services.length > 9 && (
-              <Button asChild variant='ghost' size='sm' className='mt-2 w-full'>
-                <Link to='/services'>View all {services.length}</Link>
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className='grid gap-4 @6xl:grid-cols-3'>
-        <Card className='@6xl:col-span-2'>
-          <CardHeader>
-            <CardTitle className='label-hud text-muted-foreground text-sm'>
-              RESOURCE USAGE
-            </CardTitle>
-          </CardHeader>
-          <CardContent className='space-y-4'>
-            {nodes.map((n) => (
-              <ClusterLoad key={n.id} nodeId={n.id} />
-            ))}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className='label-hud text-muted-foreground text-sm'>
-              SERVICES
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {services.length === 0 ? (
-              <p className='text-sm text-muted-foreground'>Nothing labelled yet.</p>
-            ) : (
-              <ul className='space-y-1.5'>
-                {services.map((s) => {
-                  const display = getServiceStatusDisplay(s.status);
-                  return (
-                    <li
-                      key={`${s.nodeId}:${s.key}`}
-                      className='flex items-center gap-2 text-sm'
-                    >
-                      <Dot variant={display.dotVariant} pulse={s.status === 'running'} />
-                      <span className='flex-1 truncate'>{s.name}</span>
-                      <span className='text-xs text-muted-foreground tabular-nums'>
-                        {s.running}/{s.total}
-                      </span>
-                      <span className='text-xs text-muted-foreground tabular-nums w-16 text-right'>
-                        {formatBytes(s.mem_used_bytes)}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
+        {services.length > 0 && (
+          <Section title='Service health' count={services.length} contentClassName='max-h-80 divide-y overflow-auto'>
+            {services.map((s) => {
+              const status = getServiceStatusDisplay(s.status);
+              return (
+                <div key={`${s.nodeId}:${s.key}`} className='flex items-center gap-3 px-4 py-2 text-sm'>
+                  <ServiceIcon service={s.key} size={18} />
+                  <span className='min-w-0 flex-1 truncate'>{s.name}</span>
+                  <span className='text-xs tabular-nums text-muted-foreground'>
+                    {s.running}/{s.total}
+                  </span>
+                  <Dot variant={status.dotVariant} title={status.label} pulse={s.status === 'running'} />
+                </div>
+              );
+            })}
+          </Section>
+        )}
       </div>
     </>
   );
 }
-
-export default OverviewPage;

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { HostInfo } from '@/generated/HostInfo';
 import { MetricStep } from '@/generated/MetricStep';
 import { getConnection, useNodeStore } from '@/stores/nodes';
@@ -127,37 +128,42 @@ export function useBackups(nodeId: string | null) {
   });
 }
 
+const PAST: Record<ContainerAction, string> = {
+  start: 'Started',
+  stop: 'Stopped',
+  restart: 'Restarted',
+  remove: 'Removed',
+};
+
+export type ContainerAction = 'start' | 'stop' | 'restart' | 'remove';
+
 /**
- * Container lifecycle actions.
- *
- * The agent pushes a fresh container list within ~50ms of an action via its
- * Docker event watcher, so there's nothing to invalidate here — the stream
- * delivers the new state on its own.
+ * Container lifecycle actions with toast feedback. The agent's event watcher
+ * pushes the new container list within milliseconds, so nothing is refetched.
  */
 export function useContainerActions(nodeId: string | null) {
   const [pending, setPending] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   const run = useCallback(
     async (
       containerId: string,
-      action: 'start' | 'stop' | 'restart' | 'remove',
+      action: ContainerAction,
+      label = containerId.slice(0, 12),
       opts: { force?: boolean; volumes?: boolean } = {},
     ) => {
       const conn = nodeId ? getConnection(nodeId) : null;
       if (!conn) return false;
 
       setPending(`${containerId}:${action}`);
-      setError(null);
       try {
-        if (action === 'remove') {
-          await conn.client.removeContainer(containerId, opts);
-        } else {
-          await conn.client.containerAction(containerId, action);
-        }
+        if (action === 'remove') await conn.client.removeContainer(containerId, opts);
+        else await conn.client.containerAction(containerId, action);
+        toast.success(`${PAST[action]} ${label}`);
         return true;
       } catch (e) {
-        setError(e instanceof Error ? e.message : `could not ${action} container`);
+        toast.error(`Could not ${action} ${label}`, {
+          description: e instanceof Error ? e.message : undefined,
+        });
         return false;
       } finally {
         setPending(null);
@@ -166,7 +172,33 @@ export function useContainerActions(nodeId: string | null) {
     [nodeId],
   );
 
-  return { run, pending, error, clearError: () => setError(null) };
+  /** One action across several containers, sequentially, with one toast. */
+  const runMany = useCallback(
+    async (containerIds: string[], action: Exclude<ContainerAction, 'remove'>, label: string) => {
+      const conn = nodeId ? getConnection(nodeId) : null;
+      if (!conn || containerIds.length === 0) return false;
+
+      setPending(`many:${action}`);
+      let failed = 0;
+      // Sequential: restarting a compose project all at once can trip
+      // dependency ordering.
+      for (const id of containerIds) {
+        try {
+          await conn.client.containerAction(id, action);
+        } catch {
+          failed += 1;
+        }
+      }
+      setPending(null);
+
+      if (failed === 0) toast.success(`${PAST[action]} ${label}`);
+      else toast.error(`${failed} of ${containerIds.length} failed to ${action}`);
+      return failed === 0;
+    },
+    [nodeId],
+  );
+
+  return { run, runMany, pending };
 }
 
 /**
@@ -186,4 +218,9 @@ export function useTick(intervalMs = 60_000): number {
     ),
     () => Math.floor(Date.now() / intervalMs),
   );
+}
+
+/** The current time, updated every `intervalMs`, without reading the clock in render. */
+export function useNow(intervalMs = 60_000): number {
+  return useTick(intervalMs) * intervalMs;
 }

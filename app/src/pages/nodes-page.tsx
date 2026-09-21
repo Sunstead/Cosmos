@@ -1,108 +1,81 @@
-import { GlobeCheck, GlobeOff, Server } from 'lucide-react';
-import AddNode from '@/components/add-node';
-import GridListToggle, { GridListView } from '@/components/grid-list-toggle';
+import { LayoutGrid, List, SearchX } from 'lucide-react';
+import { useState } from 'react';
 import { NodeCard } from '@/components/node-card';
-import NodeEmpty from '@/components/node-empty';
-import { NodeTableRow } from '@/components/node-table-row';
-import SimpleStatCard from '@/components/simple-stat-card';
+import { NodeTableRow, NODE_TABLE_COLUMNS } from '@/components/node-table-row';
 import { PageHeader } from '@/components/page-header';
+import { SegmentedControl } from '@/components/segmented-control';
+import { SearchInput } from '@/components/search-input';
+import { AddNodeButton, EmptyState, NoNodesState } from '@/components/empty-state';
 import { Card } from '@/components/ui/card';
-import {
-  Table,
-  TableBody,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { useNodeStore } from '@/stores/nodes';
+import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { nodeDisplayName, useNodeStore } from '@/stores/nodes';
 import { usePersistentState } from '@/hooks/use-persistent-state';
+import { matchesQuery } from '@/lib/format';
+
+type View = 'grid' | 'list';
 
 export function NodesPage() {
-  // Persisted: flipping back to grid on every navigation was irritating.
-  const [view, setView] = usePersistentState<GridListView>('cosmos-nodes-view', 'grid');
+  const [view, setView] = usePersistentState<View>('cosmos-nodes-view', 'grid');
+  const [query, setQuery] = useState('');
   const nodes = useNodeStore((s) => s.nodes);
-  const onlineNodes = useNodeStore((s) => s.onlineNodes);
-  const meta = useNodeStore((s) => s.meta);
-
-  const offlineCount = nodes.length - onlineNodes;
-  const needTokens = Object.values(meta).filter((m) => m.status === 'unauthorized').length;
+  const visible = nodes.filter((n) => matchesQuery(query, nodeDisplayName(n), n.url, n.agentName));
 
   return (
     <>
       <PageHeader
-        title='NODES'
+        title='Nodes'
+        count={nodes.length ? visible.length : undefined}
         actions={
-          <>
-            <GridListToggle view={view} onViewChange={setView} />
-            <AddNode />
-          </>
+          nodes.length > 0 && (
+            <>
+              {nodes.length > 3 && (
+                <SearchInput value={query} onChange={setQuery} placeholder='Search nodes' />
+              )}
+              <SegmentedControl<View>
+                label='View'
+                value={view}
+                onChange={setView}
+                options={[
+                  { value: 'grid', icon: LayoutGrid, hint: 'Cards' },
+                  { value: 'list', icon: List, hint: 'List' },
+                ]}
+              />
+              <AddNodeButton />
+            </>
+          )
         }
       />
 
       {nodes.length === 0 ? (
-        <div className='flex-1 flex justify-center items-center'>
-          <NodeEmpty />
+        <NoNodesState />
+      ) : visible.length === 0 ? (
+        <EmptyState size='page' icon={SearchX} title='No matching nodes' />
+      ) : view === 'grid' ? (
+        <div className='grid gap-4 @6xl:grid-cols-2'>
+          {visible.map((n) => (
+            <NodeCard key={n.id} nodeId={n.id} />
+          ))}
         </div>
       ) : (
-        <>
-          <div className='flex flex-wrap gap-4 max-w-full'>
-            <SimpleStatCard
-              value={nodes.length}
-              label='Total nodes'
-              status={offlineCount === 0 ? 'All online' : `${offlineCount} offline`}
-              statusColor={offlineCount === 0 ? 'success' : 'error'}
-              icon={Server}
-            />
-            <SimpleStatCard
-              value={onlineNodes}
-              label='Online'
-              status={onlineNodes === nodes.length ? 'Reporting' : ''}
-              statusColor='success'
-              icon={GlobeCheck}
-            />
-            <SimpleStatCard
-              value={offlineCount}
-              label='Offline'
-              status={needTokens > 0 ? `${needTokens} need a token` : ''}
-              statusColor={needTokens > 0 ? 'error' : 'default'}
-              icon={GlobeOff}
-            />
-          </div>
-
-          {view === 'grid' ? (
-            <div className='grid grid-cols-1 @6xl:grid-cols-2 w-full gap-4'>
-              {nodes.map((node) => (
-                <NodeCard key={node.id} nodeId={node.id} />
+        <Card className='p-0'>
+          <Table>
+            <TableHeader>
+              <TableRow className='hover:bg-transparent'>
+                {NODE_TABLE_COLUMNS.map((c, i) => (
+                  <TableHead key={i} className='h-9 text-xs'>
+                    {c}
+                  </TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {visible.map((n) => (
+                <NodeTableRow key={n.id} nodeId={n.id} />
               ))}
-            </div>
-          ) : (
-            <Card className='p-0'>
-              <Table className='table-fixed'>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className='w-12' />
-                    <TableHead>Name</TableHead>
-                    <TableHead className='min-w-20'>CPU</TableHead>
-                    <TableHead className='min-w-36'>Memory</TableHead>
-                    <TableHead className='min-w-36'>Network</TableHead>
-                    <TableHead className='min-w-36'>Disk I/O</TableHead>
-                    <TableHead className='min-w-32'>Uptime</TableHead>
-                    <TableHead className='w-28' />
-                    <TableHead className='w-14' />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {nodes.map((node) => (
-                    <NodeTableRow key={node.id} nodeId={node.id} />
-                  ))}
-                </TableBody>
-              </Table>
-            </Card>
-          )}
-        </>
+            </TableBody>
+          </Table>
+        </Card>
       )}
     </>
   );
 }
-
-export default NodesPage;

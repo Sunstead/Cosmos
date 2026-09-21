@@ -1,20 +1,21 @@
 import { ColumnDef } from '@tanstack/react-table';
 import { ContainerInfo } from '@/generated/ContainerInfo';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Dot, DotVariant } from './dot';
-import { ContainerActionsCell } from './container-actions-cell';
 import { formatBytes } from '@/lib/node-metrics';
 import { msToDuration } from '@/lib/time';
+import { NO_VALUE } from '@/lib/format';
+import { Dot, DotVariant } from './dot';
+import { ContainerActionsCell } from './container-actions-cell';
+import { NodeName } from './node-name';
 
-// Containers are flattened across nodes for the table; nodeId keeps row ids
-// unique since container ids can theoretically collide across nodes.
+/** Flattened across nodes; `nodeId` keeps row ids unique. */
 export type ContainerRow = ContainerInfo & { nodeId: string };
 
-function stateToVariant(state: string): DotVariant {
+export function containerStateVariant(state: string): DotVariant {
   switch (state.toLowerCase()) {
     case 'running':
       return 'success';
     case 'paused':
+    case 'restarting':
       return 'warning';
     case 'exited':
     case 'dead':
@@ -24,97 +25,73 @@ function stateToVariant(state: string): DotVariant {
   }
 }
 
-// Uptime and size formatting live in lib/ so the table and the cards can't
-// drift apart; these were duplicated here before.
-function formatUptime(startedAt: string | null): string {
-  if (!startedAt) return '—';
-  const started = new Date(startedAt).getTime();
-  if (Number.isNaN(started)) return '—';
-
-  const diffMs = Date.now() - started;
-  if (diffMs < 0) return '—';
-  return msToDuration(diffMs);
+export function containerUptime(startedAt: string | null, state: string): string {
+  if (state !== 'running' || !startedAt) return NO_VALUE;
+  const started = Date.parse(startedAt);
+  return Number.isFinite(started) && started <= Date.now()
+    ? msToDuration(Date.now() - started)
+    : NO_VALUE;
 }
 
-export const columns: ColumnDef<ContainerRow>[] = [
-  {
-    id: 'select',
-    header: ({ table }) => (
-      <div className='w-6 flex justify-end'>
-        <Checkbox
-          checked={
-            table.getIsAllPageRowsSelected() ||
-            (table.getIsSomePageRowsSelected() && 'indeterminate')
-          }
-          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-          aria-label='Select all'
-        />
-      </div>
-    ),
-    cell: ({ row }) => (
-      <div className='flex w-6 justify-end'>
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label='Select row'
-        />
-      </div>
-    ),
-    enableSorting: false,
-    enableHiding: false,
-  },
-  {
-    accessorKey: 'name',
-    header: 'Name',
-    cell: ({ row }) => <span className='font-medium'>{row.original.name}</span>,
-  },
-  {
-    accessorKey: 'image',
-    header: 'Image',
-    cell: ({ row }) => (
-      <span className='text-muted-foreground'>{row.original.image}</span>
-    ),
-  },
-  {
-    accessorKey: 'status',
-    header: 'Status',
-    cell: ({ row }) => {
-      const { state, status } = row.original;
-      return (
-        <div className='flex items-center gap-2'>
-          <Dot variant={stateToVariant(state)} />
-          <span>{status}</span>
+export function containerColumns(showNode: boolean): ColumnDef<ContainerRow>[] {
+  const nodeColumn: ColumnDef<ContainerRow> = {
+    id: 'node',
+    header: 'Node',
+    accessorFn: (r) => r.nodeId,
+    cell: ({ row }) => <NodeName nodeId={row.original.nodeId} />,
+  };
+
+  return [
+    {
+      accessorKey: 'name',
+      header: 'Name',
+      cell: ({ row }) => (
+        <div className='min-w-0'>
+          <p className='truncate font-medium'>{row.original.name}</p>
+          <p className='truncate font-mono text-2xs text-muted-foreground'>
+            {row.original.image}
+          </p>
         </div>
-      );
+      ),
     },
-  },
-  {
-    accessorKey: 'cpu_pct',
-    header: () => <div className='text-right'>CPU</div>,
-    cell: ({ row }) => (
-      <div className='text-right tabular-nums'>
-        {row.original.cpu_pct.toFixed(1)}%
-      </div>
-    ),
-  },
-  {
-    accessorKey: 'mem_used_bytes',
-    header: () => <div className='text-right'>Memory</div>,
-    cell: ({ row }) => (
-      <div className='text-right tabular-nums'>
-        {formatBytes(row.original.mem_used_bytes)}
-      </div>
-    ),
-  },
-  {
-    accessorKey: 'started_at',
-    header: 'Uptime',
-    cell: ({ row }) => formatUptime(row.original.started_at),
-  },
-  {
-    id: 'actions',
-    cell: ({ row }) => <ContainerActionsCell container={row.original} />,
-    enableSorting: false,
-    enableHiding: false,
-  },
-];
+    ...(showNode ? [nodeColumn] : []),
+    {
+      accessorKey: 'state',
+      header: 'Status',
+      cell: ({ row }) => (
+        <div className='flex items-center gap-2'>
+          <Dot variant={containerStateVariant(row.original.state)} />
+          <span className='truncate'>{row.original.status}</span>
+        </div>
+      ),
+    },
+    {
+      accessorKey: 'cpu_pct',
+      header: 'CPU',
+      cell: ({ row }) => <span className='tabular-nums'>{row.original.cpu_pct.toFixed(1)}%</span>,
+    },
+    {
+      accessorKey: 'mem_used_bytes',
+      header: 'Memory',
+      cell: ({ row }) => (
+        <span className='tabular-nums'>{formatBytes(row.original.mem_used_bytes)}</span>
+      ),
+    },
+    {
+      id: 'uptime',
+      header: 'Uptime',
+      accessorFn: (r) => (r.started_at ? Date.parse(r.started_at) : 0),
+      cell: ({ row }) => (
+        <span className='tabular-nums text-muted-foreground'>
+          {containerUptime(row.original.started_at, row.original.state)}
+        </span>
+      ),
+    },
+    {
+      id: 'actions',
+      header: () => <span className='sr-only'>Actions</span>,
+      cell: ({ row }) => <ContainerActionsCell container={row.original} />,
+      enableSorting: false,
+    },
+  ];
+}
