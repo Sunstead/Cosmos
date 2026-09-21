@@ -92,6 +92,7 @@ const monitoringRoute = createRoute({
 const logsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/logs',
+  staticData: { layout: 'fill' },
   component: lazyRouteComponent(() => import('./pages/logs-page'), 'LogsPage'),
 });
 
