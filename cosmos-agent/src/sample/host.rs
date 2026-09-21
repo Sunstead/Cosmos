@@ -91,6 +91,8 @@ pub struct HostProbe {
     prev_net: HashMap<String, (u64, u64)>,
     /// mount -> cumulative (read, written)
     prev_disk: HashMap<String, (u64, u64)>,
+    /// mount -> storage pool, see `pool_key`. Cleared on re-enumeration.
+    pools: HashMap<String, String>,
     prev_at: Instant,
     ticks: u64,
 }
@@ -124,6 +126,7 @@ impl HostProbe {
             filters,
             prev_net: HashMap::new(),
             prev_disk: HashMap::new(),
+            pools: HashMap::new(),
             prev_at: Instant::now(),
             ticks: 0,
         };
@@ -155,6 +158,9 @@ impl HostProbe {
 
         let reenumerate = self.ticks.is_multiple_of(REENUMERATE_EVERY);
         self.disks.refresh(reenumerate);
+        if reenumerate {
+            self.pools.clear();
+        }
         self.nets.refresh(reenumerate);
 
         let (nets, net_rx_bps, net_tx_bps) = self.sample_nets(dt);
@@ -231,7 +237,7 @@ impl HostProbe {
     }
 
     fn sample_disks(&mut self, dt: f64) -> Vec<DiskInfo> {
-        let mut disk = Vec::with_capacity(self.filters.disk_hint());
+        let mut disk: Vec<(String, DiskInfo)> = Vec::with_capacity(self.filters.disk_hint());
         let mut next_prev = HashMap::with_capacity(self.prev_disk.len());
 
         for d in self.disks.list() {
@@ -257,7 +263,12 @@ impl HostProbe {
                 None => (0.0, 0.0),
             };
 
-            disk.push(DiskInfo {
+            let pool = self.pools
+                .entry(mount.clone())
+                .or_insert_with(|| pool_key(d))
+                .clone();
+
+            disk.push((pool, DiskInfo {
                 mount,
                 label,
                 // Counts reserved blocks as used, which is why this can read
@@ -271,7 +282,7 @@ impl HostProbe {
                     sysinfo::DiskKind::HDD => DiskKind::Hdd,
                     _ => DiskKind::Unknown,
                 },
-            });
+            }));
         }
 
         self.prev_disk = next_prev;
@@ -289,23 +300,66 @@ pub fn unix_now() -> i64 {
         .unwrap_or(0)
 }
 
-/// Volumes that share one pool (APFS containers, btrfs subvolumes, bind
-/// mounts) each report the pool's size and I/O, so they would be counted
-/// twice. Identical total and used bytes mark a shared pool; keep the entry
-/// with the shortest label, usually `/`.
-fn dedupe_shared_volumes(mut disks: Vec<DiskInfo>) -> Vec<DiskInfo> {
-    disks.sort_by(|a, b| a.label.len().cmp(&b.label.len()).then_with(|| a.label.cmp(&b.label)));
+/// Identifies the storage behind a mount, so volumes that share it are
+/// counted once. Mounts that don't resolve to a device stay distinct.
+fn pool_key(d: &sysinfo::Disk) -> String {
+    let mount = d.mount_point();
+    // APFS volumes all carry the container's size and I/O, and sysinfo names
+    // them by volume label, so ask the kernel for the device instead.
+    #[cfg(target_os = "macos")]
+    if let Some(dev) = macos_mount_source(mount) {
+        return apfs_container(&dev).unwrap_or(dev);
+    }
+    // Linux: bind mounts and btrfs subvolumes repeat the same device path.
+    let name = d.name().to_string_lossy();
+    if name.starts_with("/dev/") {
+        name.into_owned()
+    } else {
+        format!("mount:{}", mount.to_string_lossy())
+    }
+}
+
+/// `/dev/disk3s1s1` and `/dev/disk3s5` are volumes of container `disk3`.
+fn apfs_container(dev: &str) -> Option<String> {
+    let rest = dev.strip_prefix("/dev/disk")?;
+    let n: String = rest.chars().take_while(char::is_ascii_digit).collect();
+    (!n.is_empty()).then(|| format!("disk{n}"))
+}
+
+#[cfg(target_os = "macos")]
+fn macos_mount_source(path: &std::path::Path) -> Option<String> {
+    use std::ffi::{ CStr, CString };
+    use std::os::unix::ffi::OsStrExt;
+
+    let c_path = CString::new(path.as_os_str().as_bytes()).ok()?;
+    // SAFETY: statfs fills a zeroed, correctly sized struct; f_mntfromname is
+    // a NUL-terminated fixed array.
+    unsafe {
+        let mut st: libc::statfs = std::mem::zeroed();
+        if libc::statfs(c_path.as_ptr(), &mut st) != 0 {
+            return None;
+        }
+        Some(CStr::from_ptr(st.f_mntfromname.as_ptr()).to_string_lossy().into_owned())
+    }
+}
+
+/// Keeps one entry per pool, preferring the shortest label (usually `/`).
+fn dedupe_shared_volumes(mut disks: Vec<(String, DiskInfo)>) -> Vec<DiskInfo> {
+    disks.sort_by(|(_, a), (_, b)| a.label.len().cmp(&b.label.len()).then_with(|| a.label.cmp(&b.label)));
     let mut seen = std::collections::HashSet::with_capacity(disks.len());
-    disks.retain(|d| seen.insert((d.total_bytes, d.used_bytes)));
     disks
+        .into_iter()
+        .filter(|(pool, _)| seen.insert(pool.clone()))
+        .map(|(_, d)| d)
+        .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn disk(label: &str, total: u64, used: u64) -> DiskInfo {
-        DiskInfo {
+    fn disk(pool: &str, label: &str, total: u64, used: u64) -> (String, DiskInfo) {
+        (pool.into(), DiskInfo {
             mount: label.into(),
             label: label.into(),
             used_bytes: used,
@@ -313,18 +367,38 @@ mod tests {
             read_bps: 0.0,
             write_bps: 0.0,
             kind: DiskKind::Ssd,
-        }
+        })
     }
 
     #[test]
-    fn shared_volumes_count_once() {
+    fn shared_volumes_count_once_even_when_readings_differ() {
         let out = dedupe_shared_volumes(vec![
-            disk("/System/Volumes/Data", 1000, 900),
-            disk("/", 1000, 900),
-            disk("/mnt/backup", 4000, 100),
+            disk("disk3", "/System/Volumes/Data", 1000, 901),
+            disk("disk3", "/", 1000, 900),
+            disk("/dev/sdb1", "/mnt/backup", 4000, 100),
+            // Identical drives with identical usage are still distinct.
+            disk("/dev/sdc1", "/mnt/mirror", 4000, 100),
         ]);
         let labels: Vec<_> = out.iter().map(|d| d.label.as_str()).collect();
-        assert_eq!(labels, ["/", "/mnt/backup"]);
+        assert_eq!(labels, ["/", "/mnt/backup", "/mnt/mirror"]);
+    }
+
+    #[test]
+    fn apfs_volumes_map_to_their_container() {
+        assert_eq!(apfs_container("/dev/disk3s1s1").as_deref(), Some("disk3"));
+        assert_eq!(apfs_container("/dev/disk12s5").as_deref(), Some("disk12"));
+        assert_eq!(apfs_container("/dev/sda1"), None);
+        assert_eq!(apfs_container("map auto_home"), None);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn root_and_data_volume_share_a_pool() {
+        let disks = Disks::new_with_refreshed_list();
+        let pool = |m: &str| disks.list().iter().find(|d| d.mount_point() == std::path::Path::new(m)).map(pool_key);
+        if let (Some(root), Some(data)) = (pool("/"), pool("/System/Volumes/Data")) {
+            assert_eq!(root, data);
+        }
     }
     use crate::config::HostConfig;
 
