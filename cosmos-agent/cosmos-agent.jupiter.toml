@@ -1,0 +1,68 @@
+# cosmos-agent config for the Jupiter stack.
+#
+# Save alongside docker-compose.yml as `cosmos-agent.toml`.
+# The token comes from COSMOS_AGENT_TOKEN in .env, so nothing secret is here.
+
+node_name = "jupiter"
+
+[server]
+bind = "0.0.0.0:7700"
+
+[auth]
+# Browser EventSource/WebSocket cannot set headers, so the web build needs
+# this. The Tauri app uses the Authorization header either way.
+allow_query_token = true
+allow_anonymous = false
+
+# No [cors] needed: the image serves the web UI from the agent's own origin.
+# The desktop app's origins are built in.
+
+[host]
+interval_ms = 1000
+
+# Under host networking the agent sees docker0 and every per-container veth.
+# Summing those into "node throughput" counts container traffic two or three
+# times over.
+net_exclude = ["lo*", "docker*", "br-*", "veth*", "virbr*", "tailscale*"]
+
+# In a container /proc/mounts is full of overlayfs and bind mounts, so the
+# filesystems worth charting are listed explicitly. `path` is what the agent
+# sees; `label` is what the UI shows.
+[[host.disks]]
+path  = "/host/rootfs"
+label = "/"
+
+# Uncomment once BACKUP_PATH points at a separate drive, and add the matching
+# bind mount in compose:
+# [[host.disks]]
+# path  = "/host/backups"
+# label = "/srv/backups"
+
+[docker]
+socket = "/var/run/docker.sock"
+interval_ms = 2000
+stats_concurrency = 8
+
+# Start read-only and flip this to true once you're happy. It gates
+# start/stop/restart/remove for containers and volumes; the agent also always
+# refuses to act on its own container.
+allow_actions = false
+allow_logs = true
+watch_events = true
+
+[history]
+enabled = true
+path = "/var/lib/cosmos-agent/metrics.db"
+retain_1s_secs = 3600      # 1 hour at full resolution
+retain_1m_secs = 604800    # 7 days
+retain_5m_secs = 7776000   # 90 days
+
+[backups]
+enabled = true
+status_file = "/host/backups/restic-status.json"
+# mtime = when jupiter-backup.timer last fired. If this is newer than the
+# status file, the timer ran but backup.sh died before finishing — which a
+# snapshot list alone would never reveal.
+timer_stamp = "/host/systemd-timers/stamp-jupiter-backup.timer"
+expected_interval_secs = 86400   # nightly at 03:00
+repo_label = "jupiter/restic"

@@ -1,120 +1,216 @@
-import { useQueries, useQuery } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { HostInfo } from '@/generated/HostInfo';
-import { useNodeStore } from '../stores/nodes';
-import { useContainersStore } from '../stores/containers';
-import { useVolumesStore } from '@/stores/volumes';
+import { MetricStep } from '@/generated/MetricStep';
+import { getConnection, useNodeStore } from '@/stores/nodes';
+import { NodeMeta } from './connection';
 
-export function useHostInfo(nodeId: string | null) {
-  const getClient = useNodeStore((s) => s.getClient);
-  const cached = useNodeStore((s) =>
-    nodeId ? (s.nodeHostInfo[nodeId] ?? null) : null,
+/**
+ * Connection status, capabilities and agent version. Changes only on transitions.
+ */
+export function useNodeMeta(nodeId: string | null): NodeMeta | null {
+  return useNodeStore((s) => (nodeId ? (s.meta[nodeId] ?? null) : null));
+}
+
+/**
+ * The latest host sample, as React state.
+ *
+ * Re-renders once per second. For values inside otherwise static cards, use
+ * `<LiveValue>` or `<Sparkline>`, which write through refs instead.
+ */
+export function useHostInfo(nodeId: string | null): {
+  data: HostInfo | null;
+  status: NodeMeta['status'];
+} {
+  const meta = useNodeMeta(nodeId);
+
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      const conn = nodeId ? getConnection(nodeId) : null;
+      return conn ? conn.onHost(onChange) : () => {};
+    },
+    [nodeId],
   );
-  const client = nodeId ? getClient(nodeId) : null;
-  const [data, setData] = useState<HostInfo | null>(cached);
 
-  useEffect(() => {
-    if (cached && !data) setData(cached);
-  }, [cached]);
+  // `getHost()` returns the same object until a new sample replaces it, so
+  // this is a stable snapshot and won't loop.
+  const getSnapshot = useCallback(
+    () => (nodeId ? (getConnection(nodeId)?.getHost() ?? null) : null),
+    [nodeId],
+  );
 
-  useEffect(() => {
-    if (!client) {
-      setData(null);
-      return;
-    }
-    return client.streamHost((info) => setData(info));
-  }, [client]);
-
-  return { data, isLoading: data === null };
+  const data = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  return { data, status: meta?.status ?? 'connecting' };
 }
 
-export function useContainers(nodeId: string | null) {
-  const getClient = useNodeStore((s) => s.getClient);
-  const client = nodeId ? getClient(nodeId) : null;
+/**
+ * Subscribes to a node's host stream without causing a re-render.
+ *
+ * The callback lives in a ref, so inline closures don't resubscribe.
+ */
+export function useHostSubscription(
+  nodeId: string | null,
+  onSample: (host: HostInfo) => void,
+) {
+  const handler = useRef(onSample);
+
+  // Assigned in an effect, not during render.
+  useEffect(() => {
+    handler.current = onSample;
+  }, [onSample]);
+
+  useEffect(() => {
+    if (!nodeId) return;
+    const conn = getConnection(nodeId);
+    if (!conn) return;
+    return conn.onHost((host) => handler.current(host));
+  }, [nodeId]);
+}
+
+/**
+ * Historical metrics from the agent's SQLite store.
+ *
+ * Disabled when the agent lacks the `metrics_history` capability.
+ */
+export function useMetricHistory(
+  nodeId: string | null,
+  opts: { rangeSeconds: number; step?: MetricStep; maxPoints?: number },
+) {
+  const meta = useNodeMeta(nodeId);
+  const supported = meta?.capabilities.metrics_history ?? false;
+
   return useQuery({
-    queryKey: ['containers', nodeId],
-    queryFn: () => client!.getContainers(),
-    enabled: !!client,
-    refetchInterval: 5_000,
-    refetchIntervalInBackground: false,
+    // Keyed by range length; the window is resolved at fetch time.
+    queryKey: ['metrics', nodeId, opts.rangeSeconds, opts.step, opts.maxPoints],
+    queryFn: () => {
+      const conn = getConnection(nodeId!);
+      if (!conn) throw new Error('node is not connected');
+      const to = Math.floor(Date.now() / 1000);
+      return conn.client.getMetrics({
+        from: to - opts.rangeSeconds,
+        to,
+        step: opts.step,
+        maxPoints: opts.maxPoints,
+      });
+    },
+    enabled: !!nodeId && supported && meta?.status === 'online',
+    staleTime: 15_000,
+    refetchInterval: 60_000,
+    retry: 1,
   });
 }
 
-// Fetches containers for all known nodes and keeps the containers store in sync.
-// Mount once at the app/layout level — does not render anything.
-export function useAllContainersSync() {
-  const nodes = useNodeStore((s) => s.nodes);
-  const getClient = useNodeStore((s) => s.getClient);
-  const setNodeContainers = useContainersStore((s) => s.setNodeContainers);
-  const removeNode = useContainersStore((s) => s.removeNode);
+export function useBackups(nodeId: string | null) {
+  const meta = useNodeMeta(nodeId);
+  const supported = meta?.capabilities.backups ?? false;
 
-  // Remove store entries for nodes that have been deleted
-  const prevNodeIds = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    const current = new Set(nodes.map((n) => n.id));
-    for (const id of prevNodeIds.current) {
-      if (!current.has(id)) removeNode(id);
-    }
-    prevNodeIds.current = current;
-  }, [nodes]);
-
-  useQueries({
-    queries: nodes.map((node) => ({
-      queryKey: ['containers', node.id],
-      queryFn: async () => {
-        const client = getClient(node.id);
-        if (!client) throw new Error(`No client for node ${node.id}`);
-        const result = await client.getContainers();
-        setNodeContainers(node.id, result.containers);
-        return result;
-      },
-      enabled: !!getClient(node.id),
-      refetchInterval: 5_000,
-      refetchIntervalInBackground: false,
-    })),
-  });
-}
-
-export function useVolumes(nodeId: string | null) {
-  const getClient = useNodeStore((s) => s.getClient);
-  const client = nodeId ? getClient(nodeId) : null;
   return useQuery({
-    queryKey: ['volumes', nodeId],
-    queryFn: () => client!.getVolumes(),
-    enabled: !!client,
-    refetchInterval: 30_000,
-    refetchIntervalInBackground: false,
+    queryKey: ['backups', nodeId],
+    queryFn: () => {
+      const conn = getConnection(nodeId!);
+      if (!conn) throw new Error('node is not connected');
+      return conn.client.getBackups();
+    },
+    enabled: !!nodeId && supported && meta?.status === 'online',
+    refetchInterval: 60_000,
+    retry: 1,
   });
 }
 
-export function useAllVolumesSync() {
-  const nodes = useNodeStore((s) => s.nodes);
-  const getClient = useNodeStore((s) => s.getClient);
-  const setNodeVolumes = useVolumesStore((s) => s.setNodeVolumes);
-  const removeNode = useVolumesStore((s) => s.removeNode);
+const PAST: Record<ContainerAction, string> = {
+  start: 'Started',
+  stop: 'Stopped',
+  restart: 'Restarted',
+  remove: 'Removed',
+};
 
-  const prevNodeIds = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    const current = new Set(nodes.map((n) => n.id));
-    for (const id of prevNodeIds.current) {
-      if (!current.has(id)) removeNode(id);
-    }
-    prevNodeIds.current = current;
-  }, [nodes]);
+export type ContainerAction = 'start' | 'stop' | 'restart' | 'remove';
 
-  useQueries({
-    queries: nodes.map((node) => ({
-      queryKey: ['volumes', node.id],
-      queryFn: async () => {
-        const client = getClient(node.id);
-        if (!client) throw new Error(`No client for node ${node.id}`);
-        const result = await client.getVolumes();
-        setNodeVolumes(node.id, result.volumes);
-        return result;
+/**
+ * Container lifecycle actions with toast feedback. The agent's event watcher
+ * pushes the new container list within milliseconds, so nothing is refetched.
+ */
+export function useContainerActions(nodeId: string | null) {
+  const [pending, setPending] = useState<string | null>(null);
+
+  const run = useCallback(
+    async (
+      containerId: string,
+      action: ContainerAction,
+      label = containerId.slice(0, 12),
+      opts: { force?: boolean; volumes?: boolean } = {},
+    ) => {
+      const conn = nodeId ? getConnection(nodeId) : null;
+      if (!conn) return false;
+
+      setPending(`${containerId}:${action}`);
+      try {
+        if (action === 'remove') await conn.client.removeContainer(containerId, opts);
+        else await conn.client.containerAction(containerId, action);
+        toast.success(`${PAST[action]} ${label}`);
+        return true;
+      } catch (e) {
+        toast.error(`Could not ${action} ${label}`, {
+          description: e instanceof Error ? e.message : undefined,
+        });
+        return false;
+      } finally {
+        setPending(null);
+      }
+    },
+    [nodeId],
+  );
+
+  /** One action across several containers, sequentially, with one toast. */
+  const runMany = useCallback(
+    async (containerIds: string[], action: Exclude<ContainerAction, 'remove'>, label: string) => {
+      const conn = nodeId ? getConnection(nodeId) : null;
+      if (!conn || containerIds.length === 0) return false;
+
+      setPending(`many:${action}`);
+      let failed = 0;
+      // Sequential: restarting a compose project all at once can trip
+      // dependency ordering.
+      for (const id of containerIds) {
+        try {
+          await conn.client.containerAction(id, action);
+        } catch {
+          failed += 1;
+        }
+      }
+      setPending(null);
+
+      if (failed === 0) toast.success(`${PAST[action]} ${label}`);
+      else toast.error(`${failed} of ${containerIds.length} failed to ${action}`);
+      return failed === 0;
+    },
+    [nodeId],
+  );
+
+  return { run, runMany, pending };
+}
+
+/**
+ * Re-renders on a timer, for durations that would otherwise go stale.
+ *
+ * Uptime strings only change once a minute, so there is no reason to recompute
+ * them on every host sample.
+ */
+export function useTick(intervalMs = 60_000): number {
+  return useSyncExternalStore(
+    useCallback(
+      (onChange) => {
+        const id = setInterval(onChange, intervalMs);
+        return () => clearInterval(id);
       },
-      enabled: !!getClient(node.id),
-      refetchInterval: 30_000,
-      refetchIntervalInBackground: false,
-    })),
-  });
+      [intervalMs],
+    ),
+    () => Math.floor(Date.now() / intervalMs),
+  );
+}
+
+/** The current time, updated every `intervalMs`, without reading the clock in render. */
+export function useNow(intervalMs = 60_000): number {
+  return useTick(intervalMs) * intervalMs;
 }

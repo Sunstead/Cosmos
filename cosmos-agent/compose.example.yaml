@@ -1,0 +1,87 @@
+# cosmos-agent — drop-in Compose service.
+#
+# Written to match the Jupiter stack's conventions: `cosmos.service` labels so
+# the agent shows up in its own dashboard, and a Watchtower opt-in label.
+#
+# To add it to that repo, save this as `compose/cosmos.yml` and add
+#   - path: compose/cosmos.yml
+#     project_directory: .
+# to the `include:` list in docker-compose.yml.
+#
+# Setup, once:
+#   openssl rand -hex 32 >> .env    # paste as COSMOS_AGENT_TOKEN=...
+#   echo "DOCKER_GID=$(stat -c '%g' /var/run/docker.sock)" >> .env
+#
+# The image also serves the web UI on :7700, so the Caddy entry below gives you
+# the site and the address for the desktop app in one.
+
+services:
+  cosmos-agent:
+    image: ghcr.io/sunstead/cosmos-agent:latest
+    container_name: cosmos-agent
+    restart: unless-stopped
+
+    # REQUIRED, not a convenience. /proc/net/dev is rendered from the reading
+    # process's network namespace and sysinfo has no HOST_PROC escape hatch,
+    # so without host networking the agent reports the container's own veth
+    # instead of the machine's interfaces.
+    #
+    # Consequences: `ports:` does not apply (the agent binds :7700 on the host
+    # directly), and it is NOT on the `homelab` bridge — so Caddy must reach it
+    # via host.docker.internal, exactly like wol-waker does.
+    #
+    # tailscale in this stack already uses host networking, so this is not a
+    # new pattern here.
+    network_mode: host
+
+    read_only: true                       # rootfs immutable; SQLite is on the named volume
+    cap_drop: [ALL]                       # :7700 is above 1024, so no CAP_NET_BIND_SERVICE
+    security_opt: [no-new-privileges:true]
+    user: "65532:65532"
+    group_add: ["${DOCKER_GID}"]          # uid 65532 can't read docker.sock without this
+
+    environment:
+      COSMOS_AGENT_CONFIG: /etc/cosmos-agent/agent.toml
+      COSMOS_AGENT_TOKEN: ${COSMOS_AGENT_TOKEN}
+      COSMOS_NODE_NAME: jupiter
+      RUST_LOG: "info,cosmos_agent=info"
+      TZ: ${TZ:-Etc/UTC}
+
+    volumes:
+      - ./cosmos-agent.toml:/etc/cosmos-agent/agent.toml:ro
+
+      # NOTE: `:ro` on a unix socket is NOT a security control. The flag applies
+      # to the inode, not the protocol — anyone who can connect() to this socket
+      # has the full Docker API, which is root-equivalent on the host. The real
+      # controls are `allow_actions` in the config and network isolation.
+      - /var/run/docker.sock:/var/run/docker.sock
+
+      # Only the filesystems actually charted, named in [[host.disks]].
+      - /:/host/rootfs:ro,rslave
+
+      # Backups: the status file scripts/backup.sh writes, and the systemd
+      # timer stamp whose mtime independently proves the timer fired.
+      - ${BACKUP_PATH:-/srv/backups}:/host/backups:ro
+      - /var/lib/systemd/timers:/host/systemd-timers:ro
+
+      - cosmos_agent_data:/var/lib/cosmos-agent   # SQLite; the only writable path
+
+    labels:
+      cosmos.service: cosmos
+      cosmos.service.description: Homelab monitoring agent
+      cosmos.service.url: cosmos.jupiter.sunstead.net
+      com.centurylinklabs.watchtower.enable: "true"
+
+volumes:
+  cosmos_agent_data:
+
+# Caddyfile entry — the agent is on host networking, so reach it the same way
+# wol-waker is reached:
+#
+#     @cosmos host cosmos.jupiter.sunstead.net
+#     handle @cosmos {
+#         reverse_proxy host.docker.internal:7700
+#     }
+#
+# Putting Caddy in front means you can firewall :7700 off the LAN entirely and
+# let Authentik/Cloudflare handle who gets in.

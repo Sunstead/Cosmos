@@ -1,0 +1,81 @@
+name: Agent image
+
+# Builds cosmos-agent (with the bundled web UI) and publishes it to GHCR.
+#   main     -> :latest, :main, :sha-<short>
+#   v1.2.3   -> :1.2.3, :1.2, :sha-<short>
+# Pull requests build without pushing.
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+    paths:
+      - cosmos-agent/**
+      - cosmos-common/**
+      - app/**
+      - '!app/src-tauri/**'
+      - Cargo.toml
+      - Cargo.lock
+      - .dockerignore
+      - .github/workflows/agent-image.yml
+  pull_request:
+    paths:
+      - cosmos-agent/**
+      - cosmos-common/**
+      - app/**
+      - '!app/src-tauri/**'
+      - Cargo.lock
+      - .github/workflows/agent-image.yml
+  workflow_dispatch:
+
+concurrency:
+  group: agent-image-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # GHCR image names must be lowercase; the owner may not be.
+      - name: Image name
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/cosmos-agent" >> "$GITHUB_ENV"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,format=short
+          labels: |
+            org.opencontainers.image.title=cosmos-agent
+            org.opencontainers.image.description=Cosmos homelab agent and web UI
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: cosmos-agent/Dockerfile
+          platforms: linux/amd64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

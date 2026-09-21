@@ -1,0 +1,14 @@
+# Build context for cosmos-agent/Dockerfile. Keep it to sources only.
+.git
+.github
+.vscode
+target
+**/node_modules
+app/dist
+app/e2e
+app/src/generated
+app/src-tauri/gen/android/**/build
+app/src-tauri/gen/android/.gradle
+cosmos-common/bindings
+**/.DS_Store
+*.log

@@ -1,19 +1,17 @@
 import { Moon, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/components/theme-provider';
+import { Hint } from './hint';
 
-export function ThemeToggle() {
-  const { theme, setTheme } = useTheme();
+export function ThemeToggle({ variant = 'ghost' }: { variant?: 'ghost' | 'outline' }) {
+  const { resolvedTheme, toggleTheme } = useTheme();
+  const next = resolvedTheme === 'dark' ? 'light' : 'dark';
 
   return (
-    <Button
-      variant='outline'
-      size='icon'
-      onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-    >
-      <Sun className='h-[1.2rem] w-[1.2rem] scale-100 rotate-0 transition-all dark:scale-0 dark:-rotate-90' />
-      <Moon className='absolute h-[1.2rem] w-[1.2rem] scale-0 rotate-90 transition-all dark:scale-100 dark:rotate-0' />
-      <span className='sr-only'>Toggle theme</span>
-    </Button>
+    <Hint label={`Switch to ${next} theme`} shortcut='theme'>
+      <Button variant={variant} size='icon' onClick={toggleTheme} aria-label='Toggle theme'>
+        {resolvedTheme === 'dark' ? <Moon /> : <Sun />}
+      </Button>
+    </Hint>
   );
 }

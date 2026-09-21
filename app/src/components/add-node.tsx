@@ -1,3 +1,7 @@
+import { useState } from 'react';
+import { useNavigate } from '@tanstack/react-router';
+import { TriangleAlert } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   Dialog,
   DialogClose,
@@ -6,77 +10,98 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
-import { CirclePlus } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Field, FieldLabel } from './ui/field';
 import { useNodeStore } from '@/stores/nodes';
-import { useState } from 'react';
+import { useUiStore } from '@/stores/ui';
 
-// Stable ID links the <form> to the submit button that lives outside it in DialogFooter.
-const FORM_ID = 'add-node-form';
+/** Mounted once in the shell; opened through the UI store. */
+export function AddNodeDialog() {
+  const open = useUiStore((s) => s.addNodeOpen);
+  const initialUrl = useUiStore((s) => s.addNodeUrl);
+  const setOpen = useUiStore((s) => s.setAddNodeOpen);
 
-export default function AddNode() {
-  const [url, setUrl] = useState('');
-  const [open, setOpen] = useState(false);
-  const { addNode } = useNodeStore();
+  return (
+    <Dialog open={open} onOpenChange={(o) => setOpen(o)}>
+      {open && <AddNodeForm initialUrl={initialUrl} onDone={() => setOpen(false)} />}
+    </Dialog>
+  );
+}
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+function AddNodeForm({ initialUrl, onDone }: { initialUrl: string; onDone: () => void }) {
+  const addNode = useNodeStore((s) => s.addNode);
+  const navigate = useNavigate();
+  const [url, setUrl] = useState(initialUrl);
+  const [token, setToken] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    addNode(url);
-    setUrl('');
-    setOpen(false);
-  };
+    setBusy(true);
+    setError(null);
+    const result = await addNode(url, token.trim() || undefined);
+    setBusy(false);
 
-  const handleOpenChange = (next: boolean) => {
-    if (!next) setUrl('');
-    setOpen(next);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    toast.success('Node added');
+    onDone();
+    void navigate({ to: '/nodes/$nodeId', params: { nodeId: result.id } });
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        <Button size='lg' className='gap-2'>
-          <CirclePlus />
-          Add Node
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>Add node</DialogTitle>
+        <DialogDescription>Connect a machine running cosmos-agent.</DialogDescription>
+      </DialogHeader>
+
+      <form id='add-node' onSubmit={submit} className='space-y-4'>
+        <Field>
+          <FieldLabel htmlFor='node-url'>Address</FieldLabel>
+          <Input
+            id='node-url'
+            placeholder='jupiter.local:7700'
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            autoComplete='off'
+            spellCheck={false}
+            autoFocus
+            required
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor='node-token'>Token</FieldLabel>
+          <Input
+            id='node-token'
+            type='password'
+            placeholder='Optional'
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            autoComplete='off'
+          />
+        </Field>
+        {error && (
+          <p role='alert' className='flex items-center gap-2 text-sm text-error'>
+            <TriangleAlert className='size-4 shrink-0' />
+            {error}
+          </p>
+        )}
+      </form>
+
+      <DialogFooter>
+        <DialogClose asChild>
+          <Button variant='outline'>Cancel</Button>
+        </DialogClose>
+        <Button form='add-node' type='submit' className='min-w-24' disabled={busy || !url.trim()}>
+          {busy ? 'Connecting' : 'Add'}
         </Button>
-      </DialogTrigger>
-
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Add Node</DialogTitle>
-          <DialogDescription>
-            Add a node to your Cosmos Constellation.
-          </DialogDescription>
-        </DialogHeader>
-
-        <form id={FORM_ID} onSubmit={handleSubmit}>
-          <Field>
-            <FieldLabel htmlFor='node-url'>Node URL</FieldLabel>
-            <Input
-              id='node-url'
-              type='url'
-              placeholder='https://'
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              autoComplete='url'
-              required
-            />
-          </Field>
-        </form>
-
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button variant='outline'>Cancel</Button>
-          </DialogClose>
-
-          <Button form={FORM_ID} type='submit' className='min-w-18'>
-            Add
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </DialogFooter>
+    </DialogContent>
   );
 }

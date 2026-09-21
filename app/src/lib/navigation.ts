@@ -1,0 +1,58 @@
+import {
+  Archive,
+  ChartLine,
+  Container,
+  Database,
+  Hexagon,
+  LayoutDashboard,
+  Logs,
+  Network,
+  Server,
+  Settings,
+  type LucideIcon,
+} from 'lucide-react';
+import type { ShortcutId } from './shortcuts';
+
+export type PagePath =
+  | '/overview'
+  | '/nodes'
+  | '/services'
+  | '/containers'
+  | '/volumes'
+  | '/network'
+  | '/monitoring'
+  | '/logs'
+  | '/backups'
+  | '/settings';
+
+export interface PageDef {
+  path: PagePath;
+  label: string;
+  icon: LucideIcon;
+  shortcut: ShortcutId;
+}
+
+export const PAGES: PageDef[] = [
+  { path: '/overview', label: 'Overview', icon: LayoutDashboard, shortcut: 'go.overview' },
+  { path: '/nodes', label: 'Nodes', icon: Server, shortcut: 'go.nodes' },
+  { path: '/services', label: 'Services', icon: Hexagon, shortcut: 'go.services' },
+  { path: '/containers', label: 'Containers', icon: Container, shortcut: 'go.containers' },
+  { path: '/volumes', label: 'Volumes', icon: Database, shortcut: 'go.volumes' },
+  { path: '/network', label: 'Network', icon: Network, shortcut: 'go.network' },
+  { path: '/monitoring', label: 'Monitoring', icon: ChartLine, shortcut: 'go.monitoring' },
+  { path: '/logs', label: 'Logs', icon: Logs, shortcut: 'go.logs' },
+  { path: '/backups', label: 'Backups', icon: Archive, shortcut: 'go.backups' },
+  { path: '/settings', label: 'Settings', icon: Settings, shortcut: 'settings' },
+];
+
+export const NAV_GROUPS: { label: string | null; paths: PagePath[] }[] = [
+  { label: null, paths: ['/overview', '/nodes', '/services'] },
+  { label: 'Infrastructure', paths: ['/containers', '/volumes', '/network'] },
+  { label: 'Operations', paths: ['/monitoring', '/logs', '/backups'] },
+  { label: null, paths: ['/settings'] },
+];
+
+export function pageFor(pathname: string): PageDef | undefined {
+  if (pathname === '/') return PAGES[0];
+  return PAGES.find((p) => pathname === p.path || pathname.startsWith(`${p.path}/`));
+}

@@ -1,3 +1,237 @@
+import {
+  Archive,
+  CalendarClock,
+  CircleCheck,
+  CircleX,
+  HardDrive,
+  History,
+  Layers,
+  TriangleAlert,
+} from 'lucide-react';
+import { useNodeStore } from '@/stores/nodes';
+import { useBackups, useNodeMeta, useTick } from '@/api/queries';
+import { BackupsStatus } from '@/generated/BackupsStatus';
+import { StepStatus } from '@/generated/StepStatus';
+import { formatBytes } from '@/lib/node-metrics';
+import { relativeTime, secondsToDuration } from '@/lib/time';
+import { NO_VALUE } from '@/lib/format';
+import { PageHeader } from '@/components/page-header';
+import { NodeSelect, useSelectedNode } from '@/components/node-select';
+import { StatCard, StatRow } from '@/components/stat-card';
+import { Section } from '@/components/section';
+import { EmptyState, NoNodesState } from '@/components/empty-state';
+import { SETUP } from '@/components/setup-hint';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+
+export type BackupHealth = 'healthy' | 'stale' | 'interrupted' | 'failed';
+
+/**
+ * A backup that stopped running looks healthy if you only list snapshots, so
+ * staleness and the timer cross-check decide the headline.
+ */
+export function backupHealth(s: BackupsStatus): BackupHealth {
+  const fired = s.timer_last_fired ? Date.parse(s.timer_last_fired) : NaN;
+  const wrote = s.generated_at ? Date.parse(s.generated_at) : NaN;
+  if (Number.isFinite(fired) && Number.isFinite(wrote) && fired > wrote) return 'interrupted';
+  if (s.last_exit_code !== null && s.last_exit_code !== 0) return 'failed';
+  if (s.stale) return 'stale';
+  return 'healthy';
+}
+
+function HealthAlert({ status }: { status: BackupsStatus }) {
+  const health = backupHealth(status);
+  const lastRun = relativeTime(status.last_run);
+  const next = relativeTime(status.next_run);
+
+  if (health === 'healthy') {
+    return (
+      <Alert className='border-success/30'>
+        <CircleCheck className='text-success' />
+        <AlertTitle>Backups healthy</AlertTitle>
+        <AlertDescription>
+          {[
+            lastRun && `Last run ${lastRun}`,
+            status.duration_secs != null && `took ${secondsToDuration(status.duration_secs)}`,
+            next && `next ${next}`,
+          ]
+            .filter(Boolean)
+            .join(', ')}
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  const copy = {
+    interrupted: ['Last backup did not finish', `Timer fired ${relativeTime(status.timer_last_fired)} but no status was written.`],
+    failed: ['Last backup failed', `Exited with code ${status.last_exit_code}.`],
+    stale: ['Backups are stale', lastRun ? `Last status ${lastRun}.` : 'No backup has reported yet.'],
+  }[health];
+
+  return (
+    <Alert className={health === 'stale' ? 'border-warning/40' : 'border-error/40'}>
+      <TriangleAlert className={health === 'stale' ? 'text-warning' : 'text-error'} />
+      <AlertTitle>{copy[0]}</AlertTitle>
+      <AlertDescription>{copy[1]}</AlertDescription>
+    </Alert>
+  );
+}
+
+function Step({ label, step }: { label: string; step: StepStatus | null }) {
+  if (!step) return null;
+  return (
+    <div className='flex items-center justify-between px-4 py-2.5 text-sm'>
+      <span>{label}</span>
+      {step.ok ? (
+        <span className='flex items-center gap-1 text-xs text-success'>
+          <CircleCheck className='size-3.5' /> OK
+        </span>
+      ) : (
+        <span className='flex items-center gap-1 text-xs text-error'>
+          <CircleX className='size-3.5' /> {step.message ?? 'Failed'}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function BackupsPage() {
-  return <div>BackupsPage</div>;
+  const nodeCount = useNodeStore((s) => s.nodes.length);
+  const [nodeId, setNodeId] = useSelectedNode();
+  const meta = useNodeMeta(nodeId);
+  const { data: status, isLoading, error } = useBackups(nodeId);
+  useTick(60_000);
+
+  const enabled = meta?.capabilities.backups ?? false;
+
+  const body = () => {
+    if (nodeCount === 0) return <NoNodesState />;
+    if (meta?.status === 'online' && !enabled) {
+      return (
+        <EmptyState
+          size='page'
+          icon={Archive}
+          title='Backups not configured'
+          description='This agent is not reporting backup status.'
+          setup={SETUP.backups}
+        />
+      );
+    }
+    if (error) {
+      return <EmptyState size='page' icon={TriangleAlert} title='Could not load backup status' />;
+    }
+    if (isLoading || !status) {
+      return (
+        <>
+          <Skeleton className='h-14' />
+          <StatRow>
+            {[0, 1, 2, 3].map((i) => (
+              <Skeleton key={i} className='h-18' />
+            ))}
+          </StatRow>
+        </>
+      );
+    }
+
+    const r = status.retention;
+    return (
+      <>
+        <HealthAlert status={status} />
+
+        <StatRow>
+          <StatCard
+            icon={HardDrive}
+            label='Repository'
+            value={status.repo_size_bytes != null ? formatBytes(status.repo_size_bytes) : NO_VALUE}
+            sublabel={status.repo_label}
+          />
+          <StatCard icon={Layers} label='Snapshots' value={status.snapshot_count} />
+          <StatCard
+            icon={History}
+            label='Retention'
+            value={r ? `${r.daily}d ${r.weekly}w ${r.monthly}m` : NO_VALUE}
+          />
+          <StatCard
+            icon={CalendarClock}
+            label='Next run'
+            value={relativeTime(status.next_run) ?? NO_VALUE}
+          />
+        </StatRow>
+
+        <div className='grid gap-4 @4xl:grid-cols-[1fr_2fr]'>
+          <Section title='Last run' contentClassName='divide-y'>
+            <Step label='Database dumps' step={status.postgres_dump} />
+            <Step label='Heartbeat' step={status.heartbeat} />
+            <div className='flex items-center justify-between px-4 py-2.5 text-sm'>
+              <span>Exit code</span>
+              <Badge
+                variant='outline'
+                className={`font-mono text-2xs ${status.last_exit_code === 0 ? 'text-success' : 'text-error'}`}
+              >
+                {status.last_exit_code ?? NO_VALUE}
+              </Badge>
+            </div>
+          </Section>
+
+          <Section title='Snapshots' count={status.snapshots.length || undefined}>
+            {status.snapshots.length === 0 ? (
+              <EmptyState size='inline' icon={Layers} title='No snapshots' />
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow className='hover:bg-transparent'>
+                    <TableHead className='h-9 text-xs'>ID</TableHead>
+                    <TableHead className='h-9 text-xs'>Taken</TableHead>
+                    <TableHead className='h-9 text-xs'>Tags</TableHead>
+                    <TableHead className='h-9 text-xs'>Paths</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {status.snapshots.map((s) => (
+                    <TableRow key={s.id}>
+                      <TableCell className='selectable font-mono text-xs'>{s.short_id}</TableCell>
+                      <TableCell className='whitespace-nowrap' title={s.time}>
+                        {relativeTime(s.time) ?? NO_VALUE}
+                      </TableCell>
+                      <TableCell>
+                        <div className='flex flex-wrap gap-1'>
+                          {s.tags.map((t) => (
+                            <Badge key={t} variant='secondary' className='text-2xs'>
+                              {t}
+                            </Badge>
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell
+                        className='max-w-64 truncate font-mono text-xs text-muted-foreground'
+                        title={s.paths.join('\n')}
+                      >
+                        {s.paths.join(', ')}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </Section>
+        </div>
+      </>
+    );
+  };
+
+  return (
+    <>
+      <PageHeader title='Backups' actions={<NodeSelect value={nodeId} onChange={setNodeId} />} />
+      {body()}
+    </>
+  );
 }

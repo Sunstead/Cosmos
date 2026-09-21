@@ -1,48 +1,49 @@
-import { useAllContainersSync, useAllVolumesSync } from '@/api/queries';
+import { useMatches } from '@tanstack/react-router';
 import { AppSidebar } from '@/components/app-sidebar';
-import { NodeMetricsCollector } from '@/components/node-metrics-collector';
-import { ThemeProvider } from '@/components/theme-provider';
-import TitleBar from '@/components/title-bar';
-import {
-  SidebarInset,
-  SidebarProvider,
-} from '@/components/ui/resizable-sidebar';
+import { TitleBar } from '@/components/title-bar';
+import { CommandHost } from '@/components/command-host';
+import { AddNodeDialog } from '@/components/add-node';
+import { CommandPalette } from '@/components/command-palette';
+import { SidebarInset, SidebarProvider } from '@/components/ui/resizable-sidebar';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useTauriWindow } from '@/hooks/use-tauri-window';
-import { useNodeStore } from '@/stores/nodes';
+import { useStatusToasts } from '@/hooks/use-status-toasts';
+
+export type PageLayout = 'scroll' | 'fill';
+
+declare module '@tanstack/react-router' {
+  interface StaticDataRouteOption {
+    /** `fill` pages size to the viewport and scroll internally (logs). */
+    layout?: PageLayout;
+  }
+}
+
+const CONTENT = 'flex max-w-full flex-col gap-4 p-4 @container';
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
-  useTauriWindow();
-  useAllContainersSync();
-  useAllVolumesSync();
-  const nodes = useNodeStore((s) => s.nodes);
+  const matches = useMatches();
+  const layout = matches.at(-1)?.staticData.layout ?? 'scroll';
+  useStatusToasts();
 
   return (
-    <ThemeProvider defaultTheme='dark' storageKey='vite-ui-theme'>
-      {nodes.map((n) => (
-        <NodeMetricsCollector key={n.id} nodeId={n.id} />
-      ))}
-      <div className='flex flex-col h-screen'>
-        <SidebarProvider className='flex-col'>
-          <TitleBar />
-          <div className='flex flex-1 min-h-0 relative w-full max-w-full'>
-            <AppSidebar />
-            <SidebarInset className='bg-sidebar min-w-0'>
-              <div
-                className={`size-full max-w-full bg-background md:rounded-tl-2xl overflow-hidden border-t border-l`}
-              >
-                <ScrollArea className='h-full w-full rounded-tl-2xl'>
-                  <div className='table-cell relative'>
-                    <div className='p-4 space-y-4 max-w-full h-full flex flex-col absolute inset-0 @container'>
-                      {children}
-                    </div>
-                  </div>
-                </ScrollArea>
-              </div>
-            </SidebarInset>
-          </div>
-        </SidebarProvider>
+    <SidebarProvider className='h-full flex-col'>
+      <CommandHost />
+      <AddNodeDialog />
+      <CommandPalette />
+      <TitleBar />
+      <div className='relative flex min-h-0 w-full max-w-full flex-1'>
+        <AppSidebar />
+        <SidebarInset className='min-w-0 bg-sidebar'>
+          <main className='size-full max-w-full overflow-hidden border-t border-l bg-background md:rounded-tl-2xl'>
+            {layout === 'fill' ? (
+              <div className={`${CONTENT} h-full`}>{children}</div>
+            ) : (
+              <ScrollArea className='h-full w-full'>
+                <div className={`${CONTENT} min-h-full`}>{children}</div>
+              </ScrollArea>
+            )}
+          </main>
+        </SidebarInset>
       </div>
-    </ThemeProvider>
+    </SidebarProvider>
   );
 }

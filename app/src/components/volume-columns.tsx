@@ -1,138 +1,84 @@
 import { ColumnDef } from '@tanstack/react-table';
-import { MoreVertical, Trash } from 'lucide-react';
 import { VolumeInfo } from '@/generated/VolumeInfo';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Dot, DotVariant } from './dot';
+import { NO_VALUE } from '@/lib/format';
+import { VolumeActionsCell } from './volume-actions-cell';
+import { Dot } from './dot';
+import { NodeName } from './node-name';
 
-// Volumes are flattened across nodes for the table; nodeId keeps row ids
-// unique since volume names can collide across nodes.
+/** Flattened across nodes; `nodeId` keeps row ids unique. */
 export type VolumeRow = VolumeInfo & { nodeId: string };
 
-function usageVariant(inUseBy: string[]): DotVariant {
-  return inUseBy.length > 0 ? 'success' : 'disabled';
+function formatDate(iso: string | null): string {
+  if (!iso) return NO_VALUE;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? NO_VALUE
+    : d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-function formatCreatedAt(createdAt: string | null): string {
-  if (!createdAt) return '—';
-  const created = new Date(createdAt);
-  if (Number.isNaN(created.getTime())) return '—';
-  return created.toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
-}
+export function volumeColumns(showNode: boolean): ColumnDef<VolumeRow>[] {
+  const nodeColumn: ColumnDef<VolumeRow> = {
+    id: 'node',
+    header: 'Node',
+    accessorFn: (r) => r.nodeId,
+    cell: ({ row }) => <NodeName nodeId={row.original.nodeId} />,
+  };
 
-export const columns: ColumnDef<VolumeRow>[] = [
-  {
-    id: 'select',
-    header: ({ table }) => (
-      <div className='w-6 flex justify-end'>
-        <Checkbox
-          checked={
-            table.getIsAllPageRowsSelected() ||
-            (table.getIsSomePageRowsSelected() && 'indeterminate')
-          }
-          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-          aria-label='Select all'
-        />
-      </div>
-    ),
-    cell: ({ row }) => (
-      <div className='flex w-6 justify-end'>
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label='Select row'
-        />
-      </div>
-    ),
-    enableSorting: false,
-    enableHiding: false,
-  },
-  {
-    accessorKey: 'name',
-    header: 'Name',
-    cell: ({ row }) => <span className='font-medium'>{row.original.name}</span>,
-  },
-  {
-    id: 'service',
-    header: 'Service',
-    cell: ({ row }) => {
-      const service = row.original.compose_project ?? row.original.cosmos_service;
-      return service ? <span>{service}</span> : <span className='text-muted-foreground'>—</span>;
-    },
-  },
-  {
-    accessorKey: 'mountpoint',
-    header: 'Mountpoint',
-    cell: ({ row }) => (
-      <span className='text-muted-foreground font-mono text-xs truncate block max-w-64'>
-        {row.original.mountpoint}
-      </span>
-    ),
-  },
-  {
-    accessorKey: 'driver',
-    header: 'Driver',
-    cell: ({ row }) => <span className='text-muted-foreground'>{row.original.driver}</span>,
-  },
-  {
-    id: 'usage',
-    header: 'Status',
-    cell: ({ row }) => {
-      const { in_use_by } = row.original;
-      return (
-        <div className='flex items-center gap-2'>
-          <Dot variant={usageVariant(in_use_by)} />
-          <span>{in_use_by.length > 0 ? `In use (${in_use_by.length})` : 'Unused'}</span>
+  return [
+    {
+      accessorKey: 'name',
+      header: 'Name',
+      cell: ({ row }) => (
+        <div className='min-w-0'>
+          <p className='truncate font-medium'>{row.original.name}</p>
+          <p className='selectable max-w-80 truncate font-mono text-2xs text-muted-foreground'>
+            {row.original.mountpoint}
+          </p>
         </div>
-      );
+      ),
     },
-  },
-  {
-    accessorKey: 'created_at',
-    header: 'Created',
-    cell: ({ row }) => formatCreatedAt(row.original.created_at),
-  },
-  {
-    id: 'actions',
-    cell: ({ row }) => {
-      const volume = row.original;
-      return (
-        <div className='text-right'>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant='ghost' size='icon-lg'>
-                <MoreVertical />
-                <span className='sr-only'>Open menu</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align='end' className='w-max min-w-48'>
-              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-              <DropdownMenuItem onClick={() => navigator.clipboard.writeText(volume.name)}>
-                Copy volume name
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem variant='destructive' disabled={volume.in_use_by.length > 0}>
-                <Trash />
-                Remove
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      );
+    ...(showNode ? [nodeColumn] : []),
+    {
+      id: 'service',
+      header: 'Service',
+      accessorFn: (r) => r.compose_project ?? r.cosmos_service ?? '',
+      cell: ({ getValue }) => (
+        <span className='text-muted-foreground'>{(getValue() as string) || NO_VALUE}</span>
+      ),
     },
-    enableSorting: false,
-    enableHiding: false,
-  },
-];
+    {
+      id: 'usage',
+      header: 'Status',
+      accessorFn: (r) => r.in_use_by.length,
+      cell: ({ row }) => {
+        const users = row.original.in_use_by;
+        return (
+          <div className='flex items-center gap-2' title={users.join(', ') || undefined}>
+            <Dot variant={users.length ? 'success' : 'disabled'} />
+            {users.length ? `In use by ${users.length}` : 'Unused'}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'driver',
+      header: 'Driver',
+      cell: ({ row }) => <span className='text-muted-foreground'>{row.original.driver}</span>,
+    },
+    {
+      accessorKey: 'created_at',
+      header: 'Created',
+      cell: ({ row }) => (
+        <span className='tabular-nums text-muted-foreground'>
+          {formatDate(row.original.created_at)}
+        </span>
+      ),
+    },
+    {
+      id: 'actions',
+      header: () => <span className='sr-only'>Actions</span>,
+      cell: ({ row }) => <VolumeActionsCell volume={row.original} />,
+      enableSorting: false,
+    },
+  ];
+}

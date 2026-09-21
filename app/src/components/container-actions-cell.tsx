@@ -1,0 +1,101 @@
+import { memo, useState } from 'react';
+import { Link } from '@tanstack/react-router';
+import { Copy, Logs, MoreHorizontal, Play, RotateCcw, Square, Trash } from 'lucide-react';
+import { ContainerRow } from './container-columns';
+import { useContainerActions, useNodeMeta } from '@/api/queries';
+import { copyText } from '@/lib/clipboard';
+import { Button } from './ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu';
+import { ConfirmDialog } from './confirm-dialog';
+import { ReadOnlyNote } from './read-only-note';
+
+export const ContainerActionsCell = memo(function ContainerActionsCell({
+  container,
+}: {
+  container: ContainerRow;
+}) {
+  const meta = useNodeMeta(container.nodeId);
+  const { run, pending } = useContainerActions(container.nodeId);
+  const [removing, setRemoving] = useState(false);
+
+  const canAct = meta?.capabilities.container_actions ?? false;
+  const running = container.state === 'running';
+  const busy = !!pending;
+
+  return (
+    <div className='flex justify-end'>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant='ghost' size='icon' aria-label={`Actions for ${container.name}`}>
+            <MoreHorizontal />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align='end' className='w-52'>
+          <DropdownMenuLabel className='truncate'>{container.name}</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem asChild>
+            <Link to='/logs' search={{ node: container.nodeId, container: container.id }}>
+              <Logs /> View logs
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => void copyText(container.id, 'Container ID copied')}>
+            <Copy /> Copy ID
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            disabled={!canAct || busy || running}
+            onSelect={() => void run(container.id, 'start', container.name)}
+          >
+            <Play /> Start
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            disabled={!canAct || busy || !running}
+            onSelect={() => void run(container.id, 'restart', container.name)}
+          >
+            <RotateCcw /> Restart
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            disabled={!canAct || busy || !running}
+            onSelect={() => void run(container.id, 'stop', container.name)}
+          >
+            <Square /> Stop
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            variant='destructive'
+            disabled={!canAct || busy}
+            onSelect={(e) => {
+              e.preventDefault();
+              setRemoving(true);
+            }}
+          >
+            <Trash /> Remove
+          </DropdownMenuItem>
+          {!canAct && <ReadOnlyNote />}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <ConfirmDialog
+        open={removing}
+        onOpenChange={setRemoving}
+        title={`Remove ${container.name}?`}
+        description={
+          running
+            ? 'The container will be stopped and removed. Named volumes are kept.'
+            : 'Named volumes are kept.'
+        }
+        confirmLabel='Remove'
+        onConfirm={async () => {
+          await run(container.id, 'remove', container.name, { force: running });
+        }}
+      />
+    </div>
+  );
+});

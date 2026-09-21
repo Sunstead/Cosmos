@@ -1,31 +1,36 @@
-import { ServiceIcon } from '@/lib/service-icons';
-import { Button } from './ui/button';
+import { memo } from 'react';
 import { ServiceInfo } from '@/lib/services';
+import { ServiceIcon } from '@/lib/service-icons';
+import { serviceHref } from '@/lib/agent-url';
+import { openExternal } from '@/lib/open-external';
+import { getServiceStatusDisplay } from '@/lib/service-utils';
+import { Button } from './ui/button';
+import { Dot } from './dot';
 
-export function QuickLaunchServiceButton({
+export const QuickLaunchServiceButton = memo(function QuickLaunchServiceButton({
   serviceInfo,
 }: {
   serviceInfo: ServiceInfo;
 }) {
+  // Docker labels hold bare hostnames like `portainer.jupiter.sunstead.net`.
+  // As an href that is a *relative path*, so the old anchor navigated the app
+  // to /portainer.jupiter.sunstead.net instead of opening the service.
+  const href = serviceHref(serviceInfo.url);
+  const status = getServiceStatusDisplay(serviceInfo.status);
+
   return (
     <Button
-      asChild
-      variant='outline'
-      className='flex items-center h-full gap-2 bg-muted/40 hover:bg-muted p-4 text-xs w-full group'
+      variant='secondary'
+      disabled={!href}
+      title={href ?? `${serviceInfo.name} has no cosmos.service.url label`}
+      onClick={() => href && openExternal(href)}
+      className='relative flex h-auto flex-col items-center gap-1.5 p-3'
     >
-      <a href={serviceInfo.url ?? '#'} rel='noopener' target='_blank'>
-        <div className='flex flex-col items-center gap-2 w-full'>
-          <ServiceIcon service={serviceInfo.key} className='size-10' />
-          <div className='text-center w-full'>
-            <p className='text-base group-hover:underline'>
-              {serviceInfo.name}
-            </p>
-            <p className='truncate font-normal text-muted-foreground max-w-full'>
-              {serviceInfo.url}
-            </p>
-          </div>
-        </div>
-      </a>
+      <Dot variant={status.dotVariant} className='absolute top-1.5 right-1.5' />
+      <ServiceIcon service={serviceInfo.key} size={24} />
+      <span className='text-xs truncate max-w-full'>{serviceInfo.name}</span>
     </Button>
   );
-}
+});
+
+export default QuickLaunchServiceButton;

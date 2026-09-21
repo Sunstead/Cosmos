@@ -1,88 +1,72 @@
-import { create } from 'zustand';
+import { createNodeSeries, MetricKey, NodeSeries } from '@/lib/ring-buffer';
 
-export interface MetricPoint {
-  timestamp: number;
-  value: number;
-}
+/**
+ * Last minute of per-node metrics for sparklines. Deliberately not a zustand
+ * store: it's written at 1 Hz and read every frame, outside React.
+ */
 
-interface NodeHistory {
-  cpu: MetricPoint[];
-  ram: MetricPoint[];
-  netRx: MetricPoint[];
-  netTx: MetricPoint[];
-  diskRead: MetricPoint[];
-  diskWrite: MetricPoint[];
-}
+const CAPACITY = 60; // 60 samples at 1 Hz
 
-interface MetricsHistoryStore {
-  history: Record<string, NodeHistory>;
-  push: (
-    nodeId: string,
-    data: {
-      cpu: number;
-      ram: number;
-      netRx: number;
-      netTx: number;
-      diskRead: number;
-      diskWrite: number;
-    },
-  ) => void;
-  getHistory: (nodeId: string) => NodeHistory;
-}
+const series = new Map<string, NodeSeries>();
 
-const MAX_POINTS = 60; // 60 points at 1/s = last 60 seconds
+/** Per-node redraw notifications, so charts draw once per sample, not per frame. */
+const listeners = new Map<string, Set<() => void>>();
 
-function buildEmpty(): NodeHistory {
-  const now = Date.now();
-  const points: MetricPoint[] = Array.from({ length: MAX_POINTS }, (_, i) => ({
-    timestamp: now - (MAX_POINTS - i) * 1000,
-    value: 0,
-  }));
-  return {
-    cpu: [...points],
-    ram: [...points],
-    netRx: [...points],
-    netTx: [...points],
-    diskRead: [...points],
-    diskWrite: [...points],
+export function subscribeNodeSeries(nodeId: string, fn: () => void): () => void {
+  let set = listeners.get(nodeId);
+  if (!set) {
+    set = new Set();
+    listeners.set(nodeId, set);
+  }
+  set.add(fn);
+  return () => {
+    set!.delete(fn);
+    if (set!.size === 0) listeners.delete(nodeId);
   };
 }
 
-const EMPTY: NodeHistory = buildEmpty();
-
-function trimmed(points: MetricPoint[], next: MetricPoint): MetricPoint[] {
-  const updated = [...points, next];
-  return updated.length > MAX_POINTS ? updated.slice(-MAX_POINTS) : updated;
+function notify(nodeId: string) {
+  const set = listeners.get(nodeId);
+  if (!set) return;
+  for (const fn of set) fn();
 }
 
-export const useMetricsHistory = create<MetricsHistoryStore>((set, get) => ({
-  history: {},
+export function getNodeSeries(nodeId: string): NodeSeries {
+  let existing = series.get(nodeId);
+  if (!existing) {
+    existing = createNodeSeries(CAPACITY);
+    series.set(nodeId, existing);
+  }
+  return existing;
+}
 
-  push: (nodeId, data) => {
-    const now = Date.now();
-    set((s) => {
-      const prev = s.history[nodeId] ?? EMPTY;
-      return {
-        history: {
-          ...s.history,
-          [nodeId]: {
-            cpu: trimmed(prev.cpu, { timestamp: now, value: data.cpu }),
-            ram: trimmed(prev.ram, { timestamp: now, value: data.ram }),
-            netRx: trimmed(prev.netRx, { timestamp: now, value: data.netRx }),
-            netTx: trimmed(prev.netTx, { timestamp: now, value: data.netTx }),
-            diskRead: trimmed(prev.diskRead, {
-              timestamp: now,
-              value: data.diskRead,
-            }),
-            diskWrite: trimmed(prev.diskWrite, {
-              timestamp: now,
-              value: data.diskWrite,
-            }),
-          },
-        },
-      };
-    });
-  },
+export interface MetricSample {
+  cpu: number;
+  ram: number;
+  netRx: number;
+  netTx: number;
+  diskRead: number;
+  diskWrite: number;
+}
 
-  getHistory: (nodeId) => get().history[nodeId] ?? EMPTY,
-}));
+export function pushSample(nodeId: string, sample: MetricSample) {
+  const target = getNodeSeries(nodeId);
+  const now = Date.now();
+  for (const key of Object.keys(sample) as MetricKey[]) {
+    target[key].push(now, sample[key]);
+  }
+  notify(nodeId);
+}
+
+/** Drops a node's history on removal or agent restart. */
+export function clearNodeSeries(nodeId: string) {
+  series.delete(nodeId);
+  notify(nodeId);
+}
+
+export function resetNodeSeries(nodeId: string) {
+  const existing = series.get(nodeId);
+  if (!existing) return;
+  for (const key of Object.keys(existing) as MetricKey[]) existing[key].clear();
+  notify(nodeId);
+}
