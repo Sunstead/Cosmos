@@ -9,9 +9,10 @@
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: 'Inter Variable', sans-serif;
-  /* Used for IDs, paths, ports and agent versions. `font-mono` was already
-     in use (volume mountpoints) but fell through to the Tailwind default. */
   --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
 
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -57,23 +58,27 @@
   --color-warning: var(--warning);
   --color-error: var(--error);
 
-  /* One colour per metric channel, shared by sparklines, charts and the
-     constellation so a given metric reads the same everywhere. */
+  /* One colour per metric, shared by sparklines, charts and the orrery. */
   --color-cpu: var(--cpu);
   --color-ram: var(--ram);
   --color-network: var(--network);
   --color-disk: var(--disk);
 }
 
-/*
- * Light theme.
- *
- * The semantic and metric tokens below used to be defined only under `.dark`,
- * so in light mode every `text-success`, `bg-error` and sparkline colour
- * resolved to an empty value — the theme was broken by construction, which is
- * why the theme toggle was never wired up. These are the light counterparts,
- * darkened enough to hold contrast against a white background.
- */
+/* Layout tokens, theme-independent. */
+:root {
+  /* Must match TITLEBAR_HEIGHT in src-tauri/src/window.rs. */
+  --titlebar-height: 3rem;
+  /* Space reserved for the macOS traffic lights. */
+  --titlebar-inset: 0px;
+  --control-h: 2rem;
+}
+
+html[data-platform='macos'] {
+  --titlebar-inset: 4.5rem;
+}
+
+/* Light theme. */
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.141 0.005 285.823);
@@ -119,14 +124,18 @@
 
   --glass-blur: 12px;
   --glass-tint: transparent;
+
+  /* Orrery. Planet hue is data-driven; lightness and glow are themed. */
+  --space: oklch(0.97 0.006 272);
+  --star: oklch(0.45 0.04 272);
+  --orbit: oklch(0.45 0.04 272 / 0.18);
+  --planet-light: 68%;
+  --planet-mid: 52%;
+  --planet-shade: 26%;
+  --planet-atmosphere: 0.35;
 }
 
-/*
- * Dark theme — the one Cosmos is designed for.
- *
- * Near-black blue-shifted background, translucent cards, violet-tinted
- * low-alpha borders instead of grey.
- */
+/* Dark theme, the one Cosmos is designed for. */
 .dark {
   --background: #010207;
   --foreground: oklch(0.985 0 0);
@@ -171,59 +180,81 @@
 
   --glass-blur: 16px;
   --glass-tint: oklch(87% 0.06 272 / 0.02);
+
+  --space: #03040c;
+  --star: oklch(0.92 0.03 250);
+  --orbit: oklch(87% 0.06 272 / 0.1);
+  --planet-light: 72%;
+  --planet-mid: 50%;
+  --planet-shade: 12%;
+  --planet-atmosphere: 0.5;
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply bg-background text-foreground;
+
+  /* The window is the viewport: no page scroll, no rubber-band overscroll.
+     Content scrolls inside its own ScrollArea. */
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
   }
+
+  html {
+    @apply font-sans;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+
   button:not(:disabled),
   [role='button']:not(:disabled) {
     cursor: pointer;
   }
-  html {
-    @apply font-sans;
-  }
 }
 
 @layer components {
-  /*
-   * Frosted surface.
-   *
-   * Applied deliberately rather than globally. This previously lived in
-   * @layer utilities as a blanket `@apply backdrop-blur-lg!` over every
-   * .bg-card / .bg-muted / .bg-accent / .bg-sidebar, which forced the
-   * compositor to run a backdrop filter on every one of those surfaces on
-   * every paint — continuously, since the cards repaint at 1Hz.
-   */
+  /* Frosted surface for floating panels. Applied per component, not globally,
+     because backdrop filters cost a composite on every paint. */
   .glass {
     backdrop-filter: blur(var(--glass-blur));
     -webkit-backdrop-filter: blur(var(--glass-blur));
     background-image: linear-gradient(var(--glass-tint), var(--glass-tint));
   }
 
-  /*
-   * The small caps label used throughout — "CONSTELLATION", "QUICK LAUNCH",
-   * "CPU". Previously every one of these was a literal uppercase string in
-   * the markup with no shared styling.
-   */
+  /* Small caps labels: section titles, metric names. */
   .label-hud {
     text-transform: uppercase;
     letter-spacing: 0.08em;
     font-weight: 500;
     font-variant-numeric: tabular-nums;
   }
+
+  /* App chrome is not selectable text, as in a native app. */
+  .chrome {
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: default;
+  }
+
+  .titlebar-inset {
+    width: var(--titlebar-inset);
+    transition: width 150ms ease;
+  }
+
+  .titlebar[data-fullscreen] .titlebar-inset {
+    width: 0;
+  }
 }
 
 @layer utilities {
-  /* Soft coloured glow for something live or selected. */
   .glow-success {
     box-shadow: 0 0 8px color-mix(in srgb, var(--success) 55%, transparent);
-  }
-  .glow-primary {
-    box-shadow: 0 0 12px color-mix(in srgb, var(--primary) 25%, transparent);
   }
 }
