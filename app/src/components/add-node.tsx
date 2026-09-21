@@ -20,19 +20,20 @@ import { useUiStore } from '@/stores/ui';
 /** Mounted once in the shell; opened through the UI store. */
 export function AddNodeDialog() {
   const open = useUiStore((s) => s.addNodeOpen);
+  const initialUrl = useUiStore((s) => s.addNodeUrl);
   const setOpen = useUiStore((s) => s.setAddNodeOpen);
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      {open && <AddNodeForm onDone={() => setOpen(false)} />}
+    <Dialog open={open} onOpenChange={(o) => setOpen(o)}>
+      {open && <AddNodeForm initialUrl={initialUrl} onDone={() => setOpen(false)} />}
     </Dialog>
   );
 }
 
-function AddNodeForm({ onDone }: { onDone: () => void }) {
+function AddNodeForm({ initialUrl, onDone }: { initialUrl: string; onDone: () => void }) {
   const addNode = useNodeStore((s) => s.addNode);
   const navigate = useNavigate();
-  const [url, setUrl] = useState('');
+  const [url, setUrl] = useState(initialUrl);
   const [token, setToken] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

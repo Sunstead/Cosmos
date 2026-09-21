@@ -11,10 +11,13 @@
 # Setup, once:
 #   openssl rand -hex 32 >> .env    # paste as COSMOS_AGENT_TOKEN=...
 #   echo "DOCKER_GID=$(stat -c '%g' /var/run/docker.sock)" >> .env
+#
+# The image also serves the web UI on :7700, so the Caddy entry below gives you
+# the site and the address for the desktop app in one.
 
 services:
   cosmos-agent:
-    image: ghcr.io/${GITHUB_OWNER}/cosmos-agent:latest
+    image: ghcr.io/sunstead/cosmos-agent:latest
     container_name: cosmos-agent
     restart: unless-stopped
 

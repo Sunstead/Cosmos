@@ -11,6 +11,7 @@ mod logs;
 mod meta;
 mod metrics;
 mod volumes;
+mod web;
 
 use crate::{ auth, state::AppState };
 use axum::{
@@ -53,11 +54,15 @@ pub fn router(state: AppState) -> Router {
         .route("/healthz", get(meta::healthz))
         .route("/v1/info", get(meta::info));
 
+    // The web UI, when bundled: public static files plus an SPA fallback.
+    let web = state.cfg.web.dir.as_deref().and_then(web::router).unwrap_or_default();
+
     Router::new()
         .merge(read)
         .merge(write)
         .layer(from_fn_with_state(state.clone(), auth::require_auth))
         .merge(public)
+        .merge(web)
         // Record the path, never the full URI: `?token=` must not reach the
         // logs. This is the mitigation that makes query tokens tolerable.
         .layer(

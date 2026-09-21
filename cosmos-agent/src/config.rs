@@ -30,6 +30,15 @@ pub struct Config {
     pub docker: DockerConfig,
     pub history: HistoryConfig,
     pub backups: BackupsConfig,
+    pub web: WebConfig,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct WebConfig {
+    /// A built web UI (`app/dist`) to serve from the agent's own origin.
+    /// The Docker image sets this; unset means API only.
+    pub dir: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -261,6 +270,9 @@ impl Config {
         }
         if let Ok(v) = std::env::var("COSMOS_AGENT_HISTORY_PATH") {
             self.history.path = PathBuf::from(v);
+        }
+        if let Ok(v) = std::env::var("COSMOS_AGENT_WEB_DIR") {
+            self.web.dir = (!v.is_empty()).then(|| PathBuf::from(v));
         }
         Ok(())
     }

@@ -14,9 +14,8 @@ bind = "0.0.0.0:7700"
 allow_query_token = true
 allow_anonymous = false
 
-[cors]
-# The web build, if you serve it behind Caddy.
-extra_origins = ["https://cosmos.jupiter.sunstead.net"]
+# No [cors] needed: the image serves the web UI from the agent's own origin.
+# The desktop app's origins are built in.
 
 [host]
 interval_ms = 1000
