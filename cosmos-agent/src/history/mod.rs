@@ -62,6 +62,28 @@ pub struct HistoryHandle {
     warned: Arc<AtomicBool>,
 }
 
+/// A likely cause for a failed open. SQLite only says "unable to open
+/// database file", which hides the common case: a root-owned volume.
+pub fn diagnose(path: &std::path::Path) -> &'static str {
+    let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) else {
+        return "check the path";
+    };
+    if !dir.is_dir() {
+        return "the directory does not exist and could not be created";
+    }
+    let probe = dir.join(".cosmos-write-test");
+    match std::fs::File::create(&probe) {
+        Ok(_) => {
+            let _ = std::fs::remove_file(&probe);
+            "the directory is writable; the file itself may be unreadable or corrupt"
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied =>
+            "the directory is not writable by the agent's user; chown it (or the volume) to the agent's uid",
+        Err(e) if e.raw_os_error() == Some(30) => "the filesystem is read-only; mount a writable volume there",
+        Err(_) => "the directory is not writable",
+    }
+}
+
 impl HistoryHandle {
     /// Opens the database, applies the schema, and spawns the writer thread.
     pub fn open(cfg: &HistoryConfig) -> rusqlite::Result<Self> {
@@ -324,6 +346,34 @@ fn flush(conn: &mut Connection, batch: &mut Vec<Row>) {
         tracing::warn!(error = %e, rows = batch.len(), "failed to write metrics batch");
     }
     batch.clear();
+}
+
+#[cfg(test)]
+mod diagnose_tests {
+    use super::diagnose;
+
+    #[test]
+    fn reports_missing_and_writable_directories() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(diagnose(&dir.path().join("metrics.db")).contains("writable;"));
+        assert!(diagnose(&dir.path().join("nope/metrics.db")).contains("does not exist"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reports_an_unwritable_directory() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let locked = dir.path().join("locked");
+        std::fs::create_dir(&locked).unwrap();
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555)).unwrap();
+        let hint = diagnose(&locked.join("metrics.db"));
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
+        // Root ignores permissions, so only assert when the probe was refused.
+        if !hint.contains("writable;") {
+            assert!(hint.contains("not writable by the agent's user"), "{hint}");
+        }
+    }
 }
 
 #[cfg(test)]

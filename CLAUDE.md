@@ -171,6 +171,9 @@ for both themes: semantic colours, `--text-2xs`, `--titlebar-height`,
 `lib/theme-tokens.ts`, which caches per theme and fires `onThemeChange`.
 `.glass` is applied deliberately, `.label-hud` is the small-caps label, and
 `.chrome` disables text selection on UI chrome (content stays selectable).
+Container log colours go through `lib/ansi.ts` (`--ansi-0..15` tokens); other
+escapes and control characters are stripped, and search/download use
+`stripAnsi`.
 
 **Planets.** `lib/planet.ts` gives each node name a deterministic style
 (presets for jupiter, saturn, mars, etc.; seeded otherwise).
