@@ -27,9 +27,16 @@ Frontend (from `app/`):
 npm run dev                        # Vite on :1420 (browser build)
 npm run tauri dev                  # desktop app
 npm run build                      # tsc && vite build
-npm run lint                       # expected clean; ui/ is vendored and exempt
-npm test                           # vitest, pure logic only
+npm run lint                       # 0 errors expected; ui/ is vendored and exempt
+npm test                           # vitest + jsdom + Testing Library
+npx vitest run src/lib/lib.test.ts # single file
+npm run test:e2e                   # Playwright, see below
 ```
+
+`npm run test:e2e` builds and starts a real `cosmos-agent` (random port, temp
+history DB, token `e2e-token`) and Vite on :1431, then drives system Chrome
+(`PW_CHANNEL` overrides). Docker-dependent specs skip when no daemon is up.
+Screenshots of every page in both themes land in `app/e2e/.results/`.
 
 Agent container:
 ```bash
@@ -88,69 +95,89 @@ Workspace `[profile.release-agent]` adds `panic = "abort"`; it is deliberately *
 
 The app talks directly to agents from the webview; no Tauri IPC for data.
 
-**One connection per node, owned by the store.** `api/connection.ts` —
-`NodeConnection` owns that agent's host stream, container stream and volume
-polling for the node's whole lifetime, plus capability negotiation, an explicit
-backoff reconnect and the status machine (`connecting | online | offline |
-unauthorized`). Connections live in a `Map` outside React state
-(`stores/nodes.ts`), so navigation never tears a stream down. `useHostInfo`
-previously opened an `EventSource` per *call site*: 2 per node on `/nodes`, 4
-under StrictMode, each causing the agent to run an independent sampler.
+**One connection per node, owned by the store.** `api/connection.ts`
+`NodeConnection` owns an agent's host stream, container stream, volume polling,
+capability negotiation, backoff reconnect and status (`connecting | online |
+offline | unauthorized`). Connections live in a `Map` outside React state
+(`stores/nodes.ts`), so navigation never tears a stream down. EventSource gives
+up permanently on a non-2xx and never exposes the status, so `connect()` probes
+with `getHost()` first and reconnects explicitly.
 
-The browser's built-in EventSource retry only covers a dropped connection — on
-a non-2xx it closes permanently, which is why the reconnect is explicit. And
-because EventSource never exposes a status code, `connect()` probes with a
-real `getHost()` first; without that, a 401 and a dead host are
-indistinguishable and a wrong token retries forever.
+**The node store must not churn.** `NodeConfig` is `{ id, url, agentName,
+alias }`; display name is `alias ?? agentName ?? url` (`nodeDisplayName`,
+`useNodeName`). `attach()` compares against *current* state and writes only on
+a real change. A per-sample write re-renders the sidebar and every page and
+rebuilds the constellation (the old "flash" bug; there's a regression test).
 
 **Keep 1 Hz data out of React.** `<LiveValue>` and `<Sparkline>` subscribe to
 the stream and write through refs inside a shared animation frame
-(`lib/frame-scheduler.ts`), coalescing to one frame per node per sample. Node
-cards re-render on *connection state* changes only. `<Sparkline>` uses a fixed
-`0 0 100 100` viewBox with `preserveAspectRatio="none"`, so it never measures
-itself — replacing a recharts `ResponsiveContainer` + `AreaChart` per metric
-(four per card, each with a ResizeObserver, plus an inline `<style>` element
-re-injected on every render).
-
-Recharts is still used on `/monitoring`, where the data is a request/response
-at human timescales and that's the right tool.
-
-**Ring buffers.** `lib/ring-buffer.ts` — preallocated `Float32Array` + write
-cursor, O(1) push, zero allocation. Replaces ~720 element copies and 19
-allocations per node per second.
+(`lib/frame-scheduler.ts`), fed by ring buffers (`lib/ring-buffer.ts`,
+`stores/metrics-history.ts`). `useHostInfo` re-renders every second; use it
+only where the whole view changes. Recharts is only on `/monitoring`, which is
+lazy-loaded.
 
 **Adding an endpoint:** type in `cosmos-common` → route + module in
 `cosmos-agent` → method on `AgentClient` → subscription in `NodeConnection` or
 hook in `queries.ts` → store/page. Gate the UI on the `capabilities` flag so
 older agents degrade instead of erroring.
 
-**Units.** Raw bytes and bytes/sec on the wire; all formatting lives in
-`lib/node-metrics.ts`.
-
-**Service model.** Services are declared by the `cosmos.service` Docker label,
+**Service model.** Services come from the `cosmos.service` Docker label,
 grouped per node in `lib/services.ts`. `cosmos.service: system` marks
-infrastructure and is filtered by `userFacingServices()`. `cosmos.service.url`
-labels hold **bare hostnames**, which are relative paths in an `href` — always
-route them through `serviceHref()` in `lib/agent-url.ts`.
+infrastructure (filtered by `userFacingServices()`). `cosmos.service.url` holds
+bare hostnames; always route them through `serviceHref()`.
 
-**Nodes bootstrap.** `router.tsx` root `beforeLoad` seeds from `config.ts`: no
-defaults under Tauri; in a browser it fetches `/config.json`. Hash history
-under Tauri. Note `onRehydrateStorage` runs *during* `create()`, so it seeds
-through the rehydrating draft and defers `attach()` to a microtask — touching
-`useNodeStore` there hits its temporal dead zone.
+**Nodes bootstrap.** `router.tsx` root `beforeLoad` seeds from `config.ts`
+(nothing under Tauri; `/config.json` in a browser). `onRehydrateStorage` runs
+*during* `create()`, so it seeds through the draft and defers `attach()` to a
+microtask.
 
-**UI.** Pages in `src/pages/`, routes in `src/router.tsx` (defined one by one —
-a helper function erases TanStack Router's literal path inference), shell in
-`layouts/AppLayout.tsx`. `components/ui/` is shadcn-generated; prefer the
-shadcn CLI, and note it's exempt from the React Compiler lint rules because
-`shadcn add` would overwrite any fixes. Path alias `@/` → `app/src/`.
+## UI conventions
 
-**Design tokens.** `App.css`. Semantic and metric tokens are defined for both
-themes; they used to exist only under `.dark`, which is why light mode was
-broken and the theme toggle was never wired up. `.glass` is applied
-deliberately to cards and popovers rather than as a blanket utility override —
-the previous global `backdrop-blur-lg!` forced a backdrop filter composite on
-every surface on every paint. `.label-hud` is the small-caps label style.
+**Shell.** `layouts/AppLayout.tsx` mounts the title bar, sidebar, command
+palette, add-node dialog and `CommandHost` (shortcuts + native menu events).
+Routes are lazy (`lazyRouteComponent`) and pick a layout through
+`staticData.layout`: `scroll` (default) or `fill` (logs). The body never
+scrolls; `<main>` does. Content is a `@container`, so layouts use container
+queries (`@xl`, `@3xl`, `@5xl`), not viewport breakpoints.
+
+**Pages are built from shared primitives**, not bespoke markup:
+`PageHeader` (always rendered, even when empty; the row is `h-8` and every
+header control is `h-8` so titles align), `SegmentedControl`, `SearchInput`
+(`/` focuses it), `NodeSelect`, `StatCard`/`StatRow`, `Section`, `DataTable`,
+`EmptyState` (`page | card | inline`) with an optional `SetupHint` (`?`
+popover holding the config snippet), and sonner toasts. Use shadcn components
+(`components/ui/`, generated by the CLI and lint-exempt) before writing new
+ones. An e2e spec checks header height and title position on every page.
+
+**Copy.** Short, sentence case, no em dashes or curly quotes. An ESLint rule
+rejects them in JSX text and string literals under `pages/` and
+`components/`. Missing values render as `NO_VALUE` (`n/a`).
+
+**Tokens.** Everything is themed through CSS variables in `App.css`, defined
+for both themes: semantic colours, `--text-2xs`, `--titlebar-height`,
+`--titlebar-inset`, and canvas tokens (`--space`, `--star`, `--orbit`,
+`--planet-*`). Canvas code never uses literal colours; it reads them through
+`lib/theme-tokens.ts`, which caches per theme and fires `onThemeChange`.
+`.glass` is applied deliberately, `.label-hud` is the small-caps label, and
+`.chrome` disables text selection on UI chrome (content stays selectable).
+
+**Planets.** `lib/planet.ts` gives each node name a deterministic style
+(presets for jupiter, saturn, mars, etc.; seeded otherwise).
+`lib/planet-render.ts` draws it and caches sprites. `NodePlanet` and the
+constellation share that renderer. The constellation keeps bodies in a ref
+`Map` reconciled by node id, runs one render loop capped at 30fps, pauses
+off-screen and draws a static frame under reduced motion.
+
+**Platforms.** Tauri builds the window in Rust (`src-tauri/src/window.rs`),
+not `tauri.conf.json`. An init script sets `window.__COSMOS_PLATFORM__`;
+`main.tsx` copies it to `html[data-platform]` (`macos | windows | linux |
+web`) before render. macOS: overlay title bar, traffic lights positioned by
+`TRAFFIC_LIGHTS`, a native menu (must keep the Edit items or ⌘C/⌘V break in
+inputs) that emits `menu` events, and `CommandHost` skips its own keydown
+handling there to avoid double-firing. Windows/Linux: `decorations(false)` with
+custom controls in `TitleBar`. The Rust side emits `window-state` (fullscreen,
+maximized). Shortcuts live in `lib/shortcuts.ts` and feed the palette, key
+hints and menu.
 
 ## Gotchas worth knowing
 

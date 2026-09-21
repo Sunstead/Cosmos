@@ -40,7 +40,9 @@ export const NodeTableRow = memo(function NodeTableRow({ nodeId }: { nodeId: str
               {name}
             </Link>
             {host ? (
-              <p className='truncate text-xs text-muted-foreground'>{host.hostname}</p>
+              host.hostname !== name && (
+                <p className='truncate text-xs text-muted-foreground'>{host.hostname}</p>
+              )
             ) : (
               <NodeStatusBadge nodeId={nodeId} />
             )}

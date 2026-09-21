@@ -52,7 +52,7 @@ function Header({ nodeId, subtitle }: { nodeId: string; subtitle?: string }) {
           </Link>
           <NodeStatusBadge nodeId={nodeId} />
         </div>
-        {subtitle && <p className='truncate text-xs text-muted-foreground'>{subtitle}</p>}
+        {subtitle && subtitle !== name && <p className='truncate text-xs text-muted-foreground'>{subtitle}</p>}
       </div>
       <NodeOptionsDropdown nodeId={nodeId} />
     </div>
