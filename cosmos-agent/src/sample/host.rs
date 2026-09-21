@@ -1,11 +1,5 @@
-//! The host metrics probe.
-//!
-//! One of these exists per agent, owned outright by the sampler thread. That
-//! ownership is the whole design: because nothing else can touch `prev_net`
-//! and `prev_disk`, the rate deltas are correct no matter how many clients are
-//! connected — including none. The previous version sampled once per connected
-//! SSE client against shared snapshots, so a second viewer silently corrupted
-//! the numbers for the first.
+//! Host metrics probe, owned by the sampler thread. It alone holds the
+//! previous counters, so rate deltas are correct for any number of clients.
 
 use super::{ facts::HostFacts, filters::HostFilters };
 use cosmos_common::types::{ DiskInfo, DiskKind, HostInfo, NetInfo };
@@ -114,10 +108,8 @@ impl HostProbe {
     pub fn new(filters: Arc<HostFilters>) -> Self {
         let mut sys = System::new_with_specifics(Self::refresh_kind());
 
-        // Seed the CPU counters so the first published sample is already a
-        // valid delta. This is the only sleep in the program, it happens once
-        // at startup, and no request ever waits on it — unlike the old agent,
-        // which paid 200ms on every single request and SSE tick.
+        // Seed the CPU counters so the first sample is a valid delta. The only
+        // sleep in the program; it runs once at startup, never on a request.
         sys.refresh_specifics(Self::refresh_kind());
         std::thread::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL);
         sys.refresh_specifics(Self::refresh_kind());
@@ -368,7 +360,7 @@ mod tests {
         assert!(parsed["cpu_per_core"].is_array());
         assert!(parsed["nets"].is_array());
 
-        // Guards the rename away from the old MB/s-and-megabits/s mix.
+        // Rates are bytes/sec; the pre-0.2 names must not return.
         assert!(parsed.get("net_rx_bps").is_some());
         assert!(parsed.get("net_rx_mbps").is_none());
         assert!(parsed.get("mem_used_bytes").is_some());

@@ -1,9 +1,4 @@
-//! Things about a machine that don't change while it's running.
-//!
-//! The old agent re-derived all of this on every tick — `physical_core_count()`
-//! re-parses `/proc/cpuinfo`, and `refresh_cpu_all()` re-reads every
-//! `scaling_cur_freq` in `/sys` — to produce values that were identical every
-//! time. Compute once, `memcpy` thereafter.
+//! Machine facts that don't change while it runs, computed once at startup.
 
 use sysinfo::{ CpuRefreshKind, RefreshKind, System };
 

@@ -1,12 +1,7 @@
 import { DotVariant } from '@/components/dot';
 
 /**
- * One status vocabulary.
- *
- * There were three: `colors.ts` used `default | success | warn | error`,
- * `dot.tsx` used `success | warning | error | disabled`, and
- * `service-utils.ts` had its own map — with `error` meaning `text-destructive`
- * in one place and `bg-error` in another.
+ * The one status vocabulary shared by dots, badges and text.
  */
 export type StatusColor = 'default' | 'success' | 'warn' | 'error';
 

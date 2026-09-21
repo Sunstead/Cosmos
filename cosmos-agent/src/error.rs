@@ -1,7 +1,6 @@
 //! One error type for every handler, rendered as a typed JSON envelope.
 //!
-//! The point is that a client can tell "Docker is down" from "there are no
-//! containers" — the old agent returned an empty list for both.
+//! Lets a client tell "Docker is down" from "no containers".
 
 use axum::{ http::StatusCode, response::{ IntoResponse, Response }, Json };
 use cosmos_common::types::{ ApiError, ErrorCode };
@@ -118,8 +117,7 @@ pub fn from_docker(action: &'static str, id: &str, source: bollard::errors::Erro
         bollard::errors::Error::DockerResponseServerError { status_code: 404, .. } =>
             AgentError::ContainerNotFound(id.to_string()),
         bollard::errors::Error::DockerResponseServerError { status_code: 304, .. } =>
-            // "already started" / "already stopped" — the caller's intent is
-            // satisfied, so this is not an error.
+            // Already started or stopped.
             AgentError::ActionFailed { action, source },
         _ => AgentError::ActionFailed { action, source },
     }

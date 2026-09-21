@@ -7,10 +7,7 @@ import { getConnection, useNodeStore } from '@/stores/nodes';
 import { NodeMeta } from './connection';
 
 /**
- * Live connection state for a node — status, capabilities, agent version.
- *
- * Cheap to subscribe to: it only changes on an actual transition, not on
- * every sample.
+ * Connection status, capabilities and agent version. Changes only on transitions.
  */
 export function useNodeMeta(nodeId: string | null): NodeMeta | null {
   return useNodeStore((s) => (nodeId ? (s.meta[nodeId] ?? null) : null));
@@ -19,11 +16,8 @@ export function useNodeMeta(nodeId: string | null): NodeMeta | null {
 /**
  * The latest host sample, as React state.
  *
- * **This re-renders its component once per second.** Use it for things that
- * genuinely change — a detail panel, a page-level readout. For a number or a
- * chart inside a card that is otherwise static, prefer `<LiveValue>` or
- * `<Sparkline>`, which subscribe to the same stream and write through a ref
- * without re-rendering anything.
+ * Re-renders once per second. For values inside otherwise static cards, use
+ * `<LiveValue>` or `<Sparkline>`, which write through refs instead.
  */
 export function useHostInfo(nodeId: string | null): {
   data: HostInfo | null;
@@ -53,8 +47,7 @@ export function useHostInfo(nodeId: string | null): {
 /**
  * Subscribes to a node's host stream without causing a re-render.
  *
- * The callback is stored in a ref so changing it doesn't tear down the
- * subscription — components pass inline closures freely.
+ * The callback lives in a ref, so inline closures don't resubscribe.
  */
 export function useHostSubscription(
   nodeId: string | null,
@@ -78,9 +71,7 @@ export function useHostSubscription(
 /**
  * Historical metrics from the agent's SQLite store.
  *
- * Unlike the live sparkline buffers, this is a genuine request/response, so
- * react-query is the right tool. `enabled` keys off the capability flag —
- * agents with history disabled return 501 and we shouldn't ask again.
+ * Disabled when the agent lacks the `metrics_history` capability.
  */
 export function useMetricHistory(
   nodeId: string | null,
@@ -90,8 +81,7 @@ export function useMetricHistory(
   const supported = meta?.capabilities.metrics_history ?? false;
 
   return useQuery({
-    // Keyed by the range *length*, not by absolute bounds — the window is
-    // resolved at fetch time, so the key stays stable across renders.
+    // Keyed by range length; the window is resolved at fetch time.
     queryKey: ['metrics', nodeId, opts.rangeSeconds, opts.step, opts.maxPoints],
     queryFn: () => {
       const conn = getConnection(nodeId!);

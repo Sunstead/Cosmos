@@ -1,14 +1,6 @@
 /**
- * Coalesces imperative DOM updates into a single animation frame.
- *
- * Several sparklines and readouts on one card all want to update when a
- * sample arrives. Without this, each would touch the DOM independently and
- * force its own style recalculation; with it, they all land in one frame.
- *
- * Callbacks are deduplicated by identity, so a component re-requesting before
- * the frame runs is free. `requestAnimationFrame` also stops firing when the
- * page is hidden, which is exactly the behaviour we want — nothing repaints
- * while nobody is looking.
+ * Coalesces imperative DOM updates into one animation frame. Callbacks dedupe
+ * by identity, and nothing runs while the page is hidden.
  */
 
 const pending = new Set<() => void>();

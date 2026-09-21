@@ -1,12 +1,7 @@
-/**
- * Duration formatting.
- *
- * Plain numbers rather than BigInt: these are called once per node per render
- * for values that fit comfortably in a double, and BigInt division is
- * needlessly expensive for a string that only ever shows whole units.
- */
+import { NO_VALUE } from '@/lib/format';
+
 function formatDuration(totalSeconds: number): string {
-  if (!Number.isFinite(totalSeconds) || totalSeconds < 0) return '—';
+  if (!Number.isFinite(totalSeconds) || totalSeconds < 0) return NO_VALUE;
 
   const seconds = Math.floor(totalSeconds);
   const days = Math.floor(seconds / 86_400);
@@ -19,8 +14,7 @@ function formatDuration(totalSeconds: number): string {
   if (parts.length > 0 || hours > 0) parts.push(`${hours}h`);
   if (parts.length > 0 || minutes > 0) parts.push(`${minutes}m`);
 
-  // Seconds were commented out before, so anything under a minute rendered as
-  // "0m" — a container that had just restarted looked frozen.
+  // Under a minute, show seconds so a fresh restart doesn't read as "0m".
   if (parts.length === 0) return `${secs}s`;
   return parts.join(' ');
 }

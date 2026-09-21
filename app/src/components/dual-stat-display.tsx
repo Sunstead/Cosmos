@@ -14,7 +14,7 @@ interface Props {
   side?: 'left' | 'right';
 }
 
-/** A paired readout — up/down, read/write — both values updating live. */
+/** A live paired readout, such as up/down or read/write. */
 export const DualStatDisplay = memo(function DualStatDisplay({
   nodeId,
   icon1: Icon1,

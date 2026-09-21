@@ -10,8 +10,7 @@ use serde::Deserialize;
 use std::convert::Infallible;
 
 pub async fn list(State(state): State<AppState>) -> Result<CachedJson, AgentError> {
-    // If Docker is unreachable, say so. The old agent returned an empty list,
-    // which the UI could not distinguish from "this host runs no containers".
+    // 503 when Docker is down, so it isn't mistaken for "no containers".
     state.docker.require()?;
     Ok(CachedJson(state.containers_rx.borrow().json.clone()))
 }

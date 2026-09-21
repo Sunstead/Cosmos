@@ -1,4 +1,4 @@
-import { isTauri } from './lib/tauri';
+import { isDesktop } from './lib/platform';
 
 export interface DefaultNode {
   url: string;
@@ -6,15 +6,11 @@ export interface DefaultNode {
 }
 
 /**
- * Nodes to seed on first run.
- *
- * The desktop build starts empty — you add nodes through the UI, and their
- * tokens go to the OS keychain. The web build can be served alongside a
- * `config.json` so a browser tab knows which agents to talk to without
- * anyone typing them in.
+ * Nodes to seed on first run. The browser build can ship a `config.json`;
+ * the desktop app starts empty.
  */
 export async function getDefaultNodes(): Promise<DefaultNode[]> {
-  if (isTauri()) return [];
+  if (isDesktop()) return [];
 
   try {
     const res = await fetch('/config.json');

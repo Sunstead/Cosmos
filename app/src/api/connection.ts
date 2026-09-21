@@ -27,18 +27,11 @@ const LEGACY_CONTAINER_POLL_MS = 5_000;
 const VOLUME_POLL_MS = 30_000;
 
 /**
- * Everything one agent needs, owned in one place.
+ * One agent's streams, polling, reconnect and status, for the node's whole
+ * lifetime. Components attach listeners; they never open streams themselves.
  *
- * Previously `useHostInfo` opened an `EventSource` per *call site*, so a node
- * rendered on the Nodes page had two streams (four under StrictMode), each
- * causing the agent to run an independent sampler. Here each node has exactly
- * one host stream and one container stream for as long as it exists, and
- * components attach listeners to them.
- *
- * This also owns reconnection. The browser's built-in EventSource retry only
- * covers a dropped connection — on a non-2xx response it closes permanently,
- * which is why a node that was down when the app started used to stay dark
- * forever.
+ * Reconnect is explicit because EventSource only retries dropped connections,
+ * not HTTP errors.
  */
 export class NodeConnection {
   readonly client: AgentClient;
@@ -191,9 +184,8 @@ export class NodeConnection {
   /**
    * Negotiates capabilities, verifies the token, then opens the streams.
    *
-   * The explicit `getHost` probe exists because `EventSource` never exposes an
-   * HTTP status — without it a 401 and a dead host are indistinguishable, and
-   * we'd retry a wrong token forever instead of asking for a new one.
+   * The `getHost` probe tells a 401 from a dead host, which `EventSource`
+   * can't report.
    */
   private async connect() {
     if (this.stopped) return;
@@ -254,9 +246,8 @@ export class NodeConnection {
     };
 
     source.onerror = () => {
-      // readyState CONNECTING means the browser is retrying on its own, which
-      // it does for a dropped connection. CLOSED means it has given up — an
-      // HTTP error — and only our own backoff will bring it back.
+      // CONNECTING: the browser retries on its own. CLOSED: it gave up on an
+      // HTTP error, so our backoff takes over.
       if (source.readyState === EventSource.CLOSED) {
         this.scheduleRetry('stream closed');
       }
@@ -283,8 +274,7 @@ export class NodeConnection {
       }
     };
 
-    // Container data is secondary — a failure here shouldn't mark the whole
-    // node offline while host metrics are still arriving.
+    // Container stream failures don't mark the node offline.
     source.onerror = () => {
       if (source.readyState === EventSource.CLOSED) {
         this.containerSource = null;

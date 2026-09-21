@@ -11,7 +11,7 @@ import {
 import { AppLayout } from './layouts/AppLayout';
 import { useNodeStore } from './stores/nodes';
 import { getDefaultNodes } from './config';
-import { isTauri } from './lib/tauri';
+import { isDesktop } from './lib/platform';
 
 export interface LogsSearch {
   node?: string;
@@ -133,7 +133,7 @@ const routeTree = rootRoute.addChildren([
 ]);
 
 // Hash history under Tauri: the custom protocol doesn't serve arbitrary paths.
-const history = isTauri() ? createHashHistory() : createBrowserHistory();
+const history = isDesktop() ? createHashHistory() : createBrowserHistory();
 
 export const router = createRouter({ routeTree, history });
 

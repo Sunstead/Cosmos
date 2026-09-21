@@ -1,18 +1,9 @@
 //! Container and volume sampling.
 //!
-//! Two things here are worth knowing about:
-//!
-//! 1. **CPU percentage is computed from our own consecutive ticks.** With
-//!    `one_shot: true` Docker returns absolute monotonic counters and leaves
-//!    `precpu_stats` zeroed — the old code differenced against those zeros,
-//!    which is why `cpu_pct` was meaningless. Differencing across our own
-//!    samples is exactly what Docker's two-cycle mode computes internally,
-//!    without the ~1s server-side wait per container.
-//!
-//! 2. **`started_at` is cached against state transitions.** It only changes
-//!    when a container restarts, so inspecting every container on every tick
-//!    (as the old code did, purely for this one field) is pure waste. Steady
-//!    state is zero inspect calls.
+//! - CPU % is differenced across our own ticks: `one_shot` stats leave
+//!   `precpu_stats` zeroed, and a two-cycle read would wait ~1s per container.
+//! - `started_at` is cached per container state, so steady state needs no
+//!   inspect calls.
 
 use super::host::unix_now;
 use bollard::{
@@ -119,8 +110,7 @@ impl DockerProbe {
             .filter_map(|c| c.id.clone())
             .collect();
 
-        // Bounded, unlike the old `join_all`, which fired one request per
-        // container simultaneously and hammered the socket on a busy host.
+        // Bounded so a busy host doesn't flood the Docker socket.
         let stats: HashMap<String, Stats> = futures_util::stream
             ::iter(running.into_iter().map(|id| {
                 let docker = docker.clone();

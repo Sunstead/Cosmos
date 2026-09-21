@@ -1,15 +1,8 @@
 /**
- * Per-node agent tokens.
- *
- * Under Tauri these live in the OS keychain (macOS Keychain, Windows
- * Credential Manager, libsecret) via a Rust command, and only a key reference
- * ever reaches persisted state. In the browser build there is no keychain, so
- * they fall back to `localStorage` — which is plaintext and readable by any
- * script in the page. That's an accepted limitation of the web target, not a
- * default we'd choose.
+ * Per-node agent tokens: OS keychain on desktop, localStorage in the browser.
  */
 
-import { isTauri } from './tauri';
+import { isDesktop } from './platform';
 
 const STORAGE_PREFIX = 'cosmos-token:';
 
@@ -26,7 +19,7 @@ export async function getToken(nodeId: string): Promise<string | null> {
   if (cached !== undefined) return cached;
 
   let token: string | null = null;
-  if (isTauri()) {
+  if (isDesktop()) {
     try {
       token = await invoke<string | null>('get_node_token', { nodeId });
     } catch {
@@ -49,7 +42,7 @@ export async function getToken(nodeId: string): Promise<string | null> {
 export async function setToken(nodeId: string, token: string): Promise<void> {
   cache.set(nodeId, token);
 
-  if (isTauri()) {
+  if (isDesktop()) {
     await invoke('set_node_token', { nodeId, token });
     return;
   }
@@ -63,7 +56,7 @@ export async function setToken(nodeId: string, token: string): Promise<void> {
 export async function deleteToken(nodeId: string): Promise<void> {
   cache.delete(nodeId);
 
-  if (isTauri()) {
+  if (isDesktop()) {
     try {
       await invoke('delete_node_token', { nodeId });
     } catch {

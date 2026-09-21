@@ -14,21 +14,9 @@ interface SparklineProps {
 }
 
 /**
- * A live sparkline that never re-renders.
- *
- * React mounts the SVG once. After that, samples arrive at 1 Hz and this
- * rewrites two attributes through refs inside a shared animation frame — no
- * component re-render, no reconciliation, no layout measurement.
- *
- * It replaces a recharts `ResponsiveContainer` + `AreaChart` per metric (four
- * per node card), each of which carried a `ResizeObserver`, recomputed scales
- * and rebuilt its path on every tick, and re-injected an inline `<style>`
- * element on every render.
- *
- * The geometry is a fixed 0–100 viewBox with `preserveAspectRatio="none"`, so
- * the SVG stretches to whatever box it is given and nothing here ever needs to
- * know its pixel size. `vector-effect="non-scaling-stroke"` keeps the line an
- * even weight despite the non-uniform scale.
+ * A live sparkline that never re-renders. Points are written through refs in a
+ * shared animation frame. The fixed 0-100 viewBox stretches to its box, so it
+ * never measures itself.
  */
 export const Sparkline = memo(function Sparkline({
   nodeId,
