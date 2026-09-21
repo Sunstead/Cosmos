@@ -56,7 +56,13 @@ fn init_tracing() {
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_|
         EnvFilter::new("info,cosmos_agent=info")
     );
-    tracing_subscriber::registry().with(fmt::layer().compact()).with(filter).init();
+    // Colour only on a terminal; `docker logs` would show raw escape codes.
+    let ansi = std::io::IsTerminal::is_terminal(&std::io::stdout());
+    tracing_subscriber
+        ::registry()
+        .with(fmt::layer().compact().with_ansi(ansi))
+        .with(filter)
+        .init();
 }
 
 async fn serve(cfg: Config, token: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
@@ -84,6 +90,7 @@ async fn serve(cfg: Config, token: Option<String>) -> Result<(), Box<dyn std::er
                 tracing::error!(
                     path = %cfg.history.path.display(),
                     error = %e,
+                    hint = history::diagnose(&cfg.history.path),
                     "could not open metrics history; continuing without it"
                 );
                 None

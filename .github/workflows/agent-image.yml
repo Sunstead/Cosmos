@@ -69,13 +69,49 @@ jobs:
             org.opencontainers.image.title=cosmos-agent
             org.opencontainers.image.description=Cosmos homelab agent and web UI
 
-      - uses: docker/build-push-action@v6
+      # Build once into the local daemon so the image can be checked before
+      # anything is published. The push below reuses the same cache.
+      - name: Build
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: cosmos-agent/Dockerfile
           platforms: linux/amd64
-          push: ${{ github.event_name != 'pull_request' }}
+          load: true
+          tags: cosmos-agent:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test
+        run: |
+          set -euo pipefail
+          # The data dir must be owned by the agent's uid, or a fresh named
+          # volume comes up root-owned and history can't be written.
+          cid=$(docker create cosmos-agent:test)
+          docker export "$cid" | tar -tvf - | grep -E ' var/lib/cosmos-agent/?$' | tee /dev/stderr | grep -q '65532/65532'
+          docker rm "$cid" >/dev/null
+
+          docker run -d --name smoke -p 7700:7700 -e COSMOS_AGENT_TOKEN=smoke \
+            -v smoke_data:/var/lib/cosmos-agent cosmos-agent:test
+          for i in $(seq 30); do curl -fsS localhost:7700/healthz >/dev/null && break; sleep 1; done
+
+          curl -fsS localhost:7700/ | grep -q 'id="root"'
+          curl -fsS localhost:7700/nodes/anything | grep -q 'id="root"'
+          test "$(curl -s -o /dev/null -w '%{http_code}' localhost:7700/v1/host)" = 401
+          curl -fsS -H 'Authorization: Bearer smoke' localhost:7700/v1/info | grep -q '"metrics_history":true'
+
+          docker logs smoke 2>&1 | tee agent.log
+          grep -q 'metrics history enabled' agent.log
+          if grep -q $'\x1b' agent.log; then echo 'ANSI escapes in docker logs' >&2; exit 1; fi
+
+      - name: Push
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: cosmos-agent/Dockerfile
+          platforms: linux/amd64
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max

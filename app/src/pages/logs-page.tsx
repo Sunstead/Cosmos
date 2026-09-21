@@ -25,11 +25,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { stripAnsi } from '@/lib/ansi';
+import { AnsiText } from '@/components/ansi-text';
 
 type Stream = 'all' | 'stdout' | 'stderr';
 
 function download(lines: LogLine[], name: string) {
-  const text = lines.map((l) => (l.ts ? `${l.ts} ${l.text}` : l.text)).join('\n');
+  const text = lines.map((l) => (l.ts ? `${l.ts} ${stripAnsi(l.text)}` : stripAnsi(l.text))).join('\n');
   const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
   const a = Object.assign(document.createElement('a'), { href: url, download: `${name}.log` });
   a.click();
@@ -72,7 +74,7 @@ export function LogsPage() {
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return lines.filter(
-      (l) => (stream === 'all' || l.stream === stream) && (!q || l.text.toLowerCase().includes(q)),
+      (l) => (stream === 'all' || l.stream === stream) && (!q || stripAnsi(l.text).toLowerCase().includes(q)),
     );
   }, [lines, query, stream]);
 
@@ -145,7 +147,7 @@ export function LogsPage() {
                     {line.ts.slice(11, 19)}
                   </span>
                 )}
-                {line.text}
+                <AnsiText text={line.text} />
               </div>
             ))
           )}
