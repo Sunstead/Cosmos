@@ -40,7 +40,8 @@ export function SegmentedControl<T extends string>({
             key={o.value}
             value={o.value}
             aria-label={o.hint ?? o.label}
-            className='text-xs data-[state=on]:text-foreground'
+            // A tooltip trigger overrides data-state, so style on aria-checked.
+            className='text-xs aria-checked:bg-muted aria-checked:text-foreground'
           >
             {Icon && <Icon />}
             {o.label}
