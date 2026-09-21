@@ -1,5 +1,5 @@
 import { KeyRound, MonitorCog, RefreshCw, Server, Trash } from 'lucide-react';
-import { useNodeStore } from '@/stores/nodes';
+import { useNodeStore, nodeDisplayName } from '@/stores/nodes';
 import { useNodeMeta } from '@/api/queries';
 import { PageHeader } from '@/components/page-header';
 import { NodeStatusBadge } from '@/components/node-status-badge';
@@ -38,7 +38,7 @@ function NodeRow({ nodeId }: { nodeId: string }) {
     <div className='flex items-start justify-between gap-4 border-t py-4 first:border-t-0'>
       <div className='min-w-0 space-y-1'>
         <div className='flex items-center gap-2'>
-          <p className='font-medium truncate'>{node.name}</p>
+          <p className='font-medium truncate'>{nodeDisplayName(node)}</p>
           <NodeStatusBadge nodeId={nodeId} />
         </div>
         <p className='text-xs text-muted-foreground font-mono truncate'>{node.url}</p>
@@ -77,7 +77,7 @@ function NodeRow({ nodeId }: { nodeId: string }) {
               <Trash />
             </Button>
           }
-          title={`Remove ${node.name}?`}
+          title={`Remove ${nodeDisplayName(node)}?`}
           description='Cosmos will stop monitoring this node and forget its saved token.'
           confirmLabel='Remove'
           onConfirm={() => removeNode(nodeId)}

@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Link } from '@tanstack/react-router';
 import { ArrowLeft, Boxes, Cpu, HardDrive, MemoryStick } from 'lucide-react';
 import { useHostInfo, useNodeMeta } from '@/api/queries';
-import { useNodeStore } from '@/stores/nodes';
+import { useNodeStore, nodeDisplayName } from '@/stores/nodes';
 import { useContainersStore } from '@/stores/containers';
 import {
   formatBytes,
@@ -85,7 +85,7 @@ export function NodeDetailPage({ nodeId }: { nodeId: string }) {
   return (
     <>
       <PageHeader
-        title={node.name.toUpperCase()}
+        title={nodeDisplayName(node)}
         description={host?.hostname ?? node.url}
         actions={
           <div className='flex items-center gap-2'>

@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { Link } from '@tanstack/react-router';
-import { useNodeStore } from '@/stores/nodes';
+import { useNodeStore, nodeDisplayName } from '@/stores/nodes';
 import {
   formatBytes,
   getCpuPct,
@@ -25,7 +25,7 @@ export const ClusterLoad = memo(function ClusterLoad({ nodeId }: { nodeId: strin
           params={{ nodeId }}
           className='font-medium hover:underline truncate'
         >
-          {node.name}
+          {nodeDisplayName(node)}
         </Link>
         <NodeStatusBadge nodeId={nodeId} showLabel={false} />
         <div className='flex-1' />

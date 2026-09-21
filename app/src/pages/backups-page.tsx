@@ -8,7 +8,7 @@ import {
   HeartPulse,
   TriangleAlert,
 } from 'lucide-react';
-import { useNodeStore } from '@/stores/nodes';
+import { useNodeStore, nodeDisplayName } from '@/stores/nodes';
 import { useBackups, useNodeMeta, useTick } from '@/api/queries';
 import { BackupsStatus } from '@/generated/BackupsStatus';
 import { StepStatus } from '@/generated/StepStatus';
@@ -173,7 +173,7 @@ export function BackupsPage() {
               <SelectContent>
                 {nodes.map((n) => (
                   <SelectItem key={n.id} value={n.id}>
-                    {n.name}
+                    {nodeDisplayName(n)}
                   </SelectItem>
                 ))}
               </SelectContent>

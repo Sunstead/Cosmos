@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { useNodeStore, getConnection } from '@/stores/nodes';
+import { useNodeStore, getConnection, nodeDisplayName } from '@/stores/nodes';
 import { useContainersStore } from '@/stores/containers';
 import { planetStyle } from '@/lib/planet';
 import { userFacingServices } from '@/lib/services';
@@ -73,14 +73,14 @@ export function Constellation({ className }: { className?: string }) {
     };
 
     const bodies: Body[] = nodes.map((node, i) => {
-      const style = planetStyle(node.name);
+      const style = planetStyle(nodeDisplayName(node));
       const services = userFacingServices(
         servicesRef.current.filter((s) => s.nodeId === node.id),
       );
 
       return {
         nodeId: node.id,
-        name: node.name,
+        name: nodeDisplayName(node),
         // Spread orbits evenly, innermost first.
         orbit: nodes.length === 1 ? 0 : 0.35 + (i / Math.max(nodes.length - 1, 1)) * 0.5,
         angle: (i / Math.max(nodes.length, 1)) * TAU,

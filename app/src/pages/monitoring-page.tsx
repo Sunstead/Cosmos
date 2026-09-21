@@ -9,7 +9,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { useNodeStore } from '@/stores/nodes';
+import { useNodeStore, nodeDisplayName } from '@/stores/nodes';
 import { useMetricHistory, useNodeMeta } from '@/api/queries';
 import { MetricSeries } from '@/generated/MetricSeries';
 import { PageHeader } from '@/components/page-header';
@@ -200,7 +200,7 @@ export function MonitoringPage() {
               <SelectContent>
                 {nodes.map((n) => (
                   <SelectItem key={n.id} value={n.id}>
-                    {n.name}
+                    {nodeDisplayName(n)}
                   </SelectItem>
                 ))}
               </SelectContent>

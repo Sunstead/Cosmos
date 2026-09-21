@@ -1,7 +1,7 @@
 import { memo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Info, KeyRound, MoreVertical, PencilLine, RefreshCw, Trash } from 'lucide-react';
-import { useNodeStore } from '@/stores/nodes';
+import { useNodeStore, nodeDisplayName } from '@/stores/nodes';
 import { useNodeMeta } from '@/api/queries';
 import { Button } from './ui/button';
 import {
@@ -69,7 +69,7 @@ export const NodeOptionsDropdown = memo(function NodeOptionsDropdown({
                 Remove node
               </DropdownMenuItem>
             }
-            title={`Remove ${node?.name ?? 'this node'}?`}
+            title={`Remove ${node ? nodeDisplayName(node) : 'this node'}?`}
             description={
               <>
                 Cosmos will stop monitoring this node and forget its saved token.
