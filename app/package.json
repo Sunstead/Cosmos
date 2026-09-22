@@ -12,7 +12,8 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "release": "node scripts/release.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.8",
