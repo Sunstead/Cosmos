@@ -8,7 +8,7 @@
    version="1.1"
    id="svg1"
    inkscape:version="1.4 (e7c3feb1, 2024-10-09)"
-   sodipodi:docname="icon_simple.svg"
+   sodipodi:docname="icon.svg"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
    xmlns:xlink="http://www.w3.org/1999/xlink"
@@ -25,9 +25,9 @@
      inkscape:deskcolor="#d1d1d1"
      inkscape:document-units="px"
      showgrid="false"
-     inkscape:zoom="5.6652966"
-     inkscape:cx="-61.426617"
-     inkscape:cy="-0.88256633"
+     inkscape:zoom="17.606852"
+     inkscape:cx="-0.056796069"
+     inkscape:cy="-2.6694152"
      inkscape:current-layer="layer1">
     <inkscape:grid
        id="grid1"
@@ -67,11 +67,11 @@
        id="linearGradient16"
        inkscape:collect="always">
       <stop
-         style="stop-color:#0087f2;stop-opacity:1;"
+         style="stop-color:#06aaff;stop-opacity:1;"
          offset="0"
          id="stop16" />
       <stop
-         style="stop-color:#37ceff;stop-opacity:1;"
+         style="stop-color:#4beaff;stop-opacity:1;"
          offset="1"
          id="stop17" />
     </linearGradient>
@@ -153,11 +153,40 @@
        y2="3.6600718"
        gradientUnits="userSpaceOnUse"
        gradientTransform="matrix(1.026345,-0.27500832,0.27500832,1.026345,-2.4108267,1.9893064)" />
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#linearGradient1"
+       id="linearGradient2"
+       x1="9"
+       y1="16"
+       x2="8.7358751"
+       y2="0"
+       gradientUnits="userSpaceOnUse" />
+    <linearGradient
+       id="linearGradient1"
+       inkscape:collect="always">
+      <stop
+         style="stop-color:#141a42;stop-opacity:1;"
+         offset="0"
+         id="stop1" />
+      <stop
+         style="stop-color:#222f6d;stop-opacity:1;"
+         offset="1"
+         id="stop2" />
+    </linearGradient>
   </defs>
   <g
      inkscape:label="Layer 1"
      inkscape:groupmode="layer"
      id="layer1">
+    <rect
+       style="display:inline;fill:url(#linearGradient2);fill-opacity:1;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"
+       id="rect1"
+       width="16"
+       height="16"
+       x="0"
+       y="0"
+       ry="4" />
     <path
        id="path16"
        style="fill:url(#linearGradient17);stroke-width:1.06255;stroke-linecap:round;stroke-linejoin:round;paint-order:stroke fill markers"
