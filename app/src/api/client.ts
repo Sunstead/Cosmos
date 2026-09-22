@@ -50,6 +50,16 @@ export const LEGACY_CAPABILITIES: Capabilities = {
   backups: false,
 };
 
+/**
+ * What this caller can do here. The agent reports node-level capabilities;
+ * a viewer can't act even where the node allows it. Agents before API v2
+ * don't report a principal, and their token holder is effectively an admin.
+ */
+export function effectiveCapabilities(info: AgentInfo): Capabilities {
+  if (!info.principal || info.principal.admin) return info.capabilities;
+  return { ...info.capabilities, container_actions: false, volume_actions: false };
+}
+
 export class AgentClient {
   constructor(
     readonly baseUrl: string,

@@ -17,6 +17,20 @@ pub struct AgentInfo {
     /// something an unauthenticated caller should be able to harvest.
     pub node_name: Option<String>,
     pub capabilities: Capabilities,
+    /// Who the agent thinks is asking. `None` when unauthenticated, and
+    /// absent from pre-0.3 agents.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub principal: Option<PrincipalInfo>,
+}
+
+/// The authenticated caller, as far as the UI needs to know. Action buttons
+/// need `admin` as well as the matching capability.
+#[derive(Serialize, Deserialize, TS, Debug, Clone)]
+#[ts(export, export_to = "../../app/src/generated/")]
+pub struct PrincipalInfo {
+    pub name: String,
+    pub admin: bool,
 }
 
 #[derive(Serialize, Deserialize, TS, Debug, Clone)]

@@ -1,7 +1,8 @@
-import { AgentClient, AgentRequestError, LEGACY_CAPABILITIES } from './client';
+import { AgentClient, AgentRequestError, effectiveCapabilities, LEGACY_CAPABILITIES } from './client';
 import { Capabilities } from '@/generated/Capabilities';
 import { ContainerInfo } from '@/generated/ContainerInfo';
 import { HostInfo } from '@/generated/HostInfo';
+import { PrincipalInfo } from '@/generated/PrincipalInfo';
 import { VolumeInfo } from '@/generated/VolumeInfo';
 
 export type NodeStatus =
@@ -13,7 +14,10 @@ export type NodeStatus =
 
 export interface NodeMeta {
   status: NodeStatus;
+  /** Already narrowed to what this caller may do (see effectiveCapabilities). */
   capabilities: Capabilities;
+  /** Who the agent says we are. Null for agents before API v2. */
+  principal: PrincipalInfo | null;
   agentVersion: string | null;
   apiVersion: number;
   /** Why we're offline, for the UI to show rather than a bare dot. */
@@ -47,6 +51,7 @@ export class NodeConnection {
   private meta: NodeMeta = {
     status: 'connecting',
     capabilities: LEGACY_CAPABILITIES,
+    principal: null,
     agentVersion: null,
     apiVersion: 0,
     error: null,
@@ -195,7 +200,8 @@ export class NodeConnection {
     try {
       const info = await this.client.getInfo();
       this.setMeta({
-        capabilities: info.capabilities,
+        capabilities: effectiveCapabilities(info),
+        principal: info.principal ?? null,
         agentVersion: info.agent_version,
         apiVersion: info.api_version,
       });

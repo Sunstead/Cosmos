@@ -155,4 +155,32 @@ describe('NodeConnection', () => {
     expect(FakeEventSource.latest('/v1/containers/stream')).toBeUndefined();
     conn.stop();
   });
+
+  it('hides actions from a viewer even where the node allows them', async () => {
+    const { conn, metas } = connect({
+      ...healthy,
+      '/v1/info': { body: agentInfo({ api_version: 2, principal: { name: 'guest', admin: false } }) },
+    });
+    conn.start();
+    await settle();
+
+    const meta = metas.at(-1)!;
+    expect(meta.principal).toEqual({ name: 'guest', admin: false });
+    expect(meta.capabilities.container_actions).toBe(false);
+    expect(meta.capabilities.volume_actions).toBe(false);
+    // Reading is unaffected.
+    expect(meta.capabilities.container_logs).toBe(true);
+    conn.stop();
+  });
+
+  it('keeps actions for an admin', async () => {
+    const { conn, metas } = connect({
+      ...healthy,
+      '/v1/info': { body: agentInfo({ api_version: 2, principal: { name: 'pwb', admin: true } }) },
+    });
+    conn.start();
+    await settle();
+    expect(metas.at(-1)?.capabilities.container_actions).toBe(true);
+    conn.stop();
+  });
 });
