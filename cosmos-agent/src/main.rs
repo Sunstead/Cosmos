@@ -38,18 +38,22 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     init_tracing();
 
     let cfg = Config::load()?;
-    // Resolved before anything is bound, so a misconfigured agent fails fast
+    // Decided before anything is bound, so a misconfigured agent fails fast
     // rather than coming up open.
-    let token = cfg.resolve_token()?;
-    if token.is_none() {
-        tracing::warn!(
-            "running WITHOUT authentication (auth.allow_anonymous = true); \
-             anyone who can reach this port can read this node"
-        );
+    let mode = cfg.auth_mode()?;
+    match mode {
+        config::AuthMode::Anonymous =>
+            tracing::warn!(
+                "running WITHOUT authentication (auth.allow_anonymous = true); \
+                 anyone who can reach this port can read this node"
+            ),
+        config::AuthMode::Oidc { ignored_token: true } =>
+            tracing::warn!("ignoring the old shared token; sign-in is through [auth.oidc] now"),
+        config::AuthMode::Oidc { .. } => {}
     }
 
     let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build()?;
-    runtime.block_on(serve(cfg, token))
+    runtime.block_on(serve(cfg, mode))
 }
 
 fn init_tracing() {
@@ -67,7 +71,7 @@ fn init_tracing() {
         .init();
 }
 
-async fn serve(cfg: Config, token: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
+async fn serve(cfg: Config, mode: config::AuthMode) -> Result<(), Box<dyn std::error::Error>> {
     let cfg = Arc::new(cfg);
 
     let facts = Arc::new(HostFacts::probe(cfg.node_name.as_deref()));
@@ -143,7 +147,10 @@ async fn serve(cfg: Config, token: Option<String>) -> Result<(), Box<dyn std::er
     };
 
     let state = AppState::new(Inner {
-        auth: auth::Auth::new(token, cfg.auth.allow_query_token),
+        auth: match (mode, &cfg.auth.oidc) {
+            (config::AuthMode::Oidc { .. }, Some(oidc)) => auth::Auth::oidc(oidc, cfg.auth.allow_query_token),
+            _ => auth::Auth::anonymous(cfg.auth.allow_query_token),
+        },
         facts,
         docker,
         history,

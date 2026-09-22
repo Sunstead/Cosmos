@@ -34,6 +34,12 @@ futures-util = "0.3"
 # libsqlite3 — which is what makes a distroless base viable.
 rusqlite = { version = "0.32", features = ["bundled"] }
 
+# OIDC: discovery and JWKS over HTTPS, then offline JWT checks. rustls with
+# bundled roots, so the distroless image needs no CA store; pure-Rust
+# crypto, so the build needs no C toolchain beyond what's there.
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls-webpki-roots"] }
+jsonwebtoken = { version = "11", default-features = false, features = ["rust_crypto"] }
+
 thiserror = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }

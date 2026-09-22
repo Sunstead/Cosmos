@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeEventSource, mockFetch, settle } from '@/test/fakes';
-import { agentInfo, hostInfo } from '@/test/fixtures';
+import { agentInfo, hostInfo, ISSUER, signedIn } from '@/test/fixtures';
+import { useAuthStore } from './auth';
 import { migrateNode, nodeDisplayName, useNodeStore } from './nodes';
 
 describe('node store', () => {
   beforeEach(() => {
+    useAuthStore.setState({ sessions: signedIn() });
     FakeEventSource.reset();
     vi.stubGlobal('EventSource', FakeEventSource);
     vi.stubGlobal(
@@ -25,7 +27,7 @@ describe('node store', () => {
   });
 
   it('adds a node after probing it', async () => {
-    const result = await useNodeStore.getState().addNode('agent.test', 'tok');
+    const result = await useNodeStore.getState().addNode('agent.test');
     expect(result.ok).toBe(true);
     const [node] = useNodeStore.getState().nodes;
     expect(node.url).toBe('http://agent.test:7700');
@@ -35,7 +37,7 @@ describe('node store', () => {
   it('keeps the nodes array stable across identical samples', async () => {
     // Regression: a stale comparison rewrote `nodes` on every sample, which
     // re-rendered the shell and rebuilt the constellation once a second.
-    await useNodeStore.getState().addNode('agent.test', 'tok');
+    await useNodeStore.getState().addNode('agent.test');
     await settle();
 
     const stream = FakeEventSource.latest('/v1/host/stream')!;
@@ -47,7 +49,7 @@ describe('node store', () => {
   });
 
   it('updates the agent name only when it changes', async () => {
-    await useNodeStore.getState().addNode('agent.test', 'tok');
+    await useNodeStore.getState().addNode('agent.test');
     await settle();
     const stream = FakeEventSource.latest('/v1/host/stream')!;
 
@@ -57,7 +59,7 @@ describe('node store', () => {
   });
 
   it('prefers a local alias over the agent name', async () => {
-    await useNodeStore.getState().addNode('agent.test', 'tok');
+    await useNodeStore.getState().addNode('agent.test');
     await settle();
     const id = useNodeStore.getState().nodes[0].id;
 
@@ -71,19 +73,38 @@ describe('node store', () => {
   });
 
   it('rejects a duplicate URL', async () => {
-    await useNodeStore.getState().addNode('agent.test', 'tok');
-    const again = await useNodeStore.getState().addNode('http://agent.test:7700', 'tok');
+    await useNodeStore.getState().addNode('agent.test');
+    const again = await useNodeStore.getState().addNode('http://agent.test:7700');
     expect(again).toEqual({ ok: false, error: expect.stringMatching(/already/i) });
   });
 
-  it('rejects a missing token when the agent requires one', async () => {
+  it('asks for a sign-in, naming the provider, before adding', async () => {
+    useAuthStore.setState({ sessions: {} });
     const result = await useNodeStore.getState().addNode('agent.test');
-    expect(result).toEqual({ ok: false, error: expect.stringMatching(/token/i) });
+    expect(result).toMatchObject({ ok: false, signIn: { kind: 'oidc', issuer: ISSUER } });
     expect(useNodeStore.getState().nodes).toHaveLength(0);
   });
 
+  it('retries a node waiting on sign-in as soon as a session appears', async () => {
+    await useNodeStore.getState().addNode('agent.test');
+    await settle();
+    const id = useNodeStore.getState().nodes[0].id;
+
+    // Signed out: the node waits, without streams.
+    useAuthStore.setState({ sessions: {} });
+    useNodeStore.getState().reconnect(id);
+    await settle();
+    expect(useNodeStore.getState().meta[id].status).toBe('unauthorized');
+    const streams = FakeEventSource.instances.length;
+
+    useAuthStore.setState({ sessions: signedIn() });
+    await settle();
+    expect(FakeEventSource.instances.length).toBeGreaterThan(streams);
+    expect(useNodeStore.getState().meta[id].status).not.toBe('unauthorized');
+  });
+
   it('counts online nodes from stream events', async () => {
-    await useNodeStore.getState().addNode('agent.test', 'tok');
+    await useNodeStore.getState().addNode('agent.test');
     await settle();
     expect(useNodeStore.getState().onlineNodes).toBe(0);
 

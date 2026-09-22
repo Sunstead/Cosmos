@@ -9,7 +9,7 @@ const DISPLAY: Record<NodeStatus, { label: string; dot: DotVariant; className: s
   online: { label: 'Online', dot: 'success', className: 'text-success' },
   offline: { label: 'Offline', dot: 'error', className: 'text-error' },
   // Distinct from offline on purpose: the fix is a token, not a reboot.
-  unauthorized: { label: 'Token required', dot: 'error', className: 'text-error' },
+  unauthorized: { label: 'Sign in needed', dot: 'error', className: 'text-error' },
 };
 
 export const NodeStatusBadge = memo(function NodeStatusBadge({

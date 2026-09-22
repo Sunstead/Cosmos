@@ -12,11 +12,12 @@ serde and takes no locks.
 ## Running it
 
 ```bash
-COSMOS_AGENT_TOKEN=dev cargo run -p cosmos-agent
+COSMOS_AGENT_ALLOW_ANONYMOUS=true COSMOS_AGENT_BIND=127.0.0.1:7700 cargo run -p cosmos-agent
 ```
 
-Everything has a working default except the token, which the agent refuses to
-start without. See [`agent.example.toml`](agent.example.toml) for the full
+That runs it open, for development. Everything else has a working default
+except sign-in: a real agent needs an OpenID Connect provider (`[auth.oidc]`,
+or `COSMOS_AGENT_OIDC_ISSUER`) and refuses to start without one. See [`agent.example.toml`](agent.example.toml) for the full
 configuration, or [`cosmos-agent.jupiter.toml`](cosmos-agent.jupiter.toml) for
 a filled-in one.
 

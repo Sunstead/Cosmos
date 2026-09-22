@@ -36,11 +36,14 @@ export function hostInfo(partial: Partial<HostInfo> = {}): HostInfo {
   };
 }
 
+export const ISSUER = 'https://auth.test/application/o/cosmos/';
+
 export function agentInfo(partial: Partial<AgentInfo> = {}): AgentInfo {
   return {
-    agent_version: '0.2.0',
-    api_version: 1,
+    agent_version: '0.3.0',
+    api_version: 3,
     auth_required: true,
+    auth: { kind: 'oidc', issuer: ISSUER, client_id: 'cosmos', scopes: 'openid profile offline_access' },
     node_name: 'jupiter',
     capabilities: {
       host_metrics: true,
@@ -130,5 +133,18 @@ export function wolEntry(partial: Partial<WolEntry> = {}): WolEntry {
     last_seen: null,
     last_wake: null,
     ...partial,
+  };
+}
+
+/** A signed-in session for the test issuer, so connections get a token. */
+export function signedIn(token = 'tok') {
+  return {
+    [ISSUER]: {
+      issuer: ISSUER,
+      accessToken: token,
+      expiresAt: Date.now() + 3_600_000,
+      name: 'pwb',
+      groups: ['homelab-admins'],
+    },
   };
 }
