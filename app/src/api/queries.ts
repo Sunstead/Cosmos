@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { useQueries, useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { HostInfo } from '@/generated/HostInfo';
 import { MetricStep } from '@/generated/MetricStep';
+import { WolEntry } from '@/generated/WolEntry';
+import { WolNetwork } from '@/generated/WolNetwork';
+import { WolTargetInput } from '@/generated/WolTargetInput';
 import { getConnection, useNodeStore } from '@/stores/nodes';
 import { Device, mergeTailnets } from '@/lib/tailnet';
 import { NodeMeta } from './connection';
@@ -167,6 +170,130 @@ export function useTailnet(): TailnetView {
       };
     },
   });
+}
+
+const WOL_POLL_MS = 10_000;
+/** While something is waking, so "awake" shows up within a couple of seconds. */
+const WOL_WAKING_POLL_MS = 2_000;
+
+export interface WolItem extends WolEntry {
+  /** The node that owns the target and sends its packets. */
+  nodeId: string;
+}
+
+export interface WolView {
+  items: WolItem[];
+  /** Broadcast suggestions, per node. */
+  networks: Record<string, WolNetwork[]>;
+  /** Nodes with Wake-on-LAN enabled. */
+  nodes: string[];
+  loading: boolean;
+  error: string | null;
+}
+
+/** Wake-on-LAN targets across every node that has the feature. */
+export function useWol(): WolView {
+  const nodesKey = useNodeStore((s) =>
+    s.nodes
+      .filter((n) => s.meta[n.id]?.status === 'online' && s.meta[n.id]?.capabilities.wol)
+      .map((n) => n.id)
+      .join('|'),
+  );
+  const nodes = nodesKey ? nodesKey.split('|') : [];
+
+  return useQueries({
+    queries: nodes.map((nodeId) => ({
+      queryKey: ['wol', nodeId],
+      queryFn: () => {
+        const conn = getConnection(nodeId);
+        if (!conn) throw new Error('node is not connected');
+        return conn.client.getWol();
+      },
+      refetchInterval: (q: { state: { data?: { targets: WolEntry[] } } }) =>
+        q.state.data?.targets.some((t) => t.state === 'waking') ? WOL_WAKING_POLL_MS : WOL_POLL_MS,
+      retry: 1,
+    })),
+    combine: (results) => {
+      const items: WolItem[] = [];
+      const networks: Record<string, WolNetwork[]> = {};
+      results.forEach((r, i) => {
+        if (!r.data) return;
+        networks[nodes[i]] = r.data.networks;
+        for (const t of r.data.targets) items.push({ ...t, nodeId: nodes[i] });
+      });
+      items.sort((a, b) => a.target.name.localeCompare(b.target.name, undefined, { sensitivity: 'base' }));
+      const failed = results.find((r) => r.error);
+      return {
+        items,
+        networks,
+        nodes,
+        loading: results.some((r) => r.isLoading),
+        error: items.length === 0 && failed?.error ? failed.error.message : null,
+      };
+    },
+  });
+}
+
+/** Wake, add, edit and remove, with toasts. Refreshes the node's list after. */
+export function useWolActions() {
+  const client = useQueryClient();
+  const [pending, setPending] = useState<string | null>(null);
+
+  const refresh = useCallback(
+    (nodeId: string) => client.invalidateQueries({ queryKey: ['wol', nodeId] }),
+    [client],
+  );
+
+  const wake = useCallback(
+    async (nodeId: string, id: string, name: string) => {
+      const conn = getConnection(nodeId);
+      if (!conn) return false;
+      setPending(`wake:${nodeId}:${id}`);
+      try {
+        await conn.client.wake(id);
+        toast(`Waking ${name}`, { description: 'Sent the magic packet. Watching for it to come online.' });
+        await refresh(nodeId);
+        return true;
+      } catch (e) {
+        toast.error(`Could not wake ${name}`, { description: e instanceof Error ? e.message : undefined });
+        return false;
+      } finally {
+        setPending(null);
+      }
+    },
+    [refresh],
+  );
+
+  const save = useCallback(
+    async (nodeId: string, input: WolTargetInput, id?: string) => {
+      const conn = getConnection(nodeId);
+      if (!conn) throw new Error('node is not connected');
+      if (id) await conn.client.updateWolTarget(id, input);
+      else await conn.client.createWolTarget(input);
+      await refresh(nodeId);
+      toast.success(id ? `Saved ${input.name}` : `Added ${input.name}`);
+    },
+    [refresh],
+  );
+
+  const remove = useCallback(
+    async (nodeId: string, id: string, name: string) => {
+      const conn = getConnection(nodeId);
+      if (!conn) return false;
+      try {
+        await conn.client.deleteWolTarget(id);
+        await refresh(nodeId);
+        toast.success(`Removed ${name}`);
+        return true;
+      } catch (e) {
+        toast.error(`Could not remove ${name}`, { description: e instanceof Error ? e.message : undefined });
+        return false;
+      }
+    },
+    [refresh],
+  );
+
+  return { wake, save, remove, pending };
 }
 
 const PAST: Record<ContainerAction, string> = {

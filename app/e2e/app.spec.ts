@@ -1,5 +1,6 @@
+import { createSocket } from 'node:dgram';
 import { expect, test } from '@playwright/test';
-import { addNode, addNodeOnline, PAGES } from './helpers';
+import { addNode, addNodeOnline, agentUrl, PAGES, TOKEN } from './helpers';
 
 test.describe('empty app', () => {
   test('every page keeps its header with no nodes', async ({ page }) => {
@@ -111,6 +112,44 @@ test.describe('with a node', () => {
 
     await page.getByPlaceholder('Search devices and ports').fill('pixel');
     await expect(section.getByRole('row')).toHaveCount(2);
+  });
+
+  test('adds a machine and wakes it with a real magic packet', async ({ page, request }) => {
+    // Stand in for the sleeping PC: catch what the agent broadcasts.
+    const socket = createSocket('udp4');
+    const received = new Promise<Buffer>((resolve) => socket.once('message', resolve));
+    await new Promise<void>((resolve) => socket.bind(0, '127.0.0.1', resolve));
+    const port = socket.address().port;
+
+    await addNodeOnline(page);
+    await page.goto('/network');
+    const section = page.locator('[data-slot=card]', { hasText: 'Wake-on-LAN' });
+
+    // Through the dialog.
+    await section.getByRole('button', { name: 'Add' }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByLabel('Name').fill('laptop');
+    await dialog.getByLabel('MAC address').fill('11-22-33-44-55-66');
+    await dialog.getByRole('button', { name: 'Add' }).click();
+    await expect(section.getByRole('row', { name: /laptop/ })).toContainText('11:22:33:44:55:66');
+
+    // Loopback isn't offered in the dialog, so this one goes in through the API.
+    const res = await request.post(`${agentUrl()}/v1/wol/targets`, {
+      headers: { Authorization: `Bearer ${TOKEN}` },
+      data: { name: 'desktop', mac: 'AA:BB:CC:DD:EE:FF', broadcast: '127.0.0.1', port },
+    });
+    expect(res.status()).toBe(201);
+
+    const row = section.getByRole('row', { name: /desktop/ });
+    await expect(row).toBeVisible({ timeout: 15_000 });
+    await row.getByRole('button', { name: 'Wake desktop' }).click();
+
+    const packet = await received;
+    socket.close();
+    expect(packet.length).toBe(102);
+    expect(packet.subarray(0, 6).toString('hex')).toBe('ffffffffffff');
+    expect(packet.subarray(6, 12).toString('hex')).toBe('aabbccddeeff');
+    await expect(row).toContainText('Waking');
   });
 
   test('constellation canvas is stable over time', async ({ page }) => {

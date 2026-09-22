@@ -2,7 +2,7 @@ import { memo, useMemo, useState } from 'react';
 import { ArrowUpRight, EthernetPort, SearchX, Unplug } from 'lucide-react';
 import { useNodeStore } from '@/stores/nodes';
 import { useContainersStore } from '@/stores/containers';
-import { useHostInfo, useTailnet } from '@/api/queries';
+import { useHostInfo, useTailnet, useWol } from '@/api/queries';
 import { PortInfo } from '@/generated/PortInfo';
 import { formatBytes } from '@/lib/node-metrics';
 import { serviceHref } from '@/lib/agent-url';
@@ -14,6 +14,7 @@ import { EmptyState, NoNodesState } from '@/components/empty-state';
 import { NodeStatusBadge } from '@/components/node-status-badge';
 import { NodeName } from '@/components/node-name';
 import { TailnetSection } from '@/components/tailnet-section';
+import { WolSection } from '@/components/wol-section';
 import { Section } from '@/components/section';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -79,6 +80,7 @@ export function NetworkPage() {
   const nodeContainers = useContainersStore((s) => s.nodeContainers);
   const [query, setQuery] = useState('');
   const tailnet = useTailnet();
+  const wol = useWol();
 
   const ports = useMemo(() => {
     const out: PortRow[] = [];
@@ -109,7 +111,7 @@ export function NetworkPage() {
       <PageHeader
         title='Network'
         actions={
-          (ports.length > 0 || tailnet.devices.length > 0) && (
+          (ports.length > 0 || tailnet.devices.length > 0 || wol.items.length > 0) && (
             <SearchInput value={query} onChange={setQuery} placeholder='Search devices and ports' />
           )
         }
@@ -119,7 +121,8 @@ export function NetworkPage() {
         <NoNodesState />
       ) : (
         <>
-          <TailnetSection tailnet={tailnet} query={query} />
+          <TailnetSection tailnet={tailnet} wol={wol.items} query={query} />
+          <WolSection wol={wol} query={query} multiNode={nodes.length > 1} />
 
           <Section title='Published ports' count={ports.length || undefined}>
             {ports.length === 0 ? (

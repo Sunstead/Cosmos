@@ -15,6 +15,8 @@ pub enum AgentError {
 
     #[error("this agent is configured read-only")] ReadOnly,
 
+    #[error("{0}")] NotFound(String),
+
     #[error("container {0} not found")] ContainerNotFound(String),
 
     #[error("docker is unavailable: {0}")] DockerUnavailable(String),
@@ -51,6 +53,7 @@ impl AgentError {
             Self::Unauthorized => ErrorCode::Unauthorized,
             Self::Forbidden(_) => ErrorCode::Forbidden,
             Self::ReadOnly => ErrorCode::ReadOnly,
+            Self::NotFound(_) => ErrorCode::NotFound,
             Self::ContainerNotFound(_) => ErrorCode::ContainerNotFound,
             Self::DockerUnavailable(_) => ErrorCode::DockerUnavailable,
             Self::ActionFailed { .. } => ErrorCode::ActionFailed,
@@ -65,7 +68,7 @@ impl AgentError {
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,
             Self::Unauthorized => StatusCode::UNAUTHORIZED,
             Self::Forbidden(_) | Self::ReadOnly => StatusCode::FORBIDDEN,
-            Self::ContainerNotFound(_) => StatusCode::NOT_FOUND,
+            Self::NotFound(_) | Self::ContainerNotFound(_) => StatusCode::NOT_FOUND,
             Self::ActionFailed { .. } => StatusCode::CONFLICT,
             // 501 vs 503 is load-bearing: the client hides a feature on 501
             // and shows a retry on 503.

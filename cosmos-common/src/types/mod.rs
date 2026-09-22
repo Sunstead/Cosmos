@@ -23,6 +23,7 @@ pub mod history;
 pub mod host;
 pub mod meta;
 pub mod tailnet;
+pub mod wol;
 
 // Flat re-export: `cosmos_common::types::HostInfo` keeps working, and callers
 // don't have to care which file a type happens to live in.
@@ -33,3 +34,4 @@ pub use history::*;
 pub use host::*;
 pub use meta::*;
 pub use tailnet::*;
+pub use wol::*;

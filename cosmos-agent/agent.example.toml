@@ -109,3 +109,17 @@ repo_label = "jupiter/restic"
 enabled = false
 socket = "/host/tailscale/tailscaled.sock"
 interval_ms = 10000
+
+[wol]
+# Wake-on-LAN from the Network page. Machines are added in the app and kept
+# in [state] path; waking and editing also need allow_actions and an admin.
+# The agent sends magic packets from the host's network (host networking),
+# so this node has to be on the same LAN as the machines it wakes.
+enabled = false
+interval_ms = 10000
+# How long to watch for a machine to come up before calling the wake failed.
+wake_timeout_secs = 180
+
+[state]
+# Settings edited from the UI. Must be on the writable volume.
+path = "/var/lib/cosmos-agent/state.db"

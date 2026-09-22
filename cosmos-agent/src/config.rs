@@ -37,6 +37,18 @@ pub struct Config {
     pub web: WebConfig,
     pub state: StateConfig,
     pub tailscale: TailscaleConfig,
+    pub wol: WolConfig,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct WolConfig {
+    /// Targets are added in the UI and kept in `[state] path`. Waking and
+    /// editing also need `allow_actions` and an admin.
+    pub enabled: bool,
+    pub interval_ms: u64,
+    /// How long after a packet to keep watching before calling it failed.
+    pub wake_timeout_secs: u64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -238,6 +250,12 @@ impl Default for TailscaleConfig {
     }
 }
 
+impl Default for WolConfig {
+    fn default() -> Self {
+        Self { enabled: false, interval_ms: 10_000, wake_timeout_secs: 180 }
+    }
+}
+
 impl Default for StateConfig {
     fn default() -> Self {
         Self { path: PathBuf::from("/var/lib/cosmos-agent/state.db") }
@@ -351,6 +369,12 @@ impl Config {
         }
         if self.tailscale.interval_ms < 1000 {
             return Err(ConfigError::Invalid("tailscale.interval_ms must be at least 1000".into()));
+        }
+        if self.wol.interval_ms < 1000 {
+            return Err(ConfigError::Invalid("wol.interval_ms must be at least 1000".into()));
+        }
+        if self.wol.wake_timeout_secs < 10 {
+            return Err(ConfigError::Invalid("wol.wake_timeout_secs must be at least 10".into()));
         }
         if self.docker.stats_concurrency == 0 {
             return Err(ConfigError::Invalid("docker.stats_concurrency must be at least 1".into()));
