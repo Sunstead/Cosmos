@@ -1,6 +1,5 @@
-import { expect, Page } from '@playwright/test';
+import { APIRequestContext, expect, Page } from '@playwright/test';
 
-export const TOKEN = 'e2e-token';
 export const WEB_PORT = 1431;
 export const agentUrl = () => process.env.E2E_AGENT_URL!;
 
@@ -17,18 +16,34 @@ export const PAGES = [
   '/settings',
 ] as const;
 
-export async function addNode(page: Page, token = TOKEN) {
+const issuer = () => process.env.E2E_OIDC_ISSUER!;
+const mockOrigin = () => new URL(issuer()).origin;
+
+/** Who the mock provider signs in next. No groups given means the admin. */
+export async function nextSignIn(request: APIRequestContext, user?: { name: string; groups: string[] }) {
+  await request.post(`${mockOrigin()}/test/user`, { data: user ?? {} });
+}
+
+/** A bearer token for calling the agent's API directly from a spec. */
+export async function apiToken(request: APIRequestContext): Promise<string> {
+  const res = await request.post(`${mockOrigin()}/test/token`);
+  return ((await res.json()) as { access_token: string }).access_token;
+}
+
+/** Opens Add node and submits the agent's address; sign-in comes next. */
+export async function addNode(page: Page) {
   await page.goto('/nodes');
   await page.getByRole('button', { name: 'Add node' }).first().click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Address').fill(agentUrl());
-  await dialog.getByLabel('Token').fill(token);
   await dialog.getByRole('button', { name: 'Add' }).click();
   return dialog;
 }
 
+/** Adds the node through the real sign-in round trip, and waits for it. */
 export async function addNodeOnline(page: Page) {
-  await addNode(page);
-  await expect(page).toHaveURL(/\/nodes\/[^/]+$/);
+  const dialog = await addNode(page);
+  await dialog.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page).toHaveURL(/\/nodes\/[^/]+$/, { timeout: 15_000 });
   await expect(page.locator('header').getByText('1/1')).toBeVisible({ timeout: 15_000 });
 }

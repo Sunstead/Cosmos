@@ -18,7 +18,7 @@ Rust (from repo root):
 cargo test -p cosmos-common                      # ALSO regenerates the TS bindings
 cargo test --workspace
 cargo clippy --workspace --all-targets           # expected to be warning-free
-COSMOS_AGENT_TOKEN=dev cargo run -p cosmos-agent
+COSMOS_AGENT_ALLOW_ANONYMOUS=true COSMOS_AGENT_BIND=127.0.0.1:7700 cargo run -p cosmos-agent   # dev: no sign-in
 cargo build --profile release-agent -p cosmos-agent
 ```
 
@@ -35,7 +35,8 @@ npm run release -- 0.2.0 [--push]  # desktop release; see RELEASING.md
 ```
 
 `npm run test:e2e` builds and starts a real `cosmos-agent` (random port, temp
-history DB, token `e2e-token`) and Vite on :1431, then drives system Chrome
+history DB, a fake `tailscaled` and a mock OIDC provider in `e2e/mock-oidc.ts`,
+so every spec signs in for real) and Vite on :1431, then drives system Chrome
 (`PW_CHANNEL` overrides). Docker-dependent specs skip when no daemon is up.
 Screenshots of every page in both themes land in `app/e2e/.results/`.
 
@@ -81,7 +82,9 @@ Background samplers publish to `tokio::sync::watch` channels; handlers hand out 
 
 `/v1/info` is unauthenticated so the add-node flow can distinguish "nothing here" from "needs a token", but `node_name` and `principal` stay `null` until authenticated. The app narrows capabilities by `principal.admin` in `effectiveCapabilities` (`api/client.ts`), so UI code only ever checks capabilities. A **404 there means a pre-0.2 agent** → assume `api_version: 0`.
 
-**Auth** (`auth.rs`). Constant-time bearer compare; accepts the `Authorization` header or `?token=` (browser `EventSource`/`WebSocket` cannot set headers, and the web build is supported). The trace layer records `uri.path()` only so query tokens never reach the logs. **CORS must stay the outermost layer** — axum applies layers bottom-up, and an unauthenticated `OPTIONS` preflight that 401s without CORS headers surfaces as an opaque browser failure. The agent refuses to start with no token unless `auth.allow_anonymous = true`.
+**Auth** (`auth/`). Sign-in is OpenID Connect through Authentik; the shared token is gone (an old `auth.token`/`COSMOS_AGENT_TOKEN` config fails to start with an explanation). The app gets an access token (a JWT, ~10 min) and sends it as a bearer token, or as `?token=` for `EventSource`/`WebSocket`, which cannot set headers; the trace layer records `uri.path()` only so query tokens never reach the logs. `auth/oidc.rs` verifies offline against the provider's JWKS (asymmetric algorithms only, `iss`, `aud` = client ID, `exp` with 60 s leeway), caching keys by `kid` and refetching an unknown `kid` at most once a minute. An unreachable provider is **503, not 401**, so the app retries instead of re-prompting. `groups` ∩ `admin_groups` makes an admin; everyone else who can sign in is a viewer. Streams are checked when they open, not cut at expiry. `/v1/info` publishes the non-secret `auth` block (`issuer`, `client_id`, `scopes`) so the app can start sign-in before it has a token. **CORS must stay the outermost layer** — axum applies layers bottom-up, and an unauthenticated `OPTIONS` preflight that 401s without CORS headers surfaces as an opaque browser failure. The agent refuses to start with no provider unless `auth.allow_anonymous = true`.
+
+**Sign-in, app side.** `stores/auth.ts` keeps one session per issuer (every node trusting it shares it), access tokens in memory, refreshed a minute before expiry with one refresh in flight per issuer. The browser build runs PKCE itself (`lib/oidc.ts`, `/auth/callback`) and keeps the refresh token in `localStorage`; Authentik only sends CORS headers to *strict* redirect URIs, which is why the web one is strict. The desktop app does the whole flow in Rust (`src-tauri/src/oidc.rs`, loopback redirect on a random port) so the refresh token goes from the provider to the keychain and never reaches the webview. `NodeConnection` takes a token provider, re-reads `/v1/info` with the token to learn the principal, refreshes once on a 401, and otherwise sits in `unauthorized` until a session for that issuer appears, when the node store retries it.
 
 **Errors** (`error.rs`). Every handler returns `Result<T, AgentError>` rendering `ApiError { code, message, detail }`. The `not_enabled` (501, hide the feature) vs `unavailable`/`docker_unavailable` (503, retry) split is load-bearing for the UI. `/v1/containers` returns 503 when Docker is down — never an empty list.
 

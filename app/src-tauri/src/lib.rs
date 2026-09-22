@@ -1,8 +1,10 @@
 //! The Tauri shell. Agent traffic goes through the webview; the native side
-//! owns the window, the macOS menu and token storage.
+//! owns the window, the macOS menu and sign-in (which keeps the refresh
+//! token in the keychain).
 
 #[cfg(target_os = "macos")]
 mod menu;
+mod oidc;
 mod secrets;
 mod window;
 
@@ -14,9 +16,9 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(
             tauri::generate_handler![
-                secrets::get_node_token,
-                secrets::set_node_token,
-                secrets::delete_node_token
+                oidc::oidc_sign_in,
+                oidc::oidc_access_token,
+                oidc::oidc_sign_out
             ]
         );
 

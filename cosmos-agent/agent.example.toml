@@ -1,8 +1,9 @@
 # cosmos-agent configuration.
 #
 # Every value below is the built-in default unless noted. Any of it can be
-# overridden by environment variables: COSMOS_AGENT_BIND, COSMOS_AGENT_TOKEN,
-# COSMOS_AGENT_TOKEN_FILE, COSMOS_AGENT_ALLOW_ACTIONS, COSMOS_AGENT_DOCKER_SOCKET,
+# overridden by environment variables: COSMOS_AGENT_BIND, COSMOS_AGENT_OIDC_ISSUER,
+# COSMOS_AGENT_OIDC_CLIENT_ID, COSMOS_AGENT_ALLOW_ANONYMOUS,
+# COSMOS_AGENT_ALLOW_ACTIONS, COSMOS_AGENT_DOCKER_SOCKET,
 # COSMOS_AGENT_HISTORY, COSMOS_AGENT_HISTORY_PATH, COSMOS_NODE_NAME, RUST_LOG.
 
 # Defaults to the system hostname.
@@ -19,18 +20,25 @@ bind = "0.0.0.0:7700"
 shutdown_grace_secs = 10
 
 [auth]
-# Prefer token_file over token: it keeps the secret out of this file.
-#   openssl rand -hex 32 > ./cosmos_token && chmod 600 ./cosmos_token
-token_file = "/run/secrets/cosmos_token"
-
 # Browser EventSource and WebSocket cannot set request headers, so the
 # streaming routes accept ?token= as a fallback. Turning this off breaks live
 # metrics and log following in the web build (the Tauri build is unaffected).
 allow_query_token = true
 
-# The agent REFUSES TO START without a token unless this is explicitly true.
-# Something that can stop containers must not be open by default.
+# The agent REFUSES TO START without [auth.oidc] unless this is explicitly
+# true. Something that can stop containers must not be open by default.
 allow_anonymous = false
+
+[auth.oidc]
+# Sign-in through your identity provider (Authentik). The app signs in there
+# and sends the agent short-lived access tokens, which it checks against the
+# provider's published keys. Nothing here is secret.
+issuer = "https://auth.example.com/application/o/cosmos/"
+client_id = "cosmos"
+# Members of these groups may act (with allow_actions); others can only look.
+admin_groups = ["homelab-admins"]
+# Set when the agent must reach the provider at a different address:
+# discovery_url = "https://auth.internal/application/o/cosmos/.well-known/openid-configuration"
 
 [cors]
 # tauri://localhost, http(s)://tauri.localhost and localhost:1420 are always

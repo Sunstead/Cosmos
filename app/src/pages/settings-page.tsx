@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Info, KeyRound, Monitor, Moon, PencilLine, RefreshCw, Sun, Trash } from 'lucide-react';
+import { Info, Monitor, Moon, PencilLine, RefreshCw, Sun, Trash } from 'lucide-react';
 import { useNodeStore, nodeDisplayName } from '@/stores/nodes';
 import { useNodeMeta } from '@/api/queries';
 import { useTheme, Theme } from '@/components/theme-provider';
@@ -9,7 +9,8 @@ import { SegmentedControl } from '@/components/segmented-control';
 import { NodeStatusBadge } from '@/components/node-status-badge';
 import { NodeAvatar } from '@/components/node-planet';
 import { ConfirmDialog } from '@/components/confirm-dialog';
-import { NodeCredentialsDialog } from '@/components/node-credentials-dialog';
+import { AccountList, SignInButton } from '@/components/sign-in';
+import { tokenStorageNote, useNodeSignIn } from '@/lib/sign-in';
 import { RenameNodeDialog } from '@/components/rename-node-dialog';
 import { AddNodeButton, EmptyState } from '@/components/empty-state';
 import { Hint, ShortcutKeys } from '@/components/hint';
@@ -18,7 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { PAGES } from '@/lib/navigation';
 import { ShortcutId } from '@/lib/shortcuts';
-import { getPlatform, isDesktop } from '@/lib/platform';
+import { getPlatform } from '@/lib/platform';
 import { ServerOff } from 'lucide-react';
 
 const CAPS = [
@@ -34,7 +35,8 @@ function NodeRow({ nodeId }: { nodeId: string }) {
   const removeNode = useNodeStore((s) => s.removeNode);
   const reconnect = useNodeStore((s) => s.reconnect);
   const meta = useNodeMeta(nodeId);
-  const [dialog, setDialog] = useState<'token' | 'rename' | null>(null);
+  const needsSignIn = useNodeSignIn(nodeId);
+  const [dialog, setDialog] = useState<'rename' | null>(null);
 
   if (!node) return null;
   const name = nodeDisplayName(node);
@@ -69,11 +71,7 @@ function NodeRow({ nodeId }: { nodeId: string }) {
             <PencilLine />
           </Button>
         </Hint>
-        <Hint label='Token'>
-          <Button variant='ghost' size='icon' aria-label='Token' onClick={() => setDialog('token')}>
-            <KeyRound />
-          </Button>
-        </Hint>
+        {needsSignIn && <SignInButton auth={needsSignIn} />}
         <Hint label='Reconnect'>
           <Button variant='ghost' size='icon' aria-label='Reconnect' onClick={() => reconnect(nodeId)}>
             <RefreshCw />
@@ -86,17 +84,12 @@ function NodeRow({ nodeId }: { nodeId: string }) {
             </Button>
           }
           title={`Remove ${name}?`}
-          description='Cosmos forgets this node and its token. The node itself is unchanged.'
+          description='Cosmos forgets this node. The node itself is unchanged.'
           confirmLabel='Remove'
           onConfirm={() => removeNode(nodeId)}
         />
       </div>
 
-      <NodeCredentialsDialog
-        nodeId={nodeId}
-        open={dialog === 'token'}
-        onOpenChange={(o) => setDialog(o ? 'token' : null)}
-      />
       <RenameNodeDialog
         nodeId={nodeId}
         open={dialog === 'rename'}
@@ -106,19 +99,15 @@ function NodeRow({ nodeId }: { nodeId: string }) {
   );
 }
 
-function TokenStorageInfo() {
+function SignInStorageInfo() {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant='ghost' size='icon-xs' aria-label='About token storage'>
+        <Button variant='ghost' size='icon-xs' aria-label='About sign-in storage'>
           <Info />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className='w-72 text-sm'>
-        {isDesktop()
-          ? 'Tokens are stored in your system keychain.'
-          : 'In the browser, tokens are kept in local storage. Use the desktop app for stronger protection.'}
-      </PopoverContent>
+      <PopoverContent className='w-72 text-sm'>{tokenStorageNote()}</PopoverContent>
     </Popover>
   );
 }
@@ -146,12 +135,7 @@ export function SettingsPage() {
       <PageHeader title='Settings' />
 
       <Section
-        title={
-          <>
-            Nodes
-            <TokenStorageInfo />
-          </>
-        }
+        title='Nodes'
         count={nodes.length || undefined}
         actions={<AddNodeButton variant='outline' />}
         contentClassName='divide-y'
@@ -161,6 +145,18 @@ export function SettingsPage() {
         ) : (
           nodes.map((n) => <NodeRow key={n.id} nodeId={n.id} />)
         )}
+      </Section>
+
+      <Section
+        title={
+          <>
+            Account
+            <SignInStorageInfo />
+          </>
+        }
+        contentClassName='divide-y'
+      >
+        <AccountList />
       </Section>
 
       <div className='grid gap-4 @4xl:grid-cols-2'>

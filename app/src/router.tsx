@@ -13,6 +13,7 @@ import { useNodeStore } from './stores/nodes';
 import { useUiStore } from './stores/ui';
 import { getDefaultNodes } from './config';
 import { isDesktop } from './lib/platform';
+import { signIn } from './stores/auth';
 
 export interface LogsSearch {
   node?: string;
@@ -20,18 +21,24 @@ export interface LogsSearch {
 }
 
 const rootRoute = createRootRoute({
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     const store = useNodeStore.getState();
-    if (store.nodes.length > 0) return;
+    // The callback finishes its own sign-in; seeding here would start another.
+    if (store.nodes.length > 0 || location.pathname === '/auth/callback') return;
 
     const defaults = await getDefaultNodes();
-    const results = await Promise.all(defaults.map((n) => store.addNode(n.url, n.token)));
-    // A configured node that wants a token: ask for it with the address filled in.
-    const locked = defaults.find((_, i) => {
-      const r = results[i];
-      return !r.ok && r.error === 'This agent requires a token.';
-    });
-    if (locked) useUiStore.getState().setAddNodeOpen(true, locked.url);
+    const results = await Promise.all(defaults.map((n) => store.addNode(n.url)));
+    // A configured node that wants a sign-in. When it's the agent serving
+    // this page, there's nothing to show without it, so go straight there.
+    const i = results.findIndex((r) => !r.ok && r.signIn);
+    if (i < 0) return;
+    const r = results[i];
+    if (r.ok || !r.signIn) return;
+    if (new URL(defaults[i].url).origin === window.location.origin) {
+      await signIn(r.signIn, { returnTo: location.href, addNodeUrl: defaults[i].url });
+    } else {
+      useUiStore.getState().setAddNodeOpen(true, defaults[i].url);
+    }
   },
   component: () => (
     <AppLayout>
@@ -116,6 +123,12 @@ const backupsRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages/backups-page'), 'BackupsPage'),
 });
 
+const authCallbackRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/auth/callback',
+  component: lazyRouteComponent(() => import('./pages/auth-callback-page'), 'AuthCallbackPage'),
+});
+
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings',
@@ -135,6 +148,7 @@ const routeTree = rootRoute.addChildren([
   logsRoute,
   backupsRoute,
   settingsRoute,
+  authCallbackRoute,
 ]);
 
 // Hash history under Tauri: the custom protocol doesn't serve arbitrary paths.
