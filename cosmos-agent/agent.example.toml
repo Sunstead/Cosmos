@@ -101,3 +101,11 @@ expected_interval_secs = 86400
 
 # A display name. Never the real repository path.
 repo_label = "jupiter/restic"
+
+[tailscale]
+# Lists tailnet devices on the Network page and in the constellation. Reads
+# the host's tailscaled socket; tailscaled gives a non-root caller read-only
+# access, so this can't change anything in Tailscale. No API key involved.
+enabled = false
+socket = "/host/tailscale/tailscaled.sock"
+interval_ms = 10000

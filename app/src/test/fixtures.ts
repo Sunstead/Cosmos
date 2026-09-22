@@ -1,6 +1,8 @@
 import { AgentInfo } from '@/generated/AgentInfo';
 import { ContainerInfo } from '@/generated/ContainerInfo';
 import { HostInfo } from '@/generated/HostInfo';
+import { TailnetDevice } from '@/generated/TailnetDevice';
+import { TailnetStatus } from '@/generated/TailnetStatus';
 
 export function hostInfo(partial: Partial<HostInfo> = {}): HostInfo {
   return {
@@ -49,6 +51,7 @@ export function agentInfo(partial: Partial<AgentInfo> = {}): AgentInfo {
       volume_actions: true,
       metrics_history: true,
       backups: true,
+      tailnet: true,
     },
     ...partial,
   };
@@ -72,6 +75,39 @@ export function containerInfo(partial: Partial<ContainerInfo> = {}): ContainerIn
     cpu_pct: 0,
     mem_used_bytes: 0,
     mem_limit_bytes: 0,
+    ...partial,
+  };
+}
+
+export function tailnetDevice(partial: Partial<TailnetDevice> = {}): TailnetDevice {
+  return {
+    id: 'n1',
+    name: 'desktop',
+    dns_name: 'desktop.tail1234.ts.net',
+    os: 'windows',
+    user: 'pwb@example.com',
+    ips: ['100.64.0.2', 'fd7a:115c:a1e0::2'],
+    tags: [],
+    is_self: false,
+    online: true,
+    active: false,
+    last_seen: null,
+    key_expiry: null,
+    key_expired: false,
+    connection: { kind: 'idle' },
+    exit_node: false,
+    rx_bytes: 0,
+    tx_bytes: 0,
+    ...partial,
+  };
+}
+
+export function tailnetStatus(partial: Partial<TailnetStatus> = {}): TailnetStatus {
+  return {
+    tailnet: 'example.github',
+    backend_state: 'Running',
+    devices: [tailnetDevice()],
+    sampled_at: 1_700_000_000,
     ...partial,
   };
 }

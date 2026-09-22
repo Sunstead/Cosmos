@@ -64,6 +64,11 @@ services:
       - ${BACKUP_PATH:-/srv/backups}:/host/backups:ro
       - /var/lib/systemd/timers:/host/systemd-timers:ro
 
+      # Tailnet devices ([tailscale] in the config). The tailscale container
+      # has to put its socket here: TS_SOCKET=/var/run/tailscale/tailscaled.sock
+      # plus the same bind mount. tailscaled grants non-root callers read only.
+      - /var/run/tailscale:/host/tailscale
+
       - cosmos_agent_data:/var/lib/cosmos-agent   # SQLite; the only writable path
 
     labels:

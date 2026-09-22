@@ -68,3 +68,11 @@ status_file = "/host/backups/restic-status.json"
 timer_stamp = "/host/systemd-timers/stamp-jupiter-backup.timer"
 expected_interval_secs = 86400   # nightly at 03:00
 repo_label = "jupiter/restic"
+
+[tailscale]
+# Lists tailnet devices on the Network page and in the constellation. Reads
+# the host's tailscaled socket; tailscaled gives a non-root caller read-only
+# access, so this can't change anything in Tailscale. No API key involved.
+enabled = true
+socket = "/host/tailscale/tailscaled.sock"
+interval_ms = 10000
