@@ -198,6 +198,14 @@ custom controls in `TitleBar`. The Rust side emits `window-state` (fullscreen,
 maximized). Shortcuts live in `lib/shortcuts.ts` and feed the palette, key
 hints and menu.
 
+**Cosmos mark.** `app/scripts/build-mark.mjs` (`npm run build:mark`) turns the
+two Inkscape sources (`icon_simple.svg` light ink, `icon_simple_dark.svg` dark
+ink) into `public/favicon.svg`, which carries both palettes and switches on
+`prefers-color-scheme` (browser chrome follows the OS, not the app theme), and
+`src/assets/icon-mark.svg`, whose stops read `--mark-0`/`--mark-1` so the
+inline copy follows the app theme. The inline one deliberately has no `<style>`
+element: an inline SVG's stylesheet applies to the whole document.
+
 **macOS icon.** `app/src/assets/app.icon` (Icon Composer) is the source.
 `app/scripts/build-mac-icon.sh` compiles it to `src-tauri/icons/Assets.car`
 (Liquid Glass, shipped via `bundle.macOS.files` and `CFBundleIconName` in
