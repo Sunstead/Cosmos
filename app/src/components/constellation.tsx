@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate } from '@tanstack/react-router';
+import { useTailnet } from '@/api/queries';
 import { getConnection, nodeDisplayName, useNodeStore } from '@/stores/nodes';
 import { useContainersStore } from '@/stores/containers';
 import { userFacingServices } from '@/lib/services';
@@ -35,6 +36,20 @@ export interface Body {
   unsubscribe: () => void;
 }
 
+/**
+ * A tailnet device that isn't a Cosmos node: a phone, a laptop, the desktop.
+ * Drifts on a slow outer belt, small and unlabelled until hovered.
+ */
+export interface Drifter {
+  id: string;
+  name: string;
+  online: boolean;
+  angle: number;
+  speed: number;
+  x: number;
+  y: number;
+}
+
 /** Radius from total memory, compressed so large hosts don't dwarf small ones. */
 export function bodyRadius(memBytes: number): number {
   const gb = memBytes / 1024 ** 3;
@@ -56,7 +71,9 @@ export function Constellation({ className }: { className?: string }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const bodies = useRef(new Map<string, Body>());
+  const drifters = useRef(new Map<string, Drifter>());
   const hover = useRef<string | null>(null);
+  const { devices } = useTailnet();
   const navigate = useNavigate();
   const navigateRef = useRef(navigate);
   useEffect(() => {
@@ -140,6 +157,32 @@ export function Constellation({ className }: { className?: string }) {
     };
   }, [ids]);
 
+  // Reconcile the belt with the tailnet. Positions survive polls.
+  useEffect(() => {
+    const current = drifters.current;
+    const wanted = devices.filter((d) => d.nodeId === null);
+    const ids = new Set(wanted.map((d) => d.id));
+    for (const id of current.keys()) if (!ids.has(id)) current.delete(id);
+    wanted.forEach((d, i) => {
+      const existing = current.get(d.id);
+      if (existing) {
+        existing.name = d.name;
+        existing.online = d.online;
+        return;
+      }
+      current.set(d.id, {
+        id: d.id,
+        name: d.name,
+        online: d.online,
+        // Golden-angle spacing, so late arrivals don't bunch up.
+        angle: i * 2.39996 + 1.1,
+        speed: 0.000012 + (i % 3) * 0.000004,
+        x: 0,
+        y: 0,
+      });
+    });
+  }, [devices]);
+
   // Render loop: set up once.
   useEffect(() => {
     const wrap = wrapRef.current;
@@ -205,6 +248,62 @@ export function Constellation({ className }: { className?: string }) {
         });
       }
 
+      // The device belt sits just outside the outermost orbit.
+      const beltR = span * (list.length > 1 ? 1.02 : 0.62);
+      const drift = [...drifters.current.values()];
+      for (const d of drift) {
+        d.angle += d.speed * dt;
+        d.x = cx + Math.cos(d.angle) * beltR;
+        d.y = cy + Math.sin(d.angle) * beltR * TILT;
+      }
+      if (drift.length > 0) {
+        ctx.save();
+        ctx.setLineDash([2, 6]);
+        ctx.strokeStyle = tokens.orbit;
+        ctx.globalAlpha = 0.7;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, beltR, beltR * TILT, 0, 0, TAU);
+        ctx.stroke();
+        ctx.restore();
+      }
+      const drawDrifters = (front: boolean) => {
+        for (const d of drift) {
+          if (front !== d.y >= cy) continue;
+          const hovered = hover.current === `device:${d.id}`;
+          if (d.online) {
+            const glow = ctx.createRadialGradient(d.x, d.y, 0, d.x, d.y, 9);
+            glow.addColorStop(0, tokens.star);
+            glow.addColorStop(1, 'transparent');
+            ctx.globalAlpha = 0.35;
+            ctx.fillStyle = glow;
+            ctx.beginPath();
+            ctx.arc(d.x, d.y, 9, 0, TAU);
+            ctx.fill();
+          }
+          // A ringed point, so a device doesn't read as one more star.
+          const r = hovered ? 4.5 : 3.5;
+          ctx.globalAlpha = d.online ? 0.9 : 0.35;
+          ctx.strokeStyle = d.online ? tokens.star : tokens.muted;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(d.x, d.y, r, 0, TAU);
+          ctx.stroke();
+          ctx.fillStyle = d.online ? tokens.star : tokens.muted;
+          ctx.beginPath();
+          ctx.arc(d.x, d.y, 1.5, 0, TAU);
+          ctx.fill();
+          if (hovered) {
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = d.online ? tokens.foreground : tokens.muted;
+            ctx.fillText(d.online ? d.name : `${d.name} (offline)`, d.x, d.y - 10);
+          }
+        }
+        ctx.globalAlpha = 1;
+      };
+      ctx.font = '500 11px "Inter Variable", system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      drawDrifters(false);
+
       // Draw back to front so nearer planets overlap farther ones.
       const placed = list.map((body, i) => {
         body.angle += body.speed * dt;
@@ -214,9 +313,6 @@ export function Constellation({ className }: { className?: string }) {
         return body;
       });
       placed.sort((a, b) => a.y - b.y);
-
-      ctx.font = '500 11px "Inter Variable", system-ui, sans-serif';
-      ctx.textAlign = 'center';
 
       for (const body of placed) {
         const r = body.radius;
@@ -272,6 +368,8 @@ export function Constellation({ className }: { className?: string }) {
         }
         ctx.globalAlpha = 1;
       }
+
+      drawDrifters(true);
     };
 
     const loop = (now: number) => {
@@ -313,10 +411,20 @@ export function Constellation({ className }: { className?: string }) {
       }
       return null;
     };
+    const hitDrifter = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      for (const d of drifters.current.values()) {
+        if ((mx - d.x) ** 2 + (my - d.y) ** 2 <= 10 ** 2) return d;
+      }
+      return null;
+    };
     const onMove = (e: MouseEvent) => {
       const body = hit(e);
-      hover.current = body?.nodeId ?? null;
-      canvas.style.cursor = body ? 'pointer' : 'default';
+      const drifter = body ? null : hitDrifter(e);
+      hover.current = body?.nodeId ?? (drifter ? `device:${drifter.id}` : null);
+      canvas.style.cursor = body || drifter ? 'pointer' : 'default';
     };
     const onLeave = () => {
       hover.current = null;
@@ -324,6 +432,7 @@ export function Constellation({ className }: { className?: string }) {
     const onClick = (e: MouseEvent) => {
       const body = hit(e);
       if (body) void navigateRef.current({ to: '/nodes/$nodeId', params: { nodeId: body.nodeId } });
+      else if (hitDrifter(e)) void navigateRef.current({ to: '/network' });
     };
     canvas.addEventListener('mousemove', onMove);
     canvas.addEventListener('mouseleave', onLeave);

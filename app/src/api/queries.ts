@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { HostInfo } from '@/generated/HostInfo';
 import { MetricStep } from '@/generated/MetricStep';
 import { getConnection, useNodeStore } from '@/stores/nodes';
+import { Device, mergeTailnets } from '@/lib/tailnet';
 import { NodeMeta } from './connection';
 
 /**
@@ -115,6 +116,56 @@ export function useBackups(nodeId: string | null) {
     enabled: !!nodeId && supported && meta?.status === 'online',
     refetchInterval: 60_000,
     retry: 1,
+  });
+}
+
+const TAILNET_POLL_MS = 15_000;
+
+export interface TailnetView {
+  devices: Device[];
+  /** Nodes whose agents have `[tailscale]` enabled. */
+  reporting: string[];
+  loading: boolean;
+  /** Set when every reporting agent failed, e.g. tailscaled is unreachable. */
+  error: string | null;
+}
+
+/**
+ * The tailnet, merged from every agent that can see it. Polled rather than
+ * streamed: it changes slowly, and each node already holds two of the ~6
+ * connections a browser allows per origin.
+ */
+export function useTailnet(): TailnetView {
+  // A joined string, so the query list only changes when the set does.
+  const reportingKey = useNodeStore((s) =>
+    s.nodes
+      .filter((n) => s.meta[n.id]?.status === 'online' && s.meta[n.id]?.capabilities.tailnet)
+      .map((n) => n.id)
+      .join('|'),
+  );
+  const reporting = reportingKey ? reportingKey.split('|') : [];
+
+  return useQueries({
+    queries: reporting.map((nodeId) => ({
+      queryKey: ['tailnet', nodeId],
+      queryFn: () => {
+        const conn = getConnection(nodeId);
+        if (!conn) throw new Error('node is not connected');
+        return conn.client.getTailnet();
+      },
+      refetchInterval: TAILNET_POLL_MS,
+      retry: 1,
+    })),
+    combine: (results) => {
+      const reports = results.flatMap((r, i) => (r.data ? [{ nodeId: reporting[i], status: r.data }] : []));
+      const failed = results.find((r) => r.error);
+      return {
+        devices: mergeTailnets(reports),
+        reporting,
+        loading: results.some((r) => r.isLoading),
+        error: reports.length === 0 && failed?.error ? failed.error.message : null,
+      };
+    },
   });
 }
 

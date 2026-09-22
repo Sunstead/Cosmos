@@ -98,6 +98,21 @@ test.describe('with a node', () => {
     }
   });
 
+  test('network page lists the tailnet', async ({ page }) => {
+    await addNodeOnline(page);
+    await page.goto('/network');
+    const section = page.locator('[data-slot=card]', { hasText: 'Tailnet' });
+    // The agent reads the fake tailscaled from global-setup.
+    await expect(section.getByRole('row', { name: /desktop/ })).toContainText('Direct', { timeout: 15_000 });
+    await expect(section.getByRole('row', { name: /pixel/ })).toContainText('Relay sea');
+    await expect(section.getByRole('row', { name: /air/ })).toContainText('Seen');
+    // The agent's own device is this node.
+    await expect(section.getByRole('row', { name: /e2e-node/ }).getByRole('link', { name: 'Node' })).toBeVisible();
+
+    await page.getByPlaceholder('Search devices and ports').fill('pixel');
+    await expect(section.getByRole('row')).toHaveCount(2);
+  });
+
   test('constellation canvas is stable over time', async ({ page }) => {
     await addNodeOnline(page);
     await page.goto('/overview');
