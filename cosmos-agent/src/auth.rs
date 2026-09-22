@@ -1,15 +1,54 @@
-//! Bearer-token auth, the write gate, and CORS.
+//! Bearer-token auth, who the caller is, the write gate, and CORS.
 
 use crate::{ error::AgentError, state::AppState };
 use axum::{
     extract::{ Query, Request, State },
-    http::{ header, HeaderValue, Method },
+    http::{ header, HeaderMap, HeaderValue, Method, Uri },
     middleware::Next,
     response::Response,
 };
 use serde::Deserialize;
 use std::{ sync::Arc, time::Duration };
 use tower_http::cors::{ AllowOrigin, CorsLayer };
+
+/// What a caller may do once authenticated. The node-level `allow_actions`
+/// still has to be on for an admin to change anything.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Role {
+    Admin,
+    // The shared token can only ever be an admin. Viewers arrive with OIDC,
+    // which maps groups to roles.
+    #[allow(dead_code)]
+    Viewer,
+}
+
+/// The authenticated caller, inserted into request extensions by
+/// `require_auth`. Handlers that act on something take it as an
+/// `Extension<Principal>` so the log says who did it.
+#[derive(Debug, Clone)]
+pub struct Principal {
+    /// Stable identifier, for logs.
+    pub subject: String,
+    /// Human-readable, for the UI.
+    pub name: String,
+    pub role: Role,
+}
+
+impl Principal {
+    pub fn is_admin(&self) -> bool {
+        self.role == Role::Admin
+    }
+
+    /// The shared token is all-or-nothing, so its holder is an admin.
+    fn token_holder() -> Self {
+        Self { subject: "token".into(), name: "Token".into(), role: Role::Admin }
+    }
+
+    /// `allow_anonymous` means "anyone who can reach the port", deliberately.
+    fn anonymous() -> Self {
+        Self { subject: "anonymous".into(), name: "Anonymous".into(), role: Role::Admin }
+    }
+}
 
 #[derive(Clone)]
 pub struct Auth(Arc<AuthInner>);
@@ -33,12 +72,16 @@ impl Auth {
         self.0.token.is_some()
     }
 
-    pub fn verify(&self, presented: Option<&str>) -> bool {
+    /// `None` means "not authenticated". With no token configured every
+    /// caller is let in, which is the correct reading of an agent that was
+    /// explicitly opened up; the agent refuses to start that way otherwise.
+    pub fn authenticate(&self, presented: Option<&str>) -> Option<Principal> {
         match &self.0.token {
-            // Explicitly anonymous; the agent refuses to start in this mode
-            // unless it was opted into.
-            None => true,
-            Some(expected) => presented.is_some_and(|p| ct_eq(p.as_bytes(), expected)),
+            None => Some(Principal::anonymous()),
+            Some(expected) =>
+                presented
+                    .filter(|p| ct_eq(p.as_bytes(), expected))
+                    .map(|_| Principal::token_holder()),
         }
     }
 }
@@ -68,9 +111,8 @@ struct TokenQuery {
 /// do leak into access and proxy logs, so the trace layer is configured to
 /// record `uri.path()` only, and the agent never issues redirects (which would
 /// leak via `Referer`).
-fn presented_token(req: &Request, allow_query: bool) -> Option<String> {
-    let header_token = req
-        .headers()
+fn presented_token(headers: &HeaderMap, uri: &Uri, allow_query: bool) -> Option<String> {
+    let header_token = headers
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.strip_prefix("Bearer "))
@@ -79,47 +121,27 @@ fn presented_token(req: &Request, allow_query: bool) -> Option<String> {
     if header_token.is_some() || !allow_query {
         return header_token;
     }
-    Query::<TokenQuery>::try_from_uri(req.uri()).ok()?.0.token
+    Query::<TokenQuery>::try_from_uri(uri).ok()?.0.token
 }
 
 pub async fn require_auth(
     State(state): State<AppState>,
-    req: Request,
+    mut req: Request,
     next: Next
 ) -> Result<Response, AgentError> {
-    let presented = presented_token(&req, state.auth.0.allow_query);
-    if state.auth.verify(presented.as_deref()) {
-        Ok(next.run(req).await)
-    } else {
-        Err(AgentError::Unauthorized)
-    }
+    let principal = principal_from_parts(&state, req.headers(), req.uri()).ok_or(
+        AgentError::Unauthorized
+    )?;
+    req.extensions_mut().insert(principal);
+    Ok(next.run(req).await)
 }
 
-/// Checks a token without gating the request, for `/v1/info` — which answers
-/// unauthenticated but reveals a little more once it knows who's asking.
-pub fn verify_parts(
-    state: &AppState,
-    headers: &axum::http::HeaderMap,
-    uri: &axum::http::Uri
-) -> bool {
-    let from_header = headers
-        .get(header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "))
-        .map(str::to_owned);
-
-    let presented = match from_header {
-        Some(t) => Some(t),
-        None if state.auth.0.allow_query =>
-            Query::<TokenQuery>::try_from_uri(uri)
-                .ok()
-                .and_then(|q| q.0.token),
-        None => None,
-    };
-
-    // With no token configured every caller is "authenticated", which is the
-    // correct reading of an agent that was explicitly opened up.
-    if state.auth.required() { state.auth.verify(presented.as_deref()) } else { true }
+/// Identifies the caller without gating the request, for `/v1/info`, which
+/// answers unauthenticated but reveals a little more once it knows who's
+/// asking.
+pub fn principal_from_parts(state: &AppState, headers: &HeaderMap, uri: &Uri) -> Option<Principal> {
+    let presented = presented_token(headers, uri, state.auth.0.allow_query);
+    state.auth.authenticate(presented.as_deref())
 }
 
 /// Separate from `require_auth` and applied only to the mutating sub-router,
@@ -130,10 +152,37 @@ pub async fn require_write(
     req: Request,
     next: Next
 ) -> Result<Response, AgentError> {
-    if !state.cfg.docker.allow_actions {
+    let principal = req.extensions().get::<Principal>().cloned();
+    write_allowed(state.cfg.allow_actions, principal.as_ref())?;
+
+    // One audit line per change, whoever made it. Path only, as in the trace
+    // layer: the query string may carry a token.
+    let (method, path) = (req.method().clone(), req.uri().path().to_owned());
+    let res = next.run(req).await;
+    if let Some(p) = principal {
+        tracing::info!(
+            by = %p.subject,
+            name = %p.name,
+            %method,
+            %path,
+            status = res.status().as_u16(),
+            "action"
+        );
+    }
+    Ok(res)
+}
+
+/// Both keys have to turn: the node allows actions at all, and the caller
+/// is an admin. A missing principal means a layer-ordering mistake, and
+/// fails closed.
+fn write_allowed(allow_actions: bool, principal: Option<&Principal>) -> Result<(), AgentError> {
+    if !allow_actions {
         return Err(AgentError::ReadOnly);
     }
-    Ok(next.run(req).await)
+    match principal {
+        Some(p) if p.is_admin() => Ok(()),
+        _ => Err(AgentError::Forbidden("this needs an admin".into())),
+    }
 }
 
 /// The Tauri webview's origin differs per platform, and the Vite dev server
@@ -157,7 +206,7 @@ pub fn cors(cfg: &crate::config::Config) -> CorsLayer {
 
     CorsLayer::new()
         .allow_origin(AllowOrigin::list(origins))
-        .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::OPTIONS])
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
         .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE])
         // Must stay false: we authenticate with a bearer token, not cookies,
         // and `true` is incompatible with an origin list in some browsers.
@@ -172,20 +221,35 @@ mod tests {
     #[test]
     fn rejects_wrong_absent_and_truncated_tokens() {
         let auth = Auth::new(Some("s3cret".into()), true);
-        assert!(auth.verify(Some("s3cret")));
-        assert!(!auth.verify(Some("wrong")));
-        assert!(!auth.verify(None));
+        assert!(auth.authenticate(Some("s3cret")).is_some_and(|p| p.is_admin()));
+        assert!(auth.authenticate(Some("wrong")).is_none());
+        assert!(auth.authenticate(None).is_none());
         // A prefix must not pass — this is what the length check guards.
-        assert!(!auth.verify(Some("s3cre")));
-        assert!(!auth.verify(Some("s3cretx")));
+        assert!(auth.authenticate(Some("s3cre")).is_none());
+        assert!(auth.authenticate(Some("s3cretx")).is_none());
     }
 
     #[test]
     fn anonymous_mode_accepts_anything() {
         let auth = Auth::new(None, false);
         assert!(!auth.required());
-        assert!(auth.verify(None));
-        assert!(auth.verify(Some("whatever")));
+        assert!(auth.authenticate(None).is_some());
+        assert!(auth.authenticate(Some("whatever")).is_some());
+    }
+
+    fn principal(role: Role) -> Principal {
+        Principal { subject: "s".into(), name: "n".into(), role }
+    }
+
+    #[test]
+    fn writes_need_both_the_node_switch_and_an_admin() {
+        let admin = principal(Role::Admin);
+        let viewer = principal(Role::Viewer);
+        assert!(write_allowed(true, Some(&admin)).is_ok());
+        assert!(matches!(write_allowed(false, Some(&admin)), Err(AgentError::ReadOnly)));
+        assert!(matches!(write_allowed(true, Some(&viewer)), Err(AgentError::Forbidden(_))));
+        // No principal at all means the auth layer didn't run: fail closed.
+        assert!(matches!(write_allowed(true, None), Err(AgentError::Forbidden(_))));
     }
 
     #[test]
@@ -197,32 +261,34 @@ mod tests {
         assert!(!ct_eq(b"abc", b"abd"));
     }
 
-    fn request_with(header: Option<&str>, uri: &str) -> Request {
-        let mut builder = Request::builder().uri(uri);
+    fn presented_for(header: Option<&str>, uri: &str, allow_query: bool) -> Option<String> {
+        let mut headers = HeaderMap::new();
         if let Some(h) = header {
-            builder = builder.header(header::AUTHORIZATION, h);
+            headers.insert(header::AUTHORIZATION, h.parse().unwrap());
         }
-        builder.body(axum::body::Body::empty()).unwrap()
+        presented_token(&headers, &uri.parse().unwrap(), allow_query)
     }
 
     #[test]
     fn header_token_is_preferred_over_query() {
-        let req = request_with(Some("Bearer from-header"), "/v1/host?token=from-query");
-        assert_eq!(presented_token(&req, true).as_deref(), Some("from-header"));
+        assert_eq!(
+            presented_for(Some("Bearer from-header"), "/v1/host?token=from-query", true).as_deref(),
+            Some("from-header")
+        );
     }
 
     #[test]
     fn query_token_is_read_only_when_enabled() {
-        let req = request_with(None, "/v1/host/stream?token=abc");
-        assert_eq!(presented_token(&req, true).as_deref(), Some("abc"));
-
-        let req = request_with(None, "/v1/host/stream?token=abc");
-        assert_eq!(presented_token(&req, false), None, "disabled means header-only");
+        assert_eq!(presented_for(None, "/v1/host/stream?token=abc", true).as_deref(), Some("abc"));
+        assert_eq!(
+            presented_for(None, "/v1/host/stream?token=abc", false),
+            None,
+            "disabled means header-only"
+        );
     }
 
     #[test]
     fn a_non_bearer_authorization_header_is_ignored() {
-        let req = request_with(Some("Basic dXNlcjpwYXNz"), "/v1/host");
-        assert_eq!(presented_token(&req, false), None);
+        assert_eq!(presented_for(Some("Basic dXNlcjpwYXNz"), "/v1/host", false), None);
     }
 }

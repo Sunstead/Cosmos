@@ -64,7 +64,7 @@ export const SETUP = {
   actions: {
     summary: 'Allow container and volume actions on the agent.',
     file: 'agent.toml',
-    snippet: '[docker]\nallow_actions = true',
+    snippet: '# above the first [section]\nallow_actions = true',
   },
   services: {
     summary: 'Group containers into a service with a Docker label.',
