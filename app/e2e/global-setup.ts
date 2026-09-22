@@ -60,7 +60,8 @@ export default async function globalSetup() {
   writeFileSync(
     config,
     `[cors]\nextra_origins = ["http://localhost:${WEB_PORT}"]\n` +
-      `[tailscale]\nenabled = true\nsocket = "${socket}"\ninterval_ms = 2000\n`,
+      `[tailscale]\nenabled = true\nsocket = "${socket}"\ninterval_ms = 2000\n` +
+      `[wol]\nenabled = true\n[state]\npath = "${path.join(dir, 'state.db')}"\n`,
   );
 
   const agent = spawn(path.join(root, 'target/debug/cosmos-agent'), [], {
@@ -71,7 +72,8 @@ export default async function globalSetup() {
       COSMOS_AGENT_BIND: `127.0.0.1:${port}`,
       COSMOS_AGENT_TOKEN: TOKEN,
       COSMOS_AGENT_HISTORY_PATH: path.join(dir, 'history.db'),
-      COSMOS_AGENT_ALLOW_ACTIONS: '0',
+      // Wake-on-LAN specs need it. No spec starts or stops a container.
+      COSMOS_AGENT_ALLOW_ACTIONS: '1',
       RUST_LOG: 'warn',
     },
     stdio: process.env.E2E_DEBUG ? 'inherit' : 'ignore',

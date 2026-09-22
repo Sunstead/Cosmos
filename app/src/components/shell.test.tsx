@@ -5,7 +5,8 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { useUiStore } from '@/stores/ui';
 import { DEFAULT_META, useNodeStore } from '@/stores/nodes';
 import { useContainersStore } from '@/stores/containers';
-import { containerInfo } from '@/test/fixtures';
+import { containerInfo, wolEntry } from '@/test/fixtures';
+import type { WolItem } from '@/api/queries';
 import { TitleBar } from './title-bar';
 import { CommandPalette } from './command-palette';
 
@@ -13,6 +14,8 @@ const navigate = vi.fn();
 const toggleSidebar = vi.fn();
 const toggleTheme = vi.fn();
 const run = vi.fn();
+const wake = vi.fn();
+let wolItems: WolItem[] = [];
 
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => navigate,
@@ -26,7 +29,11 @@ vi.mock('@/components/ui/resizable-sidebar', () => ({ useSidebar: () => ({ toggl
 vi.mock('@/components/theme-provider', () => ({
   useTheme: () => ({ toggleTheme, resolvedTheme: 'dark', theme: 'dark', setTheme: vi.fn() }),
 }));
-vi.mock('@/api/queries', () => ({ useContainerActions: () => ({ run, runMany: vi.fn(), pending: false }) }));
+vi.mock('@/api/queries', () => ({
+  useContainerActions: () => ({ run, runMany: vi.fn(), pending: false }),
+  useWol: () => ({ items: wolItems, networks: {}, nodes: ['n1'], loading: false, error: null }),
+  useWolActions: () => ({ wake, save: vi.fn(), remove: vi.fn(), pending: null }),
+}));
 vi.mock('./node-planet', () => ({ NodeAvatar: () => null }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
@@ -111,6 +118,24 @@ describe('CommandPalette', () => {
     await userEvent.click(await screen.findByRole('option', { name: /Containers/ }));
     expect(navigate).toHaveBeenCalledWith({ to: '/containers' });
     expect(useUiStore.getState().paletteOpen).toBe(false);
+  });
+
+  it('offers to wake a sleeping machine, not an awake one', async () => {
+    seedNode();
+    useNodeStore.setState((s) => ({
+      meta: { n1: { ...s.meta.n1, capabilities: { ...s.meta.n1.capabilities, wol: true, wol_actions: true } } },
+    }));
+    wolItems = [
+      { ...wolEntry(), nodeId: 'n1' },
+      { ...wolEntry({ state: 'awake', target: { ...wolEntry().target, id: '2', name: 'laptop' } }), nodeId: 'n1' },
+    ];
+    open();
+    wrap(<CommandPalette />);
+
+    await userEvent.click(await screen.findByRole('option', { name: /Wake desktop/ }));
+    expect(wake).toHaveBeenCalledWith('n1', '1', 'desktop');
+    expect(screen.queryByRole('option', { name: /Wake laptop/ })).toBeNull();
+    wolItems = [];
   });
 
   it('filters by typed text', async () => {

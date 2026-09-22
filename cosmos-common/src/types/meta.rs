@@ -48,6 +48,12 @@ pub struct Capabilities {
     /// `/v1/tailnet`. Absent from agents before 0.3.
     #[serde(default)]
     pub tailnet: bool,
+    /// `/v1/wol`. Absent from agents before 0.3.
+    #[serde(default)]
+    pub wol: bool,
+    /// Wake and edit targets: `wol` plus `allow_actions`.
+    #[serde(default)]
+    pub wol_actions: bool,
 }
 
 impl Capabilities {
@@ -64,6 +70,8 @@ impl Capabilities {
             metrics_history: false,
             backups: false,
             tailnet: false,
+            wol: false,
+            wol_actions: false,
         }
     }
 }

@@ -71,6 +71,15 @@ export const SETUP = {
     file: 'agent.toml',
     snippet: '[tailscale]\nenabled = true\nsocket = "/host/tailscale/tailscaled.sock"',
   },
+  wol: {
+    summary: 'Turn on Wake-on-LAN on the agent of a node on the same LAN. Waking also needs allow_actions.',
+    file: 'agent.toml',
+    snippet: '[wol]\nenabled = true',
+  },
+  wolWindows: {
+    summary:
+      'For a Windows PC: enable Wake-on-LAN in the BIOS, turn on Wake on Magic Packet in the network adapter settings, and turn off Fast Startup.',
+  },
   services: {
     summary: 'Group containers into a service with a Docker label.',
     file: 'docker-compose.yml',

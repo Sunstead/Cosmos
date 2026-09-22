@@ -15,6 +15,7 @@ use crate::{
         facts::HostFacts,
         host::HostSnapshot,
         tailnet::TailnetSnapshot,
+        wol::WolHandle,
     },
 };
 use cosmos_common::types::Capabilities;
@@ -36,6 +37,7 @@ pub struct Inner {
     pub volumes_rx: watch::Receiver<Arc<VolumeSnapshot>>,
     pub backups_rx: Option<watch::Receiver<Arc<BackupSnapshot>>>,
     pub tailnet_rx: Option<watch::Receiver<Arc<TailnetSnapshot>>>,
+    pub wol: Option<WolHandle>,
 }
 
 impl AppState {
@@ -55,6 +57,8 @@ impl AppState {
             metrics_history: self.history.is_some(),
             backups: self.backups_rx.is_some(),
             tailnet: self.tailnet_rx.is_some(),
+            wol: self.wol.is_some(),
+            wol_actions: self.wol.is_some() && self.cfg.allow_actions,
         }
     }
 }

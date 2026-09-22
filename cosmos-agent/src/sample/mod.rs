@@ -7,6 +7,7 @@ pub mod facts;
 pub mod filters;
 pub mod host;
 pub mod tailnet;
+pub mod wol;
 
 use crate::{
     backups::{ BackupSnapshot, BackupsProvider },

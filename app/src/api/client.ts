@@ -10,6 +10,11 @@ import { MetricStep } from '@/generated/MetricStep';
 import { VolumesResponse } from '@/generated/VolumesResponse';
 import { Capabilities } from '@/generated/Capabilities';
 import { TailnetStatus } from '@/generated/TailnetStatus';
+import { WolEntry } from '@/generated/WolEntry';
+import { WolNeighborsResponse } from '@/generated/WolNeighborsResponse';
+import { WolResponse } from '@/generated/WolResponse';
+import { WolTarget } from '@/generated/WolTarget';
+import { WolTargetInput } from '@/generated/WolTargetInput';
 
 /** A typed failure from an agent, carrying the agent's own error code. */
 export class AgentRequestError extends Error {
@@ -50,6 +55,8 @@ export const LEGACY_CAPABILITIES: Capabilities = {
   metrics_history: false,
   backups: false,
   tailnet: false,
+  wol: false,
+  wol_actions: false,
 };
 
 /**
@@ -59,7 +66,12 @@ export const LEGACY_CAPABILITIES: Capabilities = {
  */
 export function effectiveCapabilities(info: AgentInfo): Capabilities {
   if (!info.principal || info.principal.admin) return info.capabilities;
-  return { ...info.capabilities, container_actions: false, volume_actions: false };
+  return {
+    ...info.capabilities,
+    container_actions: false,
+    volume_actions: false,
+    wol_actions: false,
+  };
 }
 
 export class AgentClient {
@@ -153,6 +165,15 @@ export class AgentClient {
     return this.request<TailnetStatus>('/v1/tailnet');
   }
 
+  getWol(): Promise<WolResponse> {
+    return this.request<WolResponse>('/v1/wol');
+  }
+
+  /** Admin only: machines in the host's ARP table, to pick a MAC from. */
+  getWolNeighbors(): Promise<WolNeighborsResponse> {
+    return this.request<WolNeighborsResponse>('/v1/wol/neighbors');
+  }
+
   getMetrics(opts: {
     from?: number;
     to?: number;
@@ -211,6 +232,33 @@ export class AgentClient {
     if (force) params.set('force', 'true');
     return this.request<void>(`/v1/volumes/${encodeURIComponent(name)}?${params}`, {
       method: 'DELETE',
+    });
+  }
+
+  createWolTarget(input: WolTargetInput): Promise<WolTarget> {
+    return this.request<WolTarget>('/v1/wol/targets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+  }
+
+  updateWolTarget(id: string, input: WolTargetInput): Promise<WolTarget> {
+    return this.request<WolTarget>(`/v1/wol/targets/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+  }
+
+  deleteWolTarget(id: string): Promise<void> {
+    return this.request<void>(`/v1/wol/targets/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
+  /** Sends the magic packet; the entry comes back already `waking`. */
+  wake(id: string): Promise<WolEntry> {
+    return this.request<WolEntry>(`/v1/wol/targets/${encodeURIComponent(id)}/wake`, {
+      method: 'POST',
     });
   }
 
