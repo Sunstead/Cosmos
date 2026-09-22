@@ -6,6 +6,7 @@ pub mod docker;
 pub mod facts;
 pub mod filters;
 pub mod host;
+pub mod tailnet;
 
 use crate::{
     backups::{ BackupSnapshot, BackupsProvider },

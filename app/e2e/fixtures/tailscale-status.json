@@ -1,0 +1,31 @@
+{
+  "Version": "1.90.0",
+  "BackendState": "Running",
+  "Self": {
+    "ID": "nSELF", "HostName": "e2e-node", "DNSName": "e2e-node.tail1234.ts.net.",
+    "OS": "linux", "UserID": 1, "TailscaleIPs": ["100.64.0.1"],
+    "CurAddr": "", "Relay": "nyc", "Online": true, "Active": false,
+    "LastSeen": "0001-01-01T00:00:00Z"
+  },
+  "CurrentTailnet": { "Name": "example.github", "MagicDNSSuffix": "tail1234.ts.net" },
+  "Peer": {
+    "nodekey:a": {
+      "ID": "nDESK", "HostName": "desktop", "DNSName": "desktop.tail1234.ts.net.",
+      "OS": "windows", "UserID": 1, "TailscaleIPs": ["100.64.0.2"],
+      "CurAddr": "192.168.1.20:41641", "Relay": "nyc", "Online": true, "Active": true,
+      "LastSeen": "0001-01-01T00:00:00Z", "KeyExpiry": "2099-01-01T00:00:00Z"
+    },
+    "nodekey:b": {
+      "ID": "nPHONE", "HostName": "pixel", "DNSName": "pixel.tail1234.ts.net.",
+      "OS": "android", "UserID": 1, "TailscaleIPs": ["100.64.0.3"],
+      "CurAddr": "", "Relay": "sea", "Online": true, "Active": true
+    },
+    "nodekey:c": {
+      "ID": "nAIR", "HostName": "air", "DNSName": "air.tail1234.ts.net.",
+      "OS": "macOS", "UserID": 1, "TailscaleIPs": ["100.64.0.4"],
+      "CurAddr": "", "Relay": "nyc", "Online": false, "Active": false,
+      "LastSeen": "2026-09-20T18:04:00Z"
+    }
+  },
+  "User": { "1": { "ID": 1, "LoginName": "e2e@example.com", "DisplayName": "E2E" } }
+}

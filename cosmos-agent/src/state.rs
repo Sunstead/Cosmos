@@ -10,7 +10,12 @@ use crate::{
     config::Config,
     docker::DockerHandle,
     history::HistoryHandle,
-    sample::{ docker::{ ContainerSnapshot, VolumeSnapshot }, facts::HostFacts, host::HostSnapshot },
+    sample::{
+        docker::{ ContainerSnapshot, VolumeSnapshot },
+        facts::HostFacts,
+        host::HostSnapshot,
+        tailnet::TailnetSnapshot,
+    },
 };
 use cosmos_common::types::Capabilities;
 use std::{ ops::Deref, sync::Arc };
@@ -30,6 +35,7 @@ pub struct Inner {
     pub containers_rx: watch::Receiver<Arc<ContainerSnapshot>>,
     pub volumes_rx: watch::Receiver<Arc<VolumeSnapshot>>,
     pub backups_rx: Option<watch::Receiver<Arc<BackupSnapshot>>>,
+    pub tailnet_rx: Option<watch::Receiver<Arc<TailnetSnapshot>>>,
 }
 
 impl AppState {
@@ -48,6 +54,7 @@ impl AppState {
             volume_actions: self.cfg.allow_actions,
             metrics_history: self.history.is_some(),
             backups: self.backups_rx.is_some(),
+            tailnet: self.tailnet_rx.is_some(),
         }
     }
 }

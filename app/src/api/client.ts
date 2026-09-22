@@ -9,6 +9,7 @@ import { MetricSeries } from '@/generated/MetricSeries';
 import { MetricStep } from '@/generated/MetricStep';
 import { VolumesResponse } from '@/generated/VolumesResponse';
 import { Capabilities } from '@/generated/Capabilities';
+import { TailnetStatus } from '@/generated/TailnetStatus';
 
 /** A typed failure from an agent, carrying the agent's own error code. */
 export class AgentRequestError extends Error {
@@ -48,6 +49,7 @@ export const LEGACY_CAPABILITIES: Capabilities = {
   volume_actions: false,
   metrics_history: false,
   backups: false,
+  tailnet: false,
 };
 
 /**
@@ -145,6 +147,10 @@ export class AgentClient {
 
   getBackups(): Promise<BackupsStatus> {
     return this.request<BackupsStatus>('/v1/backups');
+  }
+
+  getTailnet(): Promise<TailnetStatus> {
+    return this.request<TailnetStatus>('/v1/tailnet');
   }
 
   getMetrics(opts: {
