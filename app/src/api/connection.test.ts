@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { NodeConnection, NodeMeta } from './connection';
+import { NodeConnection, NodeMeta, TokenProvider } from './connection';
 import { FakeEventSource, mockFetch, settle } from '@/test/fakes';
 import { agentInfo, hostInfo } from '@/test/fixtures';
 
@@ -16,9 +16,9 @@ describe('NodeConnection', () => {
     vi.useRealTimers();
   });
 
-  function connect(routes: Parameters<typeof mockFetch>[0]) {
+  function connect(routes: Parameters<typeof mockFetch>[0], tokens: TokenProvider = async () => 'tok') {
     vi.stubGlobal('fetch', vi.fn(mockFetch(routes)));
-    const conn = new NodeConnection('n1', URL_BASE, 'tok');
+    const conn = new NodeConnection('n1', URL_BASE, tokens);
     const metas: NodeMeta[] = [];
     conn.onMeta((m) => metas.push(m));
     return { conn, metas };
@@ -153,6 +153,60 @@ describe('NodeConnection', () => {
     expect(metas.at(-1)?.capabilities.container_actions).toBe(false);
     // Legacy agents have no container stream.
     expect(FakeEventSource.latest('/v1/containers/stream')).toBeUndefined();
+    conn.stop();
+  });
+
+  it('asks for a sign-in instead of opening streams when there is no session', async () => {
+    const { conn, metas } = connect(healthy, async () => null);
+    conn.start();
+    await settle();
+
+    const meta = metas.at(-1)!;
+    expect(meta.status).toBe('unauthorized');
+    expect(meta.auth).toMatchObject({ kind: 'oidc', client_id: 'cosmos' });
+    expect(FakeEventSource.instances).toHaveLength(0);
+    conn.stop();
+  });
+
+  it('refreshes once on a 401 before asking for a sign-in', async () => {
+    const tokens = vi.fn(async (_auth: unknown, opts?: { force?: boolean }) => (opts?.force ? 'fresh' : 'stale'));
+    let hostCalls = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith('/v1/host')) {
+          hostCalls += 1;
+          const auth = new Headers(init?.headers).get('Authorization');
+          return auth === 'Bearer fresh'
+            ? new Response(JSON.stringify(hostInfo()))
+            : new Response(JSON.stringify({ code: 'unauthorized', message: 'x', detail: null }), { status: 401 });
+        }
+        return mockFetch(healthy)(input);
+      }),
+    );
+    const conn = new NodeConnection('n1', URL_BASE, tokens);
+    const metas: NodeMeta[] = [];
+    conn.onMeta((m) => metas.push(m));
+    conn.start();
+    await settle();
+
+    expect(hostCalls).toBe(2);
+    expect(tokens).toHaveBeenLastCalledWith(expect.anything(), { force: true });
+    expect(metas.at(-1)?.status).not.toBe('unauthorized');
+    expect(FakeEventSource.latest('/v1/host/stream')!.url).toContain('token=fresh');
+    conn.stop();
+  });
+
+  it('says a pre-0.3 token agent needs updating', async () => {
+    const { conn, metas } = connect({
+      ...healthy,
+      '/v1/info': { body: agentInfo({ api_version: 2, auth: undefined, auth_required: true }) },
+    });
+    conn.start();
+    await settle();
+    expect(metas.at(-1)?.status).toBe('unauthorized');
+    expect(metas.at(-1)?.error).toMatch(/older than 0\.3/);
     conn.stop();
   });
 

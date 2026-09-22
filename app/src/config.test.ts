@@ -12,12 +12,9 @@ describe('getDefaultNodes', () => {
     expect(await getDefaultNodes()).toEqual([{ url: window.location.origin, token: undefined }]);
   });
 
-  it('keeps absolute URLs and tokens, and drops malformed entries', async () => {
+  it('keeps absolute URLs, ignores old tokens, and drops malformed entries', async () => {
     serve(['http://a:7700', { url: 'https://b', token: 't' }, { nope: 1 }, 3]);
-    expect(await getDefaultNodes()).toEqual([
-      { url: 'http://a:7700' },
-      { url: 'https://b', token: 't' },
-    ]);
+    expect(await getDefaultNodes()).toEqual([{ url: 'http://a:7700' }, { url: 'https://b' }]);
   });
 
   it('is empty in the desktop app', async () => {

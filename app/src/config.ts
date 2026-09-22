@@ -2,7 +2,6 @@ import { isDesktop } from './lib/platform';
 
 export interface DefaultNode {
   url: string;
-  token?: string;
 }
 
 /**
@@ -22,8 +21,8 @@ export async function getDefaultNodes(): Promise<DefaultNode[]> {
     return parsed.flatMap((entry) => {
       if (typeof entry === 'string') return [{ url: resolveUrl(entry) }];
       if (entry && typeof entry === 'object' && typeof (entry as DefaultNode).url === 'string') {
-        const { url, token } = entry as DefaultNode;
-        return [{ url: resolveUrl(url), token: typeof token === 'string' ? token : undefined }];
+        // A `token` field from before 0.3 is ignored: nodes sign in now.
+        return [{ url: resolveUrl((entry as DefaultNode).url) }];
       }
       return [];
     });

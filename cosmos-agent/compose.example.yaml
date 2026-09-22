@@ -9,7 +9,6 @@
 # to the `include:` list in docker-compose.yml.
 #
 # Setup, once:
-#   openssl rand -hex 32 >> .env    # paste as COSMOS_AGENT_TOKEN=...
 #   echo "DOCKER_GID=$(stat -c '%g' /var/run/docker.sock)" >> .env
 #
 # The image also serves the web UI on :7700, so the Caddy entry below gives you
@@ -28,7 +27,7 @@ services:
     #
     # Consequences: `ports:` does not apply (the agent binds :7700 on the host
     # directly), and it is NOT on the `homelab` bridge — so Caddy must reach it
-    # via host.docker.internal, exactly like wol-waker does.
+    # via host.docker.internal.
     #
     # tailscale in this stack already uses host networking, so this is not a
     # new pattern here.
@@ -42,7 +41,6 @@ services:
 
     environment:
       COSMOS_AGENT_CONFIG: /etc/cosmos-agent/agent.toml
-      COSMOS_AGENT_TOKEN: ${COSMOS_AGENT_TOKEN}
       COSMOS_NODE_NAME: jupiter
       RUST_LOG: "info,cosmos_agent=info"
       TZ: ${TZ:-Etc/UTC}

@@ -22,6 +22,25 @@ pub struct AgentInfo {
     #[serde(default)]
     #[ts(optional = nullable)]
     pub principal: Option<PrincipalInfo>,
+    /// How to sign in. Absent from pre-0.3 agents, which used a shared token.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub auth: Option<AuthInfo>,
+}
+
+/// Public sign-in parameters, so the app can start the provider's flow
+/// before it has a token. None of this is secret.
+#[derive(Serialize, Deserialize, TS, Debug, Clone, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+#[ts(export, export_to = "../../app/src/generated/")]
+pub enum AuthInfo {
+    /// `allow_anonymous`: no sign-in.
+    None,
+    Oidc {
+        issuer: String,
+        client_id: String,
+        scopes: String,
+    },
 }
 
 /// The authenticated caller, as far as the UI needs to know. Action buttons

@@ -1,6 +1,6 @@
 import { createSocket } from 'node:dgram';
 import { expect, test } from '@playwright/test';
-import { addNode, addNodeOnline, agentUrl, PAGES, TOKEN } from './helpers';
+import { addNode, addNodeOnline, agentUrl, apiToken, nextSignIn, PAGES } from './helpers';
 
 test.describe('empty app', () => {
   test('every page keeps its header with no nodes', async ({ page }) => {
@@ -67,9 +67,32 @@ test.describe('empty app', () => {
 });
 
 test.describe('with a node', () => {
-  test('rejects a wrong token', async ({ page }) => {
-    const dialog = await addNode(page, 'wrong');
-    await expect(dialog.getByRole('alert')).toHaveText('Token rejected.');
+  test('asks for a sign-in, naming the provider', async ({ page }) => {
+    const dialog = await addNode(page);
+    await expect(dialog.getByText('This node signs in with 127.0.0.1')).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Sign in' })).toBeVisible();
+  });
+
+  test('a viewer sees the node but gets no actions', async ({ page, request }) => {
+    await nextSignIn(request, { name: 'guest', groups: ['homelab-users'] });
+    await addNodeOnline(page);
+    await nextSignIn(request);
+
+    await page.goto('/settings');
+    await expect(page.getByText('guest')).toBeVisible();
+    await expect(page.getByText('Viewer')).toBeVisible();
+
+    await page.goto('/network');
+    const wol = page.locator('[data-slot=card]', { hasText: 'Wake-on-LAN' });
+    await expect(wol).toBeVisible();
+    await expect(wol.getByRole('button', { name: 'Add' })).toHaveCount(0);
+  });
+
+  test('signing out asks for a sign-in again', async ({ page }) => {
+    await addNodeOnline(page);
+    await page.goto('/settings');
+    await page.getByRole('button', { name: 'Sign out' }).click();
+    await expect(page.getByText('Sign in needed').first()).toBeVisible({ timeout: 15_000 });
   });
 
   test('adds a node and it comes online', async ({ page }) => {
@@ -135,7 +158,7 @@ test.describe('with a node', () => {
 
     // Loopback isn't offered in the dialog, so this one goes in through the API.
     const res = await request.post(`${agentUrl()}/v1/wol/targets`, {
-      headers: { Authorization: `Bearer ${TOKEN}` },
+      headers: { Authorization: `Bearer ${await apiToken(request)}` },
       data: { name: 'desktop', mac: 'AA:BB:CC:DD:EE:FF', broadcast: '127.0.0.1', port },
     });
     expect(res.status()).toBe(201);
@@ -168,7 +191,7 @@ test.describe('with a node', () => {
     const nodeId = page.url().split('/').pop()!;
     const list = async () => {
       const res = await request.get(`${process.env.E2E_AGENT_URL}/v1/containers`, {
-        headers: { Authorization: 'Bearer e2e-token' },
+        headers: { Authorization: `Bearer ${await apiToken(request)}` },
       });
       return res.ok() ? ((await res.json()) as { containers: { id: string; name: string }[] }) : null;
     };
