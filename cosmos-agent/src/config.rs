@@ -23,6 +23,10 @@ pub enum ConfigError {
 pub struct Config {
     /// Defaults to the system hostname.
     pub node_name: Option<String>,
+    /// Off by default: a node is read-only until you say otherwise. Gates
+    /// every mutating route (container and volume actions, Wake-on-LAN), and
+    /// even then only for admins.
+    pub allow_actions: bool,
     pub server: ServerConfig,
     pub auth: AuthConfig,
     pub cors: CorsConfig,
@@ -31,6 +35,15 @@ pub struct Config {
     pub history: HistoryConfig,
     pub backups: BackupsConfig,
     pub web: WebConfig,
+    pub state: StateConfig,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct StateConfig {
+    /// Settings edited from the UI. Separate from the metrics history,
+    /// whose writer thread owns that database.
+    pub path: PathBuf,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -102,8 +115,9 @@ pub struct DockerConfig {
     pub interval_ms: u64,
     /// Cap on simultaneous `stats` calls against the Docker socket.
     pub stats_concurrency: usize,
-    /// Off by default: a node is read-only until you say otherwise.
-    pub allow_actions: bool,
+    /// Deprecated: use the top-level `allow_actions`, which now also covers
+    /// Wake-on-LAN. Still read so existing configs keep working.
+    pub allow_actions: Option<bool>,
     pub allow_logs: bool,
     /// Subscribe to the Docker event stream so the container list refreshes
     /// immediately on start/stop rather than at the next poll.
@@ -183,7 +197,7 @@ impl Default for DockerConfig {
             socket: "/var/run/docker.sock".to_string(),
             interval_ms: 2000,
             stats_concurrency: 8,
-            allow_actions: false,
+            allow_actions: None,
             allow_logs: true,
             watch_events: true,
         }
@@ -200,6 +214,12 @@ impl Default for HistoryConfig {
             retain_1m_secs: 604_800, // 7 days
             retain_5m_secs: 7_776_000, // 90 days
         }
+    }
+}
+
+impl Default for StateConfig {
+    fn default() -> Self {
+        Self { path: PathBuf::from("/var/lib/cosmos-agent/state.db") }
     }
 }
 
@@ -227,9 +247,29 @@ impl Config {
             // defaults plus COSMOS_AGENT_TOKEN are enough.
             None => Self::default(),
         };
+        cfg.migrate_deprecated()?;
         cfg.apply_env()?;
         cfg.validate()?;
         Ok(cfg)
+    }
+
+    /// Folds `docker.allow_actions` into the top-level switch. Setting both
+    /// to different values is an error rather than a silent precedence rule.
+    fn migrate_deprecated(&mut self) -> Result<(), ConfigError> {
+        if let Some(v) = self.docker.allow_actions.take() {
+            if self.allow_actions && !v {
+                return Err(
+                    ConfigError::Invalid(
+                        "allow_actions and docker.allow_actions disagree; remove docker.allow_actions".into()
+                    )
+                );
+            }
+            tracing::warn!(
+                "docker.allow_actions is deprecated; move it to the top-level allow_actions"
+            );
+            self.allow_actions |= v;
+        }
+        Ok(())
     }
 
     fn from_file(path: &str) -> Result<Self, ConfigError> {
@@ -257,7 +297,7 @@ impl Config {
             self.auth.token_file = Some(PathBuf::from(v));
         }
         if let Some(v) = env_bool("COSMOS_AGENT_ALLOW_ACTIONS")? {
-            self.docker.allow_actions = v;
+            self.allow_actions = v;
         }
         if let Some(v) = env_bool("COSMOS_AGENT_ALLOW_ANONYMOUS")? {
             self.auth.allow_anonymous = v;
@@ -381,10 +421,9 @@ mod tests {
             ::from_str(
                 r#"
                 node_name = "jupiter"
+                allow_actions = true
                 [server]
                 bind = "127.0.0.1:9000"
-                [docker]
-                allow_actions = true
                 [[host.disks]]
                 path = "/host/rootfs"
                 label = "/"
@@ -394,10 +433,26 @@ mod tests {
 
         assert_eq!(cfg.node_name.as_deref(), Some("jupiter"));
         assert_eq!(cfg.server.bind.port(), 9000);
-        assert!(cfg.docker.allow_actions);
+        assert!(cfg.allow_actions);
         assert_eq!(cfg.host.disks.len(), 1);
         assert_eq!(cfg.host.disks[0].label.as_deref(), Some("/"));
         // Untouched sections keep their defaults.
         assert_eq!(cfg.host.interval_ms, 1000);
+    }
+
+    #[test]
+    fn deprecated_docker_allow_actions_still_enables_actions() {
+        let mut cfg: Config = toml::from_str("[docker]\nallow_actions = true").unwrap();
+        cfg.migrate_deprecated().unwrap();
+        assert!(cfg.allow_actions);
+        assert_eq!(cfg.docker.allow_actions, None);
+    }
+
+    #[test]
+    fn conflicting_allow_actions_is_an_error() {
+        let mut cfg: Config = toml
+            ::from_str("allow_actions = true\n[docker]\nallow_actions = false")
+            .unwrap();
+        assert!(cfg.migrate_deprecated().is_err());
     }
 }

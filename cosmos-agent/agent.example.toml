@@ -8,6 +8,12 @@
 # Defaults to the system hostname.
 node_name = "jupiter"
 
+# Off by default: a node is read-only until you say otherwise. Gates every
+# change the app can make (start, stop, restart and remove for containers and
+# volumes), and even then only for admins. The agent always refuses to act on
+# its own container. Must sit above the first [section].
+allow_actions = false
+
 [server]
 bind = "0.0.0.0:7700"
 shutdown_grace_secs = 10
@@ -65,9 +71,6 @@ socket = "/var/run/docker.sock"
 interval_ms = 2000
 stats_concurrency = 8
 
-# Off by default: a node is read-only until you say otherwise. Turning this on
-# lets the desktop app start, stop, restart and remove containers.
-allow_actions = false
 allow_logs = true
 
 # Subscribe to the Docker event stream so the container list refreshes the

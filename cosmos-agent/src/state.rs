@@ -41,11 +41,11 @@ impl AppState {
         Capabilities {
             host_metrics: true,
             containers: true,
-            container_actions: self.cfg.docker.allow_actions,
+            container_actions: self.cfg.allow_actions,
             container_logs: self.cfg.docker.allow_logs,
             websocket_logs: self.cfg.docker.allow_logs,
             volumes: true,
-            volume_actions: self.cfg.docker.allow_actions,
+            volume_actions: self.cfg.allow_actions,
             metrics_history: self.history.is_some(),
             backups: self.backups_rx.is_some(),
         }

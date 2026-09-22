@@ -1,6 +1,6 @@
 use crate::{ auth, state::AppState };
 use axum::{ extract::{ OriginalUri, State }, http::HeaderMap, Json };
-use cosmos_common::types::AgentInfo;
+use cosmos_common::types::{ AgentInfo, PrincipalInfo };
 
 pub async fn healthz() -> &'static str {
     "ok"
@@ -18,13 +18,15 @@ pub async fn info(
     headers: HeaderMap,
     OriginalUri(uri): OriginalUri
 ) -> Json<AgentInfo> {
-    let authenticated = auth::verify_parts(&state, &headers, &uri);
+    let principal = auth::principal_from_parts(&state, &headers, &uri);
 
     Json(AgentInfo {
         agent_version: env!("CARGO_PKG_VERSION").to_string(),
-        api_version: 1,
+        // 2: `principal`, and writes need an admin as well as allow_actions.
+        api_version: 2,
         auth_required: state.auth.required(),
-        node_name: authenticated.then(|| state.facts.node_name.clone()),
+        node_name: principal.is_some().then(|| state.facts.node_name.clone()),
         capabilities: state.capabilities(),
+        principal: principal.map(|p| PrincipalInfo { admin: p.is_admin(), name: p.name }),
     })
 }
