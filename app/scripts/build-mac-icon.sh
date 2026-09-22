@@ -32,6 +32,9 @@ cp "$tmp/car/Assets.car" "$OUT/Assets.car"
 # Full-size flat renders for the .icns (actool's own fallback stops at 256px).
 # ictool renders edge to edge, so each size is drawn at the macOS icon grid
 # (824 of 1024) and padded with transparency to match other apps in the Dock.
+# Light angle 0 lights the top edge, as the system does for the glass icon;
+# ictool's default is a diagonal that highlights the top-left and
+# bottom-right corners instead.
 set_dir="$tmp/icon.iconset"
 mkdir -p "$set_dir"
 for size in 16 32 128 256 512; do
@@ -42,7 +45,8 @@ for size in 16 32 128 256 512; do
     if [ "$scale" = 2 ]; then suffix="@2x"; fi
     file="$set_dir/icon_${size}x${size}${suffix}.png"
     "$ICTOOL" "$SRC" --export-image --output-file "$tmp/body.png" \
-      --platform macOS --rendition Default --width "$body" --height "$body" --scale 1 >/dev/null
+      --platform macOS --rendition Default --width "$body" --height "$body" --scale 1 \
+      --light-angle 0 >/dev/null
     sips --padToHeightWidth "$px" "$px" "$tmp/body.png" --out "$file" >/dev/null
   done
 done

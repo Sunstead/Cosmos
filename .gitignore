@@ -1,2 +1,4 @@
 # Shared Rust workspace output
 /target/
+
+.DS_Store
