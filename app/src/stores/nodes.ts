@@ -54,6 +54,7 @@ export function getAllConnections(): NodeConnection[] {
 export const DEFAULT_META: NodeMeta = {
   status: 'connecting',
   capabilities: LEGACY_CAPABILITIES,
+  principal: null,
   agentVersion: null,
   apiVersion: 0,
   error: null,

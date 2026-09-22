@@ -132,7 +132,7 @@ async fn serve(cfg: Config, token: Option<String>) -> Result<(), Box<dyn std::er
 
     tracing::info!(
         addr = %cfg.server.bind,
-        actions = cfg.docker.allow_actions,
+        actions = cfg.allow_actions,
         "listening"
     );
 

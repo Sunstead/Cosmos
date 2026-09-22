@@ -77,9 +77,9 @@ Background samplers publish to `tokio::sync::watch` channels; handlers hand out 
 - `watch` not `broadcast`: subscribers only want the newest sample, and `watch` coalesces by construction.
 - Snapshots carry `json: Arc<str>` — serialization happens once per tick, not once per request per client.
 
-**Routes.** `/healthz` and `/v1/info` are public; everything else needs a token; `POST/DELETE /v1/containers/*` additionally needs `docker.allow_actions`. Logs use a WebSocket (`/v1/containers/:id/logs/ws`) because Docker log frames contain embedded newlines, `EventSource` reconnects uncontrollably against crash-looping containers, and browsers cap ~6 HTTP/1.1 connections per origin.
+**Routes.** `/healthz` and `/v1/info` are public; everything else needs a token; every mutating route sits behind `require_write`, which needs both the node's top-level `allow_actions` and an admin `Principal` (and logs one `action` line saying who). `docker.allow_actions` is a deprecated alias. Logs use a WebSocket (`/v1/containers/:id/logs/ws`) because Docker log frames contain embedded newlines, `EventSource` reconnects uncontrollably against crash-looping containers, and browsers cap ~6 HTTP/1.1 connections per origin.
 
-`/v1/info` is unauthenticated so the add-node flow can distinguish "nothing here" from "needs a token", but `node_name` stays `null` until authenticated. A **404 there means a pre-0.2 agent** → assume `api_version: 0`.
+`/v1/info` is unauthenticated so the add-node flow can distinguish "nothing here" from "needs a token", but `node_name` and `principal` stay `null` until authenticated. The app narrows capabilities by `principal.admin` in `effectiveCapabilities` (`api/client.ts`), so UI code only ever checks capabilities. A **404 there means a pre-0.2 agent** → assume `api_version: 0`.
 
 **Auth** (`auth.rs`). Constant-time bearer compare; accepts the `Authorization` header or `?token=` (browser `EventSource`/`WebSocket` cannot set headers, and the web build is supported). The trace layer records `uri.path()` only so query tokens never reach the logs. **CORS must stay the outermost layer** — axum applies layers bottom-up, and an unauthenticated `OPTIONS` preflight that 401s without CORS headers surfaces as an opaque browser failure. The agent refuses to start with no token unless `auth.allow_anonymous = true`.
 

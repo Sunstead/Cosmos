@@ -5,6 +5,12 @@
 
 node_name = "jupiter"
 
+# Off by default: a node is read-only until you say otherwise. Gates every
+# change the app can make (start, stop, restart and remove for containers and
+# volumes), and even then only for admins. The agent always refuses to act on
+# its own container. Must sit above the first [section].
+allow_actions = false
+
 [server]
 bind = "0.0.0.0:7700"
 
@@ -43,10 +49,6 @@ socket = "/var/run/docker.sock"
 interval_ms = 2000
 stats_concurrency = 8
 
-# Start read-only and flip this to true once you're happy. It gates
-# start/stop/restart/remove for containers and volumes; the agent also always
-# refuses to act on its own container.
-allow_actions = false
 allow_logs = true
 watch_events = true
 
