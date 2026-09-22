@@ -10,6 +10,7 @@ mod host;
 mod logs;
 mod meta;
 mod metrics;
+mod tailnet;
 mod volumes;
 mod web;
 
@@ -43,6 +44,7 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/containers/:id/logs/ws", get(logs::follow))
         .route("/v1/volumes", get(volumes::list))
         .route("/v1/backups", get(backups::current))
+        .route("/v1/tailnet", get(tailnet::current))
         // Gzip only here. A history range can be tens of thousands of numbers;
         // compressing an SSE stream would break incremental delivery.
         .route("/v1/metrics", get(metrics::range).layer(CompressionLayer::new().gzip(true)));

@@ -66,6 +66,11 @@ export const SETUP = {
     file: 'agent.toml',
     snippet: '# above the first [section]\nallow_actions = true',
   },
+  tailnet: {
+    summary: 'Share the host tailscaled socket with the agent, then enable it. The agent gets read-only access.',
+    file: 'agent.toml',
+    snippet: '[tailscale]\nenabled = true\nsocket = "/host/tailscale/tailscaled.sock"',
+  },
   services: {
     summary: 'Group containers into a service with a Docker label.',
     file: 'docker-compose.yml',

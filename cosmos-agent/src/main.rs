@@ -112,6 +112,7 @@ async fn serve(cfg: Config, token: Option<String>) -> Result<(), Box<dyn std::er
     sample::spawn_self_identification(docker.clone(), facts.hostname.clone());
 
     let backups_rx = cfg.backups.enabled.then(|| sample::spawn_backups(&cfg));
+    let tailnet_rx = cfg.tailscale.enabled.then(|| sample::tailnet::spawn(&cfg.tailscale));
 
     let state = AppState::new(Inner {
         auth: auth::Auth::new(token, cfg.auth.allow_query_token),
@@ -122,6 +123,7 @@ async fn serve(cfg: Config, token: Option<String>) -> Result<(), Box<dyn std::er
         containers_rx,
         volumes_rx,
         backups_rx,
+        tailnet_rx,
         cfg: cfg.clone(),
     });
 

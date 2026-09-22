@@ -26,6 +26,7 @@ const CAPS = [
   ['container_logs', 'Logs'],
   ['metrics_history', 'History'],
   ['backups', 'Backups'],
+  ['tailnet', 'Tailnet'],
 ] as const;
 
 function NodeRow({ nodeId }: { nodeId: string }) {

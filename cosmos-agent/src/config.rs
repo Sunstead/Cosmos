@@ -36,6 +36,17 @@ pub struct Config {
     pub backups: BackupsConfig,
     pub web: WebConfig,
     pub state: StateConfig,
+    pub tailscale: TailscaleConfig,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct TailscaleConfig {
+    pub enabled: bool,
+    /// The host's `tailscaled` socket, bind-mounted in. Read-only access is
+    /// all `tailscaled` gives a non-root caller, and all the agent needs.
+    pub socket: PathBuf,
+    pub interval_ms: u64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -217,6 +228,16 @@ impl Default for HistoryConfig {
     }
 }
 
+impl Default for TailscaleConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            socket: PathBuf::from("/var/run/tailscale/tailscaled.sock"),
+            interval_ms: 10_000,
+        }
+    }
+}
+
 impl Default for StateConfig {
     fn default() -> Self {
         Self { path: PathBuf::from("/var/lib/cosmos-agent/state.db") }
@@ -327,6 +348,9 @@ impl Config {
         }
         if self.docker.interval_ms < 500 {
             return Err(ConfigError::Invalid("docker.interval_ms must be at least 500".into()));
+        }
+        if self.tailscale.interval_ms < 1000 {
+            return Err(ConfigError::Invalid("tailscale.interval_ms must be at least 1000".into()));
         }
         if self.docker.stats_concurrency == 0 {
             return Err(ConfigError::Invalid("docker.stats_concurrency must be at least 1".into()));

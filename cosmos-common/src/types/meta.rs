@@ -45,6 +45,9 @@ pub struct Capabilities {
     pub volume_actions: bool,
     pub metrics_history: bool,
     pub backups: bool,
+    /// `/v1/tailnet`. Absent from agents before 0.3.
+    #[serde(default)]
+    pub tailnet: bool,
 }
 
 impl Capabilities {
@@ -60,6 +63,7 @@ impl Capabilities {
             volume_actions: false,
             metrics_history: false,
             backups: false,
+            tailnet: false,
         }
     }
 }
