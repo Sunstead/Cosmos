@@ -15,6 +15,8 @@ mod history;
 mod sample;
 mod sse;
 mod state;
+mod store;
+mod wol;
 
 use config::Config;
 use docker::DockerHandle;
@@ -114,6 +116,32 @@ async fn serve(cfg: Config, token: Option<String>) -> Result<(), Box<dyn std::er
     let backups_rx = cfg.backups.enabled.then(|| sample::spawn_backups(&cfg));
     let tailnet_rx = cfg.tailscale.enabled.then(|| sample::tailnet::spawn(&cfg.tailscale));
 
+    // Like history, a broken state database disables the feature rather
+    // than the agent.
+    let wol = if cfg.wol.enabled {
+        match store::Store::open(&cfg.state.path) {
+            Ok(store) => {
+                let filters = sample::filters::HostFilters::from_config(&cfg.host);
+                Some(
+                    sample::wol::spawn(&cfg.wol, store, tailnet_rx.clone(), move |iface|
+                        filters.iface_allowed(iface)
+                    )
+                )
+            }
+            Err(e) => {
+                tracing::error!(
+                    path = %cfg.state.path.display(),
+                    error = %e,
+                    hint = history::diagnose(&cfg.state.path),
+                    "could not open the state database; wake-on-lan is disabled"
+                );
+                None
+            }
+        }
+    } else {
+        None
+    };
+
     let state = AppState::new(Inner {
         auth: auth::Auth::new(token, cfg.auth.allow_query_token),
         facts,
@@ -124,6 +152,7 @@ async fn serve(cfg: Config, token: Option<String>) -> Result<(), Box<dyn std::er
         volumes_rx,
         backups_rx,
         tailnet_rx,
+        wol,
         cfg: cfg.clone(),
     });
 

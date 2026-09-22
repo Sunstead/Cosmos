@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { Link } from '@tanstack/react-router';
 import { CloudOff, Globe, SearchX } from 'lucide-react';
-import { TailnetView, useTick } from '@/api/queries';
+import { TailnetView, useTick, WolItem } from '@/api/queries';
 import { Device, keyState, osLabel, primaryIp } from '@/lib/tailnet';
 import { relativeTime } from '@/lib/time';
 import { matchesQuery, NO_VALUE } from '@/lib/format';
@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { Section } from '@/components/section';
 import { EmptyState } from '@/components/empty-state';
 import { SETUP } from '@/components/setup-hint';
+import { WakeButton } from '@/components/wol-section';
 import { Dot } from '@/components/dot';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -72,15 +73,19 @@ function KeyExpiry({ device }: { device: Device }) {
 /** Every device on the tailnet, as the agents' `tailscaled` sees it. */
 export const TailnetSection = memo(function TailnetSection({
   tailnet,
+  wol,
   query,
 }: {
   tailnet: TailnetView;
+  /** Wake-on-LAN targets, so a sleeping linked device gets a Wake button. */
+  wol: WolItem[];
   query: string;
 }) {
   // "Seen 5m ago" and key expiry drift between polls.
   useTick(60_000);
   const { devices, reporting, loading, error } = tailnet;
 
+  const wakeFor = new Map(wol.filter((w) => w.target.tailnet_device).map((w) => [w.target.tailnet_device!, w]));
   const visible = devices.filter((d) =>
     matchesQuery(query, d.name, d.dns_name, d.os, d.user, ...d.ips),
   );
@@ -144,7 +149,12 @@ export const TailnetSection = memo(function TailnetSection({
                 {primaryIp(d) ?? NO_VALUE}
               </TableCell>
               <TableCell className='whitespace-nowrap'>
-                <Presence device={d} />
+                <div className='flex items-center gap-2'>
+                  <Presence device={d} />
+                  {wakeFor.has(d.id) && wakeFor.get(d.id)!.state !== 'awake' && (
+                    <WakeButton item={wakeFor.get(d.id)!} size='xs' />
+                  )}
+                </div>
               </TableCell>
               <TableCell>
                 <Path device={d} />
