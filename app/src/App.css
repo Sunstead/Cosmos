@@ -122,6 +122,10 @@ html[data-platform='macos'] {
   --network: #047857;
   --disk: #b45309;
 
+  /* Cosmos mark (favicon.svg keeps its own copy; it follows the OS scheme). */
+  --mark-0: #3c3c3c;
+  --mark-1: #000000;
+
   /* Terminal palette for container logs (ANSI 0-15). */
   --ansi-0: #3f3f46;
   --ansi-1: #b91c1c;
@@ -195,6 +199,9 @@ html[data-platform='macos'] {
   --ram: #d977f1;
   --network: #4ac981;
   --disk: #ca793b;
+
+  --mark-0: #ffffff;
+  --mark-1: #a1a1a1;
 
   --ansi-0: #52525b;
   --ansi-1: #f87171;
