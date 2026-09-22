@@ -9,6 +9,7 @@ import {
   Moon,
   PanelLeft,
   Play,
+  Power,
   Plus,
   RefreshCw,
   RotateCcw,
@@ -30,7 +31,7 @@ import { useTheme } from '@/components/theme-provider';
 import { useUiStore } from '@/stores/ui';
 import { nodeDisplayName, useNodeStore } from '@/stores/nodes';
 import { useContainersStore } from '@/stores/containers';
-import { useContainerActions } from '@/api/queries';
+import { useContainerActions, useWol, useWolActions } from '@/api/queries';
 import { PAGES } from '@/lib/navigation';
 import { userFacingServices } from '@/lib/services';
 import { serviceHref } from '@/lib/agent-url';
@@ -110,6 +111,11 @@ export function CommandPalette() {
 
   const nodes = useNodeStore((s) => s.nodes);
   const meta = useNodeStore((s) => s.meta);
+  const wol = useWol();
+  const { wake } = useWolActions();
+  const wakeable = wol.items.filter(
+    (i) => meta[i.nodeId]?.capabilities.wol_actions && i.state !== 'awake' && i.state !== 'waking',
+  );
   const reconnect = useNodeStore((s) => s.reconnect);
   const nodeContainers = useContainersStore((s) => s.nodeContainers);
   const allServices = useContainersStore((s) => s.services);
@@ -207,6 +213,20 @@ export function CommandPalette() {
                   </CommandShortcut>
                 </CommandItem>
               </CommandGroup>
+
+              {wakeable.length > 0 && (
+                <CommandGroup heading='Wake'>
+                  {wakeable.map((i) => (
+                    <CommandItem
+                      key={`${i.nodeId}:${i.target.id}`}
+                      value={`wake ${i.target.name} wol`}
+                      onSelect={go(() => void wake(i.nodeId, i.target.id, i.target.name))}
+                    >
+                      <Power /> Wake {i.target.name}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              )}
 
               {nodes.length > 0 && (
                 <CommandGroup heading='Nodes'>

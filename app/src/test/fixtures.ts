@@ -3,6 +3,7 @@ import { ContainerInfo } from '@/generated/ContainerInfo';
 import { HostInfo } from '@/generated/HostInfo';
 import { TailnetDevice } from '@/generated/TailnetDevice';
 import { TailnetStatus } from '@/generated/TailnetStatus';
+import { WolEntry } from '@/generated/WolEntry';
 
 export function hostInfo(partial: Partial<HostInfo> = {}): HostInfo {
   return {
@@ -52,6 +53,8 @@ export function agentInfo(partial: Partial<AgentInfo> = {}): AgentInfo {
       metrics_history: true,
       backups: true,
       tailnet: true,
+      wol: true,
+      wol_actions: true,
     },
     ...partial,
   };
@@ -108,6 +111,24 @@ export function tailnetStatus(partial: Partial<TailnetStatus> = {}): TailnetStat
     backend_state: 'Running',
     devices: [tailnetDevice()],
     sampled_at: 1_700_000_000,
+    ...partial,
+  };
+}
+
+export function wolEntry(partial: Partial<WolEntry> = {}): WolEntry {
+  return {
+    target: {
+      id: '1',
+      name: 'desktop',
+      mac: 'aa:bb:cc:dd:ee:ff',
+      broadcast: '192.168.1.255',
+      port: 9,
+      tailnet_device: 'n1',
+      probe: null,
+    },
+    state: 'asleep',
+    last_seen: null,
+    last_wake: null,
     ...partial,
   };
 }

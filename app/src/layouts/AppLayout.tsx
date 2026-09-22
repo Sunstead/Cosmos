@@ -2,6 +2,7 @@ import { useMatches } from '@tanstack/react-router';
 import { AppSidebar } from '@/components/app-sidebar';
 import { TitleBar } from '@/components/title-bar';
 import { CommandHost } from '@/components/command-host';
+import { WolWatcher } from '@/components/wol-watcher';
 import { AddNodeDialog } from '@/components/add-node';
 import { CommandPalette } from '@/components/command-palette';
 import { SidebarInset, SidebarProvider } from '@/components/ui/resizable-sidebar';
@@ -27,6 +28,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <SidebarProvider className='h-full flex-col'>
       <CommandHost />
+      <WolWatcher />
       <AddNodeDialog />
       <CommandPalette />
       <TitleBar />

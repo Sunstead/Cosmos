@@ -12,6 +12,7 @@ mod meta;
 mod metrics;
 mod tailnet;
 mod volumes;
+mod wol;
 mod web;
 
 use crate::{ auth, state::AppState };
@@ -19,7 +20,7 @@ use axum::{
     http::{ header, HeaderValue },
     middleware::from_fn_with_state,
     response::{ IntoResponse, Response },
-    routing::{ delete, get, post },
+    routing::{ delete, get, post, put },
     Router,
 };
 use std::sync::Arc;
@@ -33,6 +34,9 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/containers/:id/restart", post(containers::restart))
         .route("/v1/containers/:id", delete(containers::remove))
         .route("/v1/volumes/:name", delete(volumes::remove))
+        .route("/v1/wol/targets", post(wol::create))
+        .route("/v1/wol/targets/:id", put(wol::update).delete(wol::remove))
+        .route("/v1/wol/targets/:id/wake", post(wol::wake))
         .layer(from_fn_with_state(state.clone(), auth::require_write));
 
     let read = Router::new()
@@ -45,6 +49,9 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/volumes", get(volumes::list))
         .route("/v1/backups", get(backups::current))
         .route("/v1/tailnet", get(tailnet::current))
+        .route("/v1/wol", get(wol::list))
+        // Admin-only inside the handler: it reveals the LAN's MAC addresses.
+        .route("/v1/wol/neighbors", get(wol::neighbors))
         // Gzip only here. A history range can be tens of thousands of numbers;
         // compressing an SSE stream would break incremental delivery.
         .route("/v1/metrics", get(metrics::range).layer(CompressionLayer::new().gzip(true)));

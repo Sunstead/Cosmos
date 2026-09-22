@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { useTailnet } from '@/api/queries';
+import { useTailnet, useWol } from '@/api/queries';
+import { WolState } from '@/generated/WolState';
 import { getConnection, nodeDisplayName, useNodeStore } from '@/stores/nodes';
 import { useContainersStore } from '@/stores/containers';
 import { userFacingServices } from '@/lib/services';
@@ -44,6 +45,8 @@ export interface Drifter {
   id: string;
   name: string;
   online: boolean;
+  /** Set when a Wake-on-LAN target points at this device. */
+  wol: WolState | null;
   angle: number;
   speed: number;
   x: number;
@@ -74,6 +77,7 @@ export function Constellation({ className }: { className?: string }) {
   const drifters = useRef(new Map<string, Drifter>());
   const hover = useRef<string | null>(null);
   const { devices } = useTailnet();
+  const { items: wolItems } = useWol();
   const navigate = useNavigate();
   const navigateRef = useRef(navigate);
   useEffect(() => {
@@ -161,6 +165,9 @@ export function Constellation({ className }: { className?: string }) {
   useEffect(() => {
     const current = drifters.current;
     const wanted = devices.filter((d) => d.nodeId === null);
+    const wolState = new Map(
+      wolItems.filter((w) => w.target.tailnet_device).map((w) => [w.target.tailnet_device!, w.state]),
+    );
     const ids = new Set(wanted.map((d) => d.id));
     for (const id of current.keys()) if (!ids.has(id)) current.delete(id);
     wanted.forEach((d, i) => {
@@ -168,12 +175,14 @@ export function Constellation({ className }: { className?: string }) {
       if (existing) {
         existing.name = d.name;
         existing.online = d.online;
+        existing.wol = wolState.get(d.id) ?? null;
         return;
       }
       current.set(d.id, {
         id: d.id,
         name: d.name,
         online: d.online,
+        wol: wolState.get(d.id) ?? null,
         // Golden-angle spacing, so late arrivals don't bunch up.
         angle: i * 2.39996 + 1.1,
         speed: 0.000012 + (i % 3) * 0.000004,
@@ -181,7 +190,7 @@ export function Constellation({ className }: { className?: string }) {
         y: 0,
       });
     });
-  }, [devices]);
+  }, [devices, wolItems]);
 
   // Render loop: set up once.
   useEffect(() => {
@@ -292,10 +301,21 @@ export function Constellation({ className }: { className?: string }) {
           ctx.beginPath();
           ctx.arc(d.x, d.y, 1.5, 0, TAU);
           ctx.fill();
+          // Waking: a ring pulsing outwards until it comes up.
+          if (d.wol === 'waking') {
+            const phase = reduceMotion ? 0.5 : (now % 1400) / 1400;
+            ctx.globalAlpha = 0.8 * (1 - phase);
+            ctx.strokeStyle = tokens.warning;
+            ctx.beginPath();
+            ctx.arc(d.x, d.y, r + 2 + phase * 10, 0, TAU);
+            ctx.stroke();
+          }
           if (hovered) {
             ctx.globalAlpha = 1;
             ctx.fillStyle = d.online ? tokens.foreground : tokens.muted;
-            ctx.fillText(d.online ? d.name : `${d.name} (offline)`, d.x, d.y - 10);
+            const status =
+              d.wol === 'waking' ? ' (waking)' : d.online ? '' : d.wol ? ' (asleep)' : ' (offline)';
+            ctx.fillText(`${d.name}${status}`, d.x, d.y - 10);
           }
         }
         ctx.globalAlpha = 1;
