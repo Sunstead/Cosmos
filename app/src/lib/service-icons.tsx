@@ -1,7 +1,7 @@
 import { ComponentType, SVGProps } from 'react';
 import { Server } from 'lucide-react';
 
-import CosmosIcon from '@/assets/icon_simple.svg?react';
+import CosmosIcon from '@/assets/icon-mark.svg?react';
 import GiteaIcon from '@/assets/icons/gitea.svg?react';
 import NextcloudIcon from '@/assets/icons/nextcloud.svg?react';
 import ImmichIcon from '@/assets/icons/immich.svg?react';
