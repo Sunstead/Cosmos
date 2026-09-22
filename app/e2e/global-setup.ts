@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { TOKEN, WEB_PORT } from './helpers';
+import { WEB_PORT } from './helpers';
+import { startMockOidc } from './mock-oidc';
 
 function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -53,6 +54,7 @@ export default async function globalSetup() {
   execFileSync('cargo', ['build', '-q', '-p', 'cosmos-agent'], { cwd: root, stdio: 'inherit' });
 
   const port = await freePort();
+  const oidc = await startMockOidc();
   const dir = mkdtempSync(path.join(tmpdir(), 'cosmos-e2e-'));
   const config = path.join(dir, 'agent.toml');
   const socket = path.join(dir, 'tailscaled.sock');
@@ -70,7 +72,8 @@ export default async function globalSetup() {
       ...process.env,
       COSMOS_AGENT_CONFIG: config,
       COSMOS_AGENT_BIND: `127.0.0.1:${port}`,
-      COSMOS_AGENT_TOKEN: TOKEN,
+      // Signs in against the mock provider, exactly as against Authentik.
+      COSMOS_AGENT_OIDC_ISSUER: oidc.issuer,
       COSMOS_AGENT_HISTORY_PATH: path.join(dir, 'history.db'),
       // Wake-on-LAN specs need it. No spec starts or stops a container.
       COSMOS_AGENT_ALLOW_ACTIONS: '1',
@@ -82,10 +85,12 @@ export default async function globalSetup() {
   const url = `http://127.0.0.1:${port}`;
   await waitFor(`${url}/v1/info`);
   process.env.E2E_AGENT_URL = url;
+  process.env.E2E_OIDC_ISSUER = oidc.issuer;
 
   return async () => {
     agent.kill();
     tailscaled.close();
+    oidc.server.close();
     rmSync(dir, { recursive: true, force: true });
   };
 }

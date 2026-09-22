@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { NodeConnection, NodeMeta, NodeStatus } from '@/api/connection';
+import { NodeConnection, NodeMeta, NodeStatus, OidcAuthInfo } from '@/api/connection';
 import { AgentRequestError, LEGACY_CAPABILITIES } from '@/api/client';
 import { normalizeAgentUrl } from '@/lib/agent-url';
-import { getToken, deleteToken, primeToken, setToken } from '@/lib/secrets';
+import { getAccessToken, useAuthStore } from './auth';
 import { sumDisk, getMemUsagePct } from '@/lib/node-metrics';
 import { clearNodeSeries, pushSample, resetNodeSeries } from './metrics-history';
 import { useContainersStore } from './containers';
@@ -24,7 +24,10 @@ export function nodeDisplayName(node: Pick<NodeConfig, 'alias' | 'agentName' | '
   return node.alias || node.agentName || node.url;
 }
 
-type AddResult = { ok: true; id: string } | { ok: false; error: string };
+type AddResult =
+  | { ok: true; id: string }
+  /** `signIn`: the agent is fine, we just need to sign in to its provider first. */
+  | { ok: false; error: string; signIn?: OidcAuthInfo };
 
 interface NodeStore {
   nodes: NodeConfig[];
@@ -32,11 +35,10 @@ interface NodeStore {
   meta: Record<string, NodeMeta>;
   onlineNodes: number;
 
-  addNode: (url: string, token?: string) => Promise<AddResult>;
+  addNode: (url: string) => Promise<AddResult>;
   removeNode: (id: string) => void;
   /** Pass null or an empty string to fall back to the agent's name. */
   renameNode: (id: string, alias: string | null) => void;
-  updateNodeToken: (id: string, token: string) => Promise<void>;
   reconnect: (id: string) => void;
 }
 
@@ -55,6 +57,7 @@ export const DEFAULT_META: NodeMeta = {
   status: 'connecting',
   capabilities: LEGACY_CAPABILITIES,
   principal: null,
+  auth: null,
   agentVersion: null,
   apiVersion: 0,
   error: null,
@@ -72,8 +75,8 @@ export function onNodeStatusChange(fn: StatusListener): () => void {
   return () => statusListeners.delete(fn);
 }
 
-function attach(nodeId: string, url: string, token: string | null): NodeConnection {
-  const conn = new NodeConnection(nodeId, url, token);
+function attach(nodeId: string, url: string): NodeConnection {
+  const conn = new NodeConnection(nodeId, url, getAccessToken);
   connections.set(nodeId, conn);
 
   conn.onMeta((meta) => {
@@ -154,7 +157,7 @@ export const useNodeStore = create<NodeStore>()(
       meta: {},
       onlineNodes: 0,
 
-      addNode: async (rawUrl, token) => {
+      addNode: async (rawUrl) => {
         const url = normalizeAgentUrl(rawUrl);
         if (!url) return { ok: false, error: 'Enter a host or URL.' };
         if (get().nodes.some((n) => n.url === url)) {
@@ -163,37 +166,40 @@ export const useNodeStore = create<NodeStore>()(
 
         const id = crypto.randomUUID();
 
-        // Probe first so a bad address or token is reported, not saved.
-        const probe = new NodeConnection(id, url, token ?? null);
+        // Probe first so a bad address or sign-in is reported, not saved.
+        const probe = new NodeConnection(id, url);
         let agentName: string | null = null;
         try {
           const info = await probe.client.getInfo();
-          if (info.auth_required && !token) {
-            return { ok: false, error: 'This agent requires a token.' };
+          if (info.auth?.kind === 'oidc') {
+            const token = await getAccessToken(info.auth);
+            if (!token) return { ok: false, error: 'Sign in to add this node.', signIn: info.auth };
+            probe.client.setToken(token);
+          } else if (info.auth_required) {
+            return {
+              ok: false,
+              error: 'This agent is older than 0.3 and uses a shared token. Update it first.',
+            };
           }
           agentName = (await probe.client.getHost()).name || null;
         } catch (e) {
           if (e instanceof AgentRequestError && e.isUnauthorized) {
-            return { ok: false, error: 'Token rejected.' };
+            return { ok: false, error: 'Signed in, but this agent did not accept it.' };
           }
           return { ok: false, error: `No agent reachable at ${url}.` };
         }
-
-        if (token) await setToken(id, token);
-        primeToken(id, token ?? null);
 
         set((s) => ({
           nodes: [...s.nodes, { id, url, agentName, alias: null }],
           meta: { ...s.meta, [id]: DEFAULT_META },
         }));
-        attach(id, url, token ?? null);
+        attach(id, url);
 
         return { ok: true, id };
       },
 
       removeNode: (id) => {
         detach(id);
-        void deleteToken(id);
         set((s) => {
           const { [id]: _removed, ...meta } = s.meta;
           return {
@@ -211,16 +217,11 @@ export const useNodeStore = create<NodeStore>()(
           ),
         })),
 
-      updateNodeToken: async (id, token) => {
-        await setToken(id, token);
-        connections.get(id)?.setToken(token);
-      },
-
       reconnect: (id) => {
         const node = get().nodes.find((n) => n.id === id);
         if (!node) return;
         detach(id);
-        void getToken(id).then((token) => attach(node.id, node.url, token));
+        attach(node.id, node.url);
       },
     }),
     {
@@ -241,9 +242,7 @@ export const useNodeStore = create<NodeStore>()(
 
         const nodes = state.nodes;
         queueMicrotask(() => {
-          for (const node of nodes) {
-            void getToken(node.id).then((token) => attach(node.id, node.url, token));
-          }
+          for (const node of nodes) attach(node.id, node.url);
         });
       },
     },
@@ -257,3 +256,18 @@ export function useNodeName(nodeId: string | null): string | null {
     return n ? nodeDisplayName(n) : null;
   });
 }
+
+/**
+ * A new sign-in may unlock nodes that were waiting on it: every node that
+ * trusts that provider shares the session.
+ */
+useAuthStore.subscribe((state, prev) => {
+  const added = Object.keys(state.sessions).filter((issuer) => !prev.sessions[issuer]);
+  if (added.length === 0) return;
+  for (const conn of connections.values()) {
+    const meta = conn.getMeta();
+    if (meta.status === 'unauthorized' && meta.auth?.kind === 'oidc' && added.includes(meta.auth.issuer)) {
+      conn.retryNow();
+    }
+  }
+});

@@ -1,6 +1,7 @@
 //! Agent configuration: a TOML file with a `COSMOS_AGENT_*` environment
-//! overlay on top. Everything has a working default except the auth token,
-//! which the agent refuses to start without.
+//! overlay on top. Everything has a working default except auth: the agent
+//! refuses to start without an identity provider unless explicitly opened
+//! up with `allow_anonymous`.
 
 use serde::Deserialize;
 use std::{ net::SocketAddr, path::PathBuf };
@@ -87,16 +88,51 @@ pub struct ServerConfig {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct AuthConfig {
+    /// Sign-in through an OpenID Connect provider (Authentik).
+    pub oidc: Option<OidcConfig>,
+    /// Removed in 0.3. Still parsed so an old config fails with an
+    /// explanation instead of "unknown field".
     pub token: Option<String>,
-    /// Preferred over `token` — keeps the secret out of the config file.
     pub token_file: Option<PathBuf>,
     /// Browser `EventSource` and `WebSocket` cannot set request headers, so
     /// the streaming routes need `?token=`. Turning this off breaks live
     /// metrics in the web build.
     pub allow_query_token: bool,
-    /// Must be set explicitly to run without a token. Guards against
+    /// Must be set explicitly to run without sign-in. Guards against
     /// accidentally exposing container actions to the whole LAN.
     pub allow_anonymous: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OidcConfig {
+    /// Exactly as the provider states it, e.g.
+    /// `https://auth.example.com/application/o/cosmos/`.
+    pub issuer: String,
+    /// The app's client ID; tokens must be addressed to it.
+    pub client_id: String,
+    /// Defaults to `client_id`.
+    #[serde(default)]
+    pub audience: Option<String>,
+    /// Defaults to the issuer's `/.well-known/openid-configuration`. Set it
+    /// when the agent must reach the provider by a different address.
+    #[serde(default)]
+    pub discovery_url: Option<String>,
+    /// Members of any of these may act (with `allow_actions`); everyone
+    /// else who can sign in is a viewer.
+    #[serde(default = "default_admin_groups")]
+    pub admin_groups: Vec<String>,
+    /// What the app asks for. `offline_access` gets it a refresh token.
+    #[serde(default = "default_scopes")]
+    pub scopes: String,
+}
+
+fn default_admin_groups() -> Vec<String> {
+    vec!["homelab-admins".into()]
+}
+
+fn default_scopes() -> String {
+    "openid profile email offline_access".into()
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -187,6 +223,7 @@ impl Default for ServerConfig {
 impl Default for AuthConfig {
     fn default() -> Self {
         Self {
+            oidc: None,
             token: None,
             token_file: None,
             allow_query_token: true,
@@ -335,6 +372,21 @@ impl Config {
         if let Ok(v) = std::env::var("COSMOS_AGENT_TOKEN_FILE") {
             self.auth.token_file = Some(PathBuf::from(v));
         }
+        if let Ok(issuer) = std::env::var("COSMOS_AGENT_OIDC_ISSUER") {
+            let client_id = std::env
+                ::var("COSMOS_AGENT_OIDC_CLIENT_ID")
+                .unwrap_or_else(|_| "cosmos".into());
+            let oidc = self.auth.oidc.get_or_insert_with(|| OidcConfig {
+                issuer: issuer.clone(),
+                client_id: client_id.clone(),
+                audience: None,
+                discovery_url: None,
+                admin_groups: default_admin_groups(),
+                scopes: default_scopes(),
+            });
+            oidc.issuer = issuer;
+            oidc.client_id = client_id;
+        }
         if let Some(v) = env_bool("COSMOS_AGENT_ALLOW_ACTIONS")? {
             self.allow_actions = v;
         }
@@ -382,41 +434,47 @@ impl Config {
         Ok(())
     }
 
-    /// Resolves the token from `token_file` or `token`, in that order.
-    ///
-    /// Returns `Ok(None)` only when anonymous access was explicitly allowed;
-    /// otherwise a missing token is a startup failure, because an agent that
-    /// can stop containers must not be open by default.
-    pub fn resolve_token(&self) -> Result<Option<String>, ConfigError> {
-        if let Some(path) = &self.auth.token_file {
-            let raw = std::fs
-                ::read_to_string(path)
-                .map_err(|source| ConfigError::Read {
-                    path: path.display().to_string(),
-                    source,
-                })?;
-            let token = raw.trim().to_string();
-            if token.is_empty() {
-                return Err(
-                    ConfigError::Invalid(format!("token file {} is empty", path.display()))
-                );
+    /// How callers authenticate. An agent that can stop containers must
+    /// never come up open by accident, so no provider and no explicit
+    /// `allow_anonymous` is a startup failure.
+    pub fn auth_mode(&self) -> Result<AuthMode, ConfigError> {
+        let legacy = self.auth.token.as_deref().is_some_and(|t| !t.trim().is_empty()) ||
+            self.auth.token_file.is_some();
+        match (&self.auth.oidc, self.auth.allow_anonymous) {
+            (Some(oidc), _) => {
+                if oidc.issuer.trim().is_empty() || oidc.client_id.trim().is_empty() {
+                    return Err(ConfigError::Invalid("auth.oidc needs an issuer and a client_id".into()));
+                }
+                Ok(AuthMode::Oidc { ignored_token: legacy })
             }
-            return Ok(Some(token));
+            (None, true) => Ok(AuthMode::Anonymous),
+            (None, false) if legacy =>
+                Err(
+                    ConfigError::Invalid(
+                        "the shared agent token was removed in 0.3. Configure [auth.oidc] with \
+                         your identity provider (see agent.example.toml), and remove \
+                         COSMOS_AGENT_TOKEN / auth.token".into()
+                    )
+                ),
+            (None, false) =>
+                Err(
+                    ConfigError::Invalid(
+                        "no sign-in configured. Set [auth.oidc] (or COSMOS_AGENT_OIDC_ISSUER), or \
+                         auth.allow_anonymous = true if this agent really should be open to anyone \
+                         who can reach it".into()
+                    )
+                ),
         }
-        if let Some(token) = self.auth.token.as_ref().map(|t| t.trim()).filter(|t| !t.is_empty()) {
-            return Ok(Some(token.to_string()));
-        }
-        if self.auth.allow_anonymous {
-            return Ok(None);
-        }
-        Err(
-            ConfigError::Invalid(
-                "no auth token configured. Set COSMOS_AGENT_TOKEN, or auth.token_file in the \
-                 config, or set auth.allow_anonymous = true if this agent really should be open \
-                 to anyone who can reach it".into()
-            )
-        )
     }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum AuthMode {
+    Anonymous,
+    /// `ignored_token`: an old shared token is still configured.
+    Oidc {
+        ignored_token: bool,
+    },
 }
 
 fn env_bool(key: &str) -> Result<Option<bool>, ConfigError> {
@@ -441,19 +499,37 @@ mod tests {
     }
 
     #[test]
-    fn missing_token_is_a_startup_error_unless_anonymous_is_explicit() {
+    fn no_sign_in_is_a_startup_error_unless_anonymous_is_explicit() {
         let mut cfg = Config::default();
-        assert!(cfg.resolve_token().is_err(), "a tokenless agent must refuse to start");
+        assert!(cfg.auth_mode().is_err(), "an agent with no sign-in must refuse to start");
 
         cfg.auth.allow_anonymous = true;
-        assert_eq!(cfg.resolve_token().unwrap(), None);
+        assert_eq!(cfg.auth_mode().unwrap(), AuthMode::Anonymous);
     }
 
     #[test]
-    fn blank_token_is_treated_as_absent() {
+    fn an_old_token_config_explains_what_to_do() {
         let mut cfg = Config::default();
-        cfg.auth.token = Some("   ".to_string());
-        assert!(cfg.resolve_token().is_err());
+        cfg.auth.token = Some("s3cret".into());
+        let err = cfg.auth_mode().unwrap_err().to_string();
+        assert!(err.contains("[auth.oidc]"), "{err}");
+    }
+
+    #[test]
+    fn parses_oidc_with_defaults() {
+        let cfg: Config = toml
+            ::from_str(
+                r#"
+                [auth.oidc]
+                issuer = "https://auth.example.com/application/o/cosmos/"
+                client_id = "cosmos"
+            "#
+            )
+            .unwrap();
+        let oidc = cfg.auth.oidc.as_ref().unwrap();
+        assert_eq!(oidc.admin_groups, ["homelab-admins"]);
+        assert!(oidc.scopes.contains("offline_access"));
+        assert_eq!(cfg.auth_mode().unwrap(), AuthMode::Oidc { ignored_token: false });
     }
 
     #[test]

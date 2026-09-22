@@ -1,4 +1,9 @@
-//! Bearer-token auth, who the caller is, the write gate, and CORS.
+//! Who the caller is, the write gate, and CORS.
+//!
+//! Callers present an OIDC access token (see `oidc`) as a bearer token. The
+//! only other mode is `allow_anonymous`, for local development.
+
+pub mod oidc;
 
 use crate::{ error::AgentError, state::AppState };
 use axum::{
@@ -16,9 +21,6 @@ use tower_http::cors::{ AllowOrigin, CorsLayer };
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Role {
     Admin,
-    // The shared token can only ever be an admin. Viewers arrive with OIDC,
-    // which maps groups to roles.
-    #[allow(dead_code)]
     Viewer,
 }
 
@@ -39,11 +41,6 @@ impl Principal {
         self.role == Role::Admin
     }
 
-    /// The shared token is all-or-nothing, so its holder is an admin.
-    fn token_holder() -> Self {
-        Self { subject: "token".into(), name: "Token".into(), role: Role::Admin }
-    }
-
     /// `allow_anonymous` means "anyone who can reach the port", deliberately.
     fn anonymous() -> Self {
         Self { subject: "anonymous".into(), name: "Anonymous".into(), role: Role::Admin }
@@ -51,51 +48,55 @@ impl Principal {
 }
 
 #[derive(Clone)]
-pub struct Auth(Arc<AuthInner>);
-
-struct AuthInner {
-    token: Option<Box<[u8]>>,
+pub struct Auth {
+    mode: Arc<Mode>,
     allow_query: bool,
 }
 
+enum Mode {
+    /// Explicitly opened up. The agent refuses to start this way unless
+    /// `allow_anonymous` is set.
+    Anonymous,
+    Oidc(Arc<oidc::OidcVerifier>),
+}
+
 impl Auth {
-    pub fn new(token: Option<String>, allow_query: bool) -> Self {
-        Self(
-            Arc::new(AuthInner {
-                token: token.map(|t| t.into_bytes().into_boxed_slice()),
-                allow_query,
-            })
-        )
+    pub fn anonymous(allow_query: bool) -> Self {
+        Self { mode: Arc::new(Mode::Anonymous), allow_query }
+    }
+
+    /// Starts loading the provider's keys in the background.
+    pub fn oidc(cfg: &crate::config::OidcConfig, allow_query: bool) -> Self {
+        let verifier = Arc::new(oidc::OidcVerifier::new(cfg));
+        verifier.spawn_refresh();
+        Self { mode: Arc::new(Mode::Oidc(verifier)), allow_query }
     }
 
     pub fn required(&self) -> bool {
-        self.0.token.is_some()
+        !matches!(*self.mode, Mode::Anonymous)
     }
 
-    /// `None` means "not authenticated". With no token configured every
-    /// caller is let in, which is the correct reading of an agent that was
-    /// explicitly opened up; the agent refuses to start that way otherwise.
-    pub fn authenticate(&self, presented: Option<&str>) -> Option<Principal> {
-        match &self.0.token {
-            None => Some(Principal::anonymous()),
-            Some(expected) =>
-                presented
-                    .filter(|p| ct_eq(p.as_bytes(), expected))
-                    .map(|_| Principal::token_holder()),
+    /// `Ok(None)` is "not authenticated". `Err` is "can't tell right now"
+    /// (the provider is unreachable), which must not look like a bad token,
+    /// or the app would send the user back through sign-in for nothing.
+    pub async fn authenticate(&self, presented: Option<&str>) -> Result<Option<Principal>, AgentError> {
+        match &*self.mode {
+            Mode::Anonymous => Ok(Some(Principal::anonymous())),
+            Mode::Oidc(verifier) => {
+                let Some(token) = presented else {
+                    return Ok(None);
+                };
+                match verifier.verify(token).await {
+                    Ok(p) => Ok(Some(p)),
+                    Err(oidc::VerifyError::Invalid(reason)) => {
+                        tracing::debug!(%reason, "rejected token");
+                        Ok(None)
+                    }
+                    Err(oidc::VerifyError::Unavailable(reason)) => Err(AgentError::Unavailable(reason)),
+                }
+            }
         }
     }
-}
-
-/// Constant-time comparison. A plain `==` short-circuits at the first
-/// differing byte, which leaks the token prefix to anyone able to measure
-/// response latency across enough requests.
-fn ct_eq(a: &[u8], b: &[u8]) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    a.iter()
-        .zip(b.iter())
-        .fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 
 #[derive(Deserialize, Default)]
@@ -129,7 +130,7 @@ pub async fn require_auth(
     mut req: Request,
     next: Next
 ) -> Result<Response, AgentError> {
-    let principal = principal_from_parts(&state, req.headers(), req.uri()).ok_or(
+    let principal = principal_from_parts(&state, req.headers(), req.uri()).await?.ok_or(
         AgentError::Unauthorized
     )?;
     req.extensions_mut().insert(principal);
@@ -139,9 +140,13 @@ pub async fn require_auth(
 /// Identifies the caller without gating the request, for `/v1/info`, which
 /// answers unauthenticated but reveals a little more once it knows who's
 /// asking.
-pub fn principal_from_parts(state: &AppState, headers: &HeaderMap, uri: &Uri) -> Option<Principal> {
-    let presented = presented_token(headers, uri, state.auth.0.allow_query);
-    state.auth.authenticate(presented.as_deref())
+pub async fn principal_from_parts(
+    state: &AppState,
+    headers: &HeaderMap,
+    uri: &Uri
+) -> Result<Option<Principal>, AgentError> {
+    let presented = presented_token(headers, uri, state.auth.allow_query);
+    state.auth.authenticate(presented.as_deref()).await
 }
 
 /// Separate from `require_auth` and applied only to the mutating sub-router,
@@ -218,23 +223,32 @@ pub fn cors(cfg: &crate::config::Config) -> CorsLayer {
 mod tests {
     use super::*;
 
-    #[test]
-    fn rejects_wrong_absent_and_truncated_tokens() {
-        let auth = Auth::new(Some("s3cret".into()), true);
-        assert!(auth.authenticate(Some("s3cret")).is_some_and(|p| p.is_admin()));
-        assert!(auth.authenticate(Some("wrong")).is_none());
-        assert!(auth.authenticate(None).is_none());
-        // A prefix must not pass — this is what the length check guards.
-        assert!(auth.authenticate(Some("s3cre")).is_none());
-        assert!(auth.authenticate(Some("s3cretx")).is_none());
+    #[tokio::test]
+    async fn anonymous_mode_lets_anyone_in_as_admin() {
+        let auth = Auth::anonymous(false);
+        assert!(!auth.required());
+        assert!(auth.authenticate(None).await.unwrap().is_some_and(|p| p.is_admin()));
     }
 
-    #[test]
-    fn anonymous_mode_accepts_anything() {
-        let auth = Auth::new(None, false);
-        assert!(!auth.required());
-        assert!(auth.authenticate(None).is_some());
-        assert!(auth.authenticate(Some("whatever")).is_some());
+    #[tokio::test]
+    async fn oidc_mode_needs_a_valid_token() {
+        let p = oidc::tests::provider("k1").await;
+        let cfg = crate::config::OidcConfig {
+            issuer: p.issuer.clone(),
+            client_id: "cosmos".into(),
+            audience: None,
+            discovery_url: None,
+            admin_groups: vec!["homelab-admins".into()],
+            scopes: "openid".into(),
+        };
+        let auth = Auth::oidc(&cfg, true);
+        assert!(auth.required());
+        assert!(auth.authenticate(None).await.unwrap().is_none());
+        assert!(auth.authenticate(Some("junk")).await.unwrap().is_none());
+
+        let token = oidc::tests::token("k1", oidc::tests::claims(&p.issuer, &["homelab-admins"]));
+        let who = auth.authenticate(Some(&token)).await.unwrap().unwrap();
+        assert!(who.is_admin());
     }
 
     fn principal(role: Role) -> Principal {
@@ -250,15 +264,6 @@ mod tests {
         assert!(matches!(write_allowed(true, Some(&viewer)), Err(AgentError::Forbidden(_))));
         // No principal at all means the auth layer didn't run: fail closed.
         assert!(matches!(write_allowed(true, None), Err(AgentError::Forbidden(_))));
-    }
-
-    #[test]
-    fn constant_time_compare_is_correct_for_edge_cases() {
-        assert!(ct_eq(b"", b""));
-        assert!(!ct_eq(b"a", b""));
-        assert!(!ct_eq(b"", b"a"));
-        assert!(ct_eq(b"abc", b"abc"));
-        assert!(!ct_eq(b"abc", b"abd"));
     }
 
     fn presented_for(header: Option<&str>, uri: &str, allow_query: bool) -> Option<String> {

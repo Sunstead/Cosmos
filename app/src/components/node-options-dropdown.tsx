@@ -1,8 +1,7 @@
 import { memo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Info, KeyRound, MoreHorizontal, PencilLine, RefreshCw, Trash } from 'lucide-react';
+import { Info, LogIn, MoreHorizontal, PencilLine, RefreshCw, Trash } from 'lucide-react';
 import { useNodeStore, useNodeName } from '@/stores/nodes';
-import { useNodeMeta } from '@/api/queries';
 import { Button } from './ui/button';
 import {
   DropdownMenu,
@@ -12,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
 import { ConfirmDialog } from './confirm-dialog';
-import { NodeCredentialsDialog } from './node-credentials-dialog';
+import { useNodeSignIn, useSignIn } from '@/lib/sign-in';
 import { RenameNodeDialog } from './rename-node-dialog';
 
 export const NodeOptionsDropdown = memo(function NodeOptionsDropdown({
@@ -25,8 +24,9 @@ export const NodeOptionsDropdown = memo(function NodeOptionsDropdown({
   const removeNode = useNodeStore((s) => s.removeNode);
   const reconnect = useNodeStore((s) => s.reconnect);
   const name = useNodeName(nodeId) ?? 'this node';
-  const meta = useNodeMeta(nodeId);
-  const [dialog, setDialog] = useState<'rename' | 'token' | 'remove' | null>(null);
+  const needsSignIn = useNodeSignIn(nodeId);
+  const { start } = useSignIn();
+  const [dialog, setDialog] = useState<'rename' | 'remove' | null>(null);
   const close = (o: boolean) => !o && setDialog(null);
 
   return (
@@ -48,9 +48,11 @@ export const NodeOptionsDropdown = memo(function NodeOptionsDropdown({
           <DropdownMenuItem onSelect={() => setDialog('rename')}>
             <PencilLine /> Rename
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setDialog('token')}>
-            <KeyRound /> {meta?.status === 'unauthorized' ? 'Set token' : 'Change token'}
-          </DropdownMenuItem>
+          {needsSignIn && (
+            <DropdownMenuItem onSelect={() => void start(needsSignIn)}>
+              <LogIn /> Sign in
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onSelect={() => reconnect(nodeId)}>
             <RefreshCw /> Reconnect
           </DropdownMenuItem>
@@ -62,12 +64,11 @@ export const NodeOptionsDropdown = memo(function NodeOptionsDropdown({
       </DropdownMenu>
 
       <RenameNodeDialog nodeId={nodeId} open={dialog === 'rename'} onOpenChange={close} />
-      <NodeCredentialsDialog nodeId={nodeId} open={dialog === 'token'} onOpenChange={close} />
       <ConfirmDialog
         open={dialog === 'remove'}
         onOpenChange={close}
         title={`Remove ${name}?`}
-        description='Cosmos forgets this node and its token. The node itself is unchanged.'
+        description='Cosmos forgets this node. The node itself is unchanged.'
         confirmLabel='Remove'
         onConfirm={() => removeNode(nodeId)}
       />
