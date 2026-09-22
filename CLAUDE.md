@@ -193,6 +193,13 @@ custom controls in `TitleBar`. The Rust side emits `window-state` (fullscreen,
 maximized). Shortcuts live in `lib/shortcuts.ts` and feed the palette, key
 hints and menu.
 
+**macOS icon.** `app/src/assets/app.icon` (Icon Composer) is the source.
+`app/scripts/build-mac-icon.sh` compiles it to `src-tauri/icons/Assets.car`
+(Liquid Glass, shipped via `bundle.macOS.files` and `CFBundleIconName` in
+`src-tauri/Info.plist`) and a padded full-size `icon.icns` fallback. Both are
+committed; re-run the script after editing the icon (needs Xcode 26+ and Icon
+Composer). The glass icon only shows in a bundled build, not `tauri dev`.
+
 ## Gotchas worth knowing
 
 - **SSE events must stay unnamed.** The agent emits `Event::default().data(..)`
