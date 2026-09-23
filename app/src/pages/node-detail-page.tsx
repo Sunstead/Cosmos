@@ -4,6 +4,7 @@ import { Box, ChevronLeft, RefreshCw, ServerOff } from 'lucide-react';
 import { useHostInfo, useNodeMeta } from '@/api/queries';
 import { useNodeName, useNodeStore } from '@/stores/nodes';
 import { useContainersStore } from '@/stores/containers';
+import { useAwaiting } from '@/hooks/use-awaiting';
 import {
   formatBytes,
   getCpuPct,
@@ -66,6 +67,7 @@ export function NodeDetailPage({ nodeId }: { nodeId: string }) {
   const meta = useNodeMeta(nodeId);
   const { data: host } = useHostInfo(nodeId);
   const raw = useContainersStore((s) => s.nodeContainers[nodeId]);
+  const awaitingContainers = useAwaiting(useContainersStore((s) => s.nodeContainers), nodeId);
   const containers = useMemo<ContainerRow[]>(
     () => (raw ?? []).map((c) => ({ ...c, nodeId })).sort((a, b) => a.name.localeCompare(b.name)),
     [raw, nodeId],
@@ -207,6 +209,7 @@ export function NodeDetailPage({ nodeId }: { nodeId: string }) {
         columns={columns}
         data={containers}
         getRowId={(r) => r.id}
+        loading={awaitingContainers}
         empty={<EmptyState size='inline' icon={Box} title='No containers on this node' />}
       />
     </>

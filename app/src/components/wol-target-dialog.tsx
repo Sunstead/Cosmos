@@ -220,7 +220,7 @@ function TargetForm({
             <FieldDescription>How Cosmos tells it woke up.</FieldDescription>
           </Field>
 
-          <div className='grid grid-cols-[1fr_6rem] gap-3'>
+          <div className='grid grid-cols-[minmax(0,1fr)_6rem] gap-3'>
             <Field>
               <FieldLabel htmlFor='wol-broadcast'>Send to</FieldLabel>
               <Select value={broadcast} onValueChange={setBroadcast}>

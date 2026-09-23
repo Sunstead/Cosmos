@@ -40,6 +40,7 @@ type Listener<T> = (value: T) => void;
 
 const BACKOFF_MS = [1_000, 2_000, 4_000, 8_000, 15_000, 30_000];
 const LEGACY_CONTAINER_POLL_MS = 5_000;
+/** Only for agents without a volume stream (before 0.4). */
 const VOLUME_POLL_MS = 30_000;
 /** Access tokens last ~10 minutes; keep the one we send fresh. */
 const TOKEN_CHECK_MS = 60_000;
@@ -56,6 +57,7 @@ export class NodeConnection {
 
   private hostSource: EventSource | null = null;
   private containerSource: EventSource | null = null;
+  private volumeSource: EventSource | null = null;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private volumeTimer: ReturnType<typeof setInterval> | null = null;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -74,6 +76,7 @@ export class NodeConnection {
   };
 
   private lastHost: HostInfo | null = null;
+  private lastVolumes: VolumeInfo[] | null = null;
   private lastSeq = -1;
 
   private hostListeners = new Set<Listener<HostInfo>>();
@@ -109,8 +112,10 @@ export class NodeConnection {
   onVolumes(fn: Listener<VolumeInfo[]>): () => void {
     const wasEmpty = this.volumeListeners.size === 0;
     this.volumeListeners.add(fn);
-    // Otherwise the first subscriber waits out a full 30s poll interval.
-    if (wasEmpty && !this.stopped) void this.pollVolumes();
+    if (this.lastVolumes) fn(this.lastVolumes);
+    // When polling, the first subscriber would otherwise wait out a full
+    // interval. A stream sends its current value on open.
+    if (wasEmpty && !this.stopped && !this.volumeSource) void this.pollVolumes();
     return () => this.volumeListeners.delete(fn);
   }
 
@@ -179,8 +184,10 @@ export class NodeConnection {
   private teardown() {
     this.hostSource?.close();
     this.containerSource?.close();
+    this.volumeSource?.close();
     this.hostSource = null;
     this.containerSource = null;
+    this.volumeSource = null;
 
     for (const t of [this.pollTimer, this.volumeTimer, this.tokenTimer]) if (t) clearInterval(t);
     if (this.retryTimer) clearTimeout(this.retryTimer);
@@ -252,7 +259,7 @@ export class NodeConnection {
     if (auth) this.keepTokenFresh(auth);
     this.openHostStream();
     this.openContainerStream();
-    this.startVolumePolling();
+    this.openVolumeStream();
   }
 
   /** A 401 may just be an expired token: refresh once before giving up. */
@@ -363,6 +370,34 @@ export class NodeConnection {
     }
   }
 
+  /**
+   * Streamed like containers, so a delete from here or the CLI, and a volume
+   * freed by a removed container, show up at once. Older agents are polled.
+   */
+  private openVolumeStream() {
+    if (!this.meta.capabilities.volume_stream) return this.startVolumePolling();
+
+    const source = new EventSource(this.client.volumesStreamUrl());
+    this.volumeSource = source;
+
+    source.onmessage = (e) => {
+      try {
+        const parsed = JSON.parse(e.data) as { volumes: VolumeInfo[] };
+        this.publishVolumes(parsed.volumes);
+      } catch {
+        /* malformed frame; the next one will do */
+      }
+    };
+
+    // Like containers: a failed volume stream doesn't mark the node offline.
+    source.onerror = () => {
+      if (source.readyState === EventSource.CLOSED) {
+        this.volumeSource = null;
+        if (!this.volumeTimer) this.startVolumePolling();
+      }
+    };
+  }
+
   private startVolumePolling() {
     void this.pollVolumes();
     this.volumeTimer = setInterval(() => void this.pollVolumes(), VOLUME_POLL_MS);
@@ -372,9 +407,14 @@ export class NodeConnection {
     if (this.volumeListeners.size === 0) return;
     try {
       const result = await this.client.getVolumes();
-      for (const fn of this.volumeListeners) fn(result.volumes);
+      this.publishVolumes(result.volumes);
     } catch {
       /* volumes are not worth changing node status over */
     }
+  }
+
+  private publishVolumes(volumes: VolumeInfo[]) {
+    this.lastVolumes = volumes;
+    for (const fn of this.volumeListeners) fn(volumes);
   }
 }

@@ -152,9 +152,10 @@ export function CommandPalette() {
       onOpenChange={(o) => (o ? setOpen(true) : close())}
       title='Command palette'
       description='Search pages, nodes, services and containers'
-      className='glass sm:max-w-xl'
+      className='sm:max-w-xl'
     >
-      <Command loop>
+      {/* The dialog is already tinted glass; a second bg-popover hides the blur. */}
+      <Command loop className='bg-transparent'>
         <CommandInput
           value={search}
           onValueChange={setSearch}

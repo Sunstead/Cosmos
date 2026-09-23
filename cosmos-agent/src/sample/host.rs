@@ -248,9 +248,9 @@ impl HostProbe {
             if d.total_space() == 0 {
                 continue;
             }
-            // Filters out overlayfs, tmpfs and bind-mount noise, and remaps
-            // `/host/rootfs` back to `/` for display.
-            let Some(label) = self.filters.disk_label(&mount) else {
+            // Filters out overlayfs, tmpfs and bind-mount noise, and names
+            // mounts under the host root by their host path.
+            let Some(label) = self.filters.disk_label(&mount, &d.file_system().to_string_lossy()) else {
                 continue;
             };
 

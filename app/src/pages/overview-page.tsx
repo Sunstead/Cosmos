@@ -4,6 +4,7 @@ import { Boxes, ChevronRight, Database, Hexagon, Server } from 'lucide-react';
 import { useNodeStore } from '@/stores/nodes';
 import { useContainersStore } from '@/stores/containers';
 import { useVolumesStore } from '@/stores/volumes';
+import { useAwaiting } from '@/hooks/use-awaiting';
 import { userFacingServices } from '@/lib/services';
 import { getServiceStatusDisplay } from '@/lib/service-utils';
 import { PageHeader } from '@/components/page-header';
@@ -25,6 +26,12 @@ export function OverviewPage() {
   const nodeContainers = useContainersStore((s) => s.nodeContainers);
   const allServices = useContainersStore((s) => s.services);
   const nodeVolumes = useVolumesStore((s) => s.nodeVolumes);
+  const awaitingContainers = useAwaiting(nodeContainers);
+  const awaitingVolumes = useAwaiting(nodeVolumes);
+  // Only nodes that have given up count as offline; connecting is not a fault.
+  const down = useNodeStore((s) =>
+    s.nodes.filter((n) => ['offline', 'unauthorized'].includes(s.meta[n.id]?.status ?? '')).length,
+  );
   const steps = useSetupSteps();
 
   const services = useMemo(() => userFacingServices(allServices), [allServices]);
@@ -50,7 +57,6 @@ export function OverviewPage() {
     );
   }
 
-  const offline = nodes.length - onlineNodes;
   const setupDone = steps.every((s) => s.done);
   const launchable = services.filter((s) => s.url).slice(0, QUICK_LAUNCH_MAX);
 
@@ -63,7 +69,7 @@ export function OverviewPage() {
           icon={Server}
           label='Nodes'
           value={`${onlineNodes} / ${nodes.length}`}
-          sublabel={offline ? `${offline} offline` : null}
+          sublabel={down ? `${down} offline` : null}
           tone='error'
         />
         <StatCard
@@ -72,9 +78,20 @@ export function OverviewPage() {
           value={`${stats.healthy} / ${services.length}`}
           sublabel={services.length - stats.healthy ? `${services.length - stats.healthy} degraded` : null}
           tone='warning'
+          loading={awaitingContainers && stats.containers === 0}
         />
-        <StatCard icon={Boxes} label='Containers' value={`${stats.running} / ${stats.containers}`} />
-        <StatCard icon={Database} label='Volumes' value={`${stats.volumesInUse} / ${stats.volumes}`} />
+        <StatCard
+          icon={Boxes}
+          label='Containers'
+          value={`${stats.running} / ${stats.containers}`}
+          loading={awaitingContainers && stats.containers === 0}
+        />
+        <StatCard
+          icon={Database}
+          label='Volumes'
+          value={`${stats.volumesInUse} / ${stats.volumes}`}
+          loading={awaitingVolumes && stats.volumes === 0}
+        />
       </StatRow>
 
       <div className='grid gap-4 @5xl:grid-cols-3'>

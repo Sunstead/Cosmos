@@ -101,7 +101,7 @@ pub fn spawn_containers(
             // instant instead of waiting out a 2s tick.
             tokio::select! {
                 _ = ticker.tick() => {}
-                _ = docker.notify().notified() => {}
+                _ = docker.containers_changed().notified() => {}
             }
 
             let Some(client) = docker.try_reconnect() else {
@@ -134,8 +134,9 @@ pub fn spawn_containers(
     rx
 }
 
-/// Volumes change rarely, so this runs slowly and relies on Docker events for
-/// anything that happens in between.
+/// Volumes change rarely, so the timer is slow; Docker events and actions
+/// wake it for anything that happens in between. A sample is two list calls,
+/// cheap enough to run on every change.
 pub fn spawn_volumes(docker: DockerHandle) -> watch::Receiver<Arc<VolumeSnapshot>> {
     let (tx, rx) = watch::channel(Arc::new(VolumeSnapshot::empty()));
 
@@ -145,7 +146,10 @@ pub fn spawn_volumes(docker: DockerHandle) -> watch::Receiver<Arc<VolumeSnapshot
         let mut failing = false;
 
         loop {
-            ticker.tick().await;
+            tokio::select! {
+                _ = ticker.tick() => {}
+                _ = docker.volumes_changed().notified() => {}
+            }
 
             let Some(client) = docker.client() else {
                 continue;
@@ -170,7 +174,7 @@ pub fn spawn_volumes(docker: DockerHandle) -> watch::Receiver<Arc<VolumeSnapshot
     rx
 }
 
-/// Watches the Docker event stream and pokes the container sampler.
+/// Watches the Docker event stream and pokes the samplers it affects.
 pub fn spawn_event_watcher(docker: DockerHandle) {
     tokio::spawn(async move {
         loop {
@@ -195,7 +199,7 @@ pub fn spawn_event_watcher(docker: DockerHandle) {
             tracing::debug!("watching docker events");
             while let Some(event) = events.next().await {
                 match event {
-                    Ok(_) => docker.notify().notify_waiters(),
+                    Ok(event) => poke_for_event(&docker, &event),
                     Err(e) => {
                         tracing::debug!(error = %e, "docker event stream ended");
                         break;
@@ -208,6 +212,23 @@ pub fn spawn_event_watcher(docker: DockerHandle) {
             tokio::time::sleep(Duration::from_secs(5)).await;
         }
     });
+}
+
+/// Volume events change the volume list. Container create and destroy change
+/// which containers use a volume; the rest (start, health, exec, ...) don't,
+/// and health checks alone would otherwise resample volumes every few seconds.
+fn poke_for_event(docker: &DockerHandle, event: &bollard::models::EventMessage) {
+    use bollard::models::EventMessageTypeEnum as Kind;
+    match event.typ {
+        Some(Kind::VOLUME) => docker.poke_volumes(),
+        Some(Kind::CONTAINER) => {
+            docker.poke_containers();
+            if matches!(event.action.as_deref(), Some("create" | "destroy")) {
+                docker.poke_volumes();
+            }
+        }
+        _ => {}
+    }
 }
 
 /// Backups. A file poll, so it's cheap enough to run on the async runtime.
@@ -244,4 +265,61 @@ pub fn spawn_self_identification(docker: DockerHandle, hostname: String) {
             docker.set_self_id(Some(id));
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bollard::models::{ EventMessage, EventMessageTypeEnum as Kind };
+    use std::time::Duration;
+
+    fn event(typ: Kind, action: &str) -> EventMessage {
+        EventMessage { typ: Some(typ), action: Some(action.into()), ..Default::default() }
+    }
+
+    /// Whether a poke is waiting, without consuming more than a moment.
+    async fn poked(n: &tokio::sync::Notify) -> bool {
+        tokio::time::timeout(Duration::from_millis(20), n.notified()).await.is_ok()
+    }
+
+    fn handle() -> DockerHandle {
+        DockerHandle::new("/nonexistent/docker.sock".into())
+    }
+
+    #[tokio::test]
+    async fn volume_events_wake_only_the_volume_sampler() {
+        let docker = handle();
+        poke_for_event(&docker, &event(Kind::VOLUME, "destroy"));
+        assert!(poked(docker.volumes_changed()).await);
+        assert!(!poked(docker.containers_changed()).await);
+    }
+
+    #[tokio::test]
+    async fn container_create_and_destroy_also_refresh_volumes() {
+        for action in ["create", "destroy"] {
+            let docker = handle();
+            poke_for_event(&docker, &event(Kind::CONTAINER, action));
+            assert!(poked(docker.containers_changed()).await, "{action}");
+            assert!(poked(docker.volumes_changed()).await, "{action}");
+        }
+    }
+
+    #[tokio::test]
+    async fn noisy_container_events_leave_volumes_alone() {
+        let docker = handle();
+        poke_for_event(&docker, &event(Kind::CONTAINER, "health_status: healthy"));
+        assert!(poked(docker.containers_changed()).await);
+        assert!(!poked(docker.volumes_changed()).await);
+    }
+
+    /// The bug this replaced: `notify_waiters` dropped a poke that arrived
+    /// while the sampler was busy sampling, so it waited out a full tick.
+    #[tokio::test]
+    async fn a_poke_while_nobody_waits_is_kept() {
+        let docker = handle();
+        docker.poke_volumes();
+        assert!(poked(docker.volumes_changed()).await);
+        // One permit, not a backlog.
+        assert!(!poked(docker.volumes_changed()).await);
+    }
 }

@@ -156,6 +156,11 @@ pub struct HostConfig {
     /// "report everything with a non-zero size", which is right on a host and
     /// wrong in a container (you get overlayfs and every bind mount).
     pub disks: Vec<DiskConfig>,
+    /// Where the host's `/` is mounted in the container, e.g. `/host/rootfs`.
+    /// Every real filesystem under it (the bind is recursive) is reported
+    /// under its host path, so a second drive needs no entry of its own.
+    /// Defaults to the `disks` entry labelled `/`.
+    pub root: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -247,6 +252,7 @@ impl Default for HostConfig {
                 .collect(),
             net_include: Vec::new(),
             disks: Vec::new(),
+            root: None,
         }
     }
 }
@@ -537,6 +543,13 @@ mod tests {
         let mut cfg = Config::default();
         cfg.host.interval_ms = 50;
         assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn parses_the_host_root() {
+        let cfg: Config = toml::from_str("[host]\nroot = \"/hostfs\"").expect("valid config");
+        assert_eq!(cfg.host.root.as_deref(), Some("/hostfs"));
+        assert_eq!(Config::default().host.root, None);
     }
 
     #[test]

@@ -140,6 +140,83 @@ describe('NodeConnection', () => {
     conn.stop();
   });
 
+  describe('volumes', () => {
+    const vol = (name: string) => ({
+      name,
+      driver: 'local',
+      mountpoint: `/var/lib/docker/volumes/${name}/_data`,
+      created_at: null,
+      scope: 'local',
+      compose_project: null,
+      cosmos_service: null,
+      in_use_by: [],
+    });
+    const names = (lists: { name: string }[][]) => lists.map((l) => l.map((v) => v.name));
+
+    it('streams them, so a delete shows up with the next frame', async () => {
+      const { conn } = connect(healthy);
+      const seen: { name: string }[][] = [];
+      conn.onVolumes((v) => seen.push(v));
+      conn.start();
+      await settle();
+
+      const stream = FakeEventSource.latest('/v1/volumes/stream')!;
+      expect(stream.url).toContain('token=tok');
+      stream.emit({ volumes: [vol('data'), vol('cache')], sampled_at: 1 });
+      stream.emit({ volumes: [vol('data')], sampled_at: 2 });
+      expect(names(seen).slice(-2)).toEqual([['data', 'cache'], ['data']]);
+      conn.stop();
+    });
+
+    it('hands the latest list to a late subscriber', async () => {
+      const { conn } = connect(healthy);
+      conn.onVolumes(() => {});
+      conn.start();
+      await settle();
+      FakeEventSource.latest('/v1/volumes/stream')!.emit({ volumes: [vol('data')], sampled_at: 1 });
+
+      const late: { name: string }[][] = [];
+      conn.onVolumes((v) => late.push(v));
+      expect(names(late)).toEqual([['data']]);
+      conn.stop();
+    });
+
+    it('polls an agent without a volume stream', async () => {
+      const info = agentInfo();
+      const { conn } = connect({
+        ...healthy,
+        '/v1/info': { body: { ...info, capabilities: { ...info.capabilities, volume_stream: false } } },
+        '/v1/volumes': { body: { volumes: [vol('data')], sampled_at: 0 } },
+      });
+      const seen: { name: string }[][] = [];
+      conn.onVolumes((v) => seen.push(v));
+      conn.start();
+      await settle();
+
+      expect(FakeEventSource.latest('/v1/volumes/stream')).toBeUndefined();
+      expect(names(seen).at(-1)).toEqual(['data']);
+      conn.stop();
+    });
+
+    it('falls back to polling when the stream closes, without going offline', async () => {
+      const { conn, metas } = connect({
+        ...healthy,
+        '/v1/volumes': { body: { volumes: [vol('data')], sampled_at: 0 } },
+      });
+      const seen: { name: string }[][] = [];
+      conn.onVolumes((v) => seen.push(v));
+      conn.start();
+      await settle();
+      FakeEventSource.latest('/v1/host/stream')!.emit(hostInfo());
+
+      FakeEventSource.latest('/v1/volumes/stream')!.fail();
+      await settle();
+      expect(names(seen).at(-1)).toEqual(['data']);
+      expect(metas.at(-1)?.status).toBe('online');
+      conn.stop();
+    });
+  });
+
   it('falls back to legacy capabilities when /v1/info is missing', async () => {
     const { conn, metas } = connect({
       '/v1/host': { body: hostInfo() },
@@ -151,8 +228,9 @@ describe('NodeConnection', () => {
 
     expect(metas.at(-1)?.apiVersion).toBe(0);
     expect(metas.at(-1)?.capabilities.container_actions).toBe(false);
-    // Legacy agents have no container stream.
+    // Legacy agents have no container or volume stream.
     expect(FakeEventSource.latest('/v1/containers/stream')).toBeUndefined();
+    expect(FakeEventSource.latest('/v1/volumes/stream')).toBeUndefined();
     conn.stop();
   });
 

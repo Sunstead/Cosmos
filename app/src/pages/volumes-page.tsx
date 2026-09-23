@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Database, Link2, PackageOpen, SearchX, Unlink } from 'lucide-react';
 import { useVolumesStore } from '@/stores/volumes';
+import { useAwaiting } from '@/hooks/use-awaiting';
 import { useNodeStore } from '@/stores/nodes';
 import { matchesQuery } from '@/lib/format';
 import { PageHeader } from '@/components/page-header';
@@ -16,6 +17,7 @@ type Filter = 'all' | 'used' | 'unused';
 export function VolumesPage() {
   const nodeCount = useNodeStore((s) => s.nodes.length);
   const nodeVolumes = useVolumesStore((s) => s.nodeVolumes);
+  const awaiting = useAwaiting(nodeVolumes);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
 
@@ -84,6 +86,7 @@ export function VolumesPage() {
             </StatRow>
           )}
           <DataTable
+            loading={awaiting}
             columns={columns}
             data={visible}
             getRowId={(r) => `${r.nodeId}:${r.name}`}

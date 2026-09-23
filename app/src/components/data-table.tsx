@@ -17,6 +17,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Card } from './ui/card';
+import { SkeletonRows } from './skeletons';
 import { cn } from '@/lib/utils';
 
 /**
@@ -28,12 +29,15 @@ export function DataTable<TData, TValue>({
   data,
   getRowId,
   empty,
+  loading = false,
 }: {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
   getRowId?: (row: TData) => string;
   /** Rendered in place of the body when there are no rows. */
   empty: ReactNode;
+  /** No rows yet because data is on its way: skeleton rows, not `empty`. */
+  loading?: boolean;
 }) {
   const [sorting, setSorting] = useState<SortingState>([]);
 
@@ -48,7 +52,7 @@ export function DataTable<TData, TValue>({
   });
 
   return (
-    <Card className='p-0'>
+    <Card className='p-0' aria-busy={loading && !data.length ? true : undefined}>
       <Table>
         <TableHeader>
           {table.getHeaderGroups().map((group) => (
@@ -98,6 +102,8 @@ export function DataTable<TData, TValue>({
                 ))}
               </TableRow>
             ))
+          ) : loading ? (
+            <SkeletonRows columns={columns.length} />
           ) : (
             <TableRow className='hover:bg-transparent'>
               <TableCell colSpan={columns.length} className='p-0'>

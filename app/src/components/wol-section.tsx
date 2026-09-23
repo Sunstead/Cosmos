@@ -7,6 +7,7 @@ import { matchesQuery } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { Section } from '@/components/section';
 import { EmptyState } from '@/components/empty-state';
+import { TableSkeleton } from '@/components/skeletons';
 import { SETUP } from '@/components/setup-hint';
 import { Dot, DotVariant } from '@/components/dot';
 import { NodeName } from '@/components/node-name';
@@ -156,6 +157,7 @@ export const WolSection = memo(function WolSection({
       );
     }
     if (wol.error) return <EmptyState size='inline' icon={Power} title='Could not load' description={wol.error} />;
+    if (wol.loading && wol.items.length === 0) return <TableSkeleton columns={3} rows={2} />;
     if (wol.items.length === 0) {
       return (
         <EmptyState
@@ -176,7 +178,6 @@ export const WolSection = memo(function WolSection({
             <TableHead className='h-9 text-xs'>Machine</TableHead>
             {multiNode && <TableHead className='h-9 text-xs'>Node</TableHead>}
             <TableHead className='h-9 text-xs'>State</TableHead>
-            <TableHead className='h-9 text-xs'>Last</TableHead>
             <TableHead className='h-9 text-xs'>
               <span className='sr-only'>Actions</span>
             </TableHead>
@@ -194,10 +195,12 @@ export const WolSection = memo(function WolSection({
                   <NodeName nodeId={item.nodeId} />
                 </TableCell>
               )}
-              <TableCell className='whitespace-nowrap'>
-                <StateCell item={item} />
+              <TableCell>
+                <div className='whitespace-nowrap'>
+                  <StateCell item={item} />
+                </div>
+                {lastLine(item) && <div className='pl-4 text-xs text-muted-foreground'>{lastLine(item)}</div>}
               </TableCell>
-              <TableCell className='text-muted-foreground'>{lastLine(item) ?? ''}</TableCell>
               <TableCell>
                 <div className='flex items-center justify-end gap-1'>
                   <WakeButton item={item} />
