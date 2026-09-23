@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Box, Container, Cpu, MemoryStick, SearchX } from 'lucide-react';
 import { useContainersStore } from '@/stores/containers';
+import { useAwaiting } from '@/hooks/use-awaiting';
 import { useNodeStore } from '@/stores/nodes';
 import { formatBytes } from '@/lib/node-metrics';
 import { matchesQuery } from '@/lib/format';
@@ -17,6 +18,7 @@ type Filter = 'all' | 'running' | 'stopped';
 export function ContainersPage() {
   const nodeCount = useNodeStore((s) => s.nodes.length);
   const nodeContainers = useContainersStore((s) => s.nodeContainers);
+  const awaiting = useAwaiting(nodeContainers);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
 
@@ -94,6 +96,7 @@ export function ContainersPage() {
           <DataTable
             columns={columns}
             data={visible}
+            loading={awaiting}
             getRowId={(r) => `${r.nodeId}:${r.id}`}
             empty={
               filtered ? (

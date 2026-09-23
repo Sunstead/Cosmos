@@ -65,3 +65,10 @@ export async function overflowing(container: Locator) {
     return out;
   });
 }
+
+/** A page section (not a summary stat card) by its heading. */
+export function section(page: Page, title: string | RegExp) {
+  return page.locator('[data-slot=card]:not([data-stat-card])', {
+    has: page.getByRole('heading', { name: title }),
+  });
+}

@@ -7,15 +7,20 @@ import { SegmentedControl } from '@/components/segmented-control';
 import { EmptyState, NoNodesState } from '@/components/empty-state';
 import { SETUP } from '@/components/setup-hint';
 import { useContainersStore } from '@/stores/containers';
+import { useAwaiting } from '@/hooks/use-awaiting';
+import { CardGridSkeleton } from '@/components/skeletons';
 import { useNodeStore } from '@/stores/nodes';
 import { ServiceStatus, userFacingServices } from '@/lib/services';
 import { matchesQuery } from '@/lib/format';
 
 type Filter = 'all' | ServiceStatus;
 
+const SERVICE_GRID = 'grid grid-cols-[repeat(auto-fill,minmax(20rem,1fr))] gap-4';
+
 export function ServicesPage() {
   const nodeCount = useNodeStore((s) => s.nodes.length);
   const allServices = useContainersStore((s) => s.services);
+  const awaiting = useAwaiting(useContainersStore((s) => s.nodeContainers));
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
 
@@ -65,6 +70,8 @@ export function ServicesPage() {
 
       {nodeCount === 0 ? (
         <NoNodesState />
+      ) : services.length === 0 && awaiting ? (
+        <CardGridSkeleton count={6} className={SERVICE_GRID} />
       ) : services.length === 0 ? (
         <EmptyState
           size='page'
@@ -76,7 +83,7 @@ export function ServicesPage() {
       ) : visible.length === 0 ? (
         <EmptyState size='page' icon={SearchX} title='No matching services' />
       ) : (
-        <div className='grid grid-cols-[repeat(auto-fill,minmax(20rem,1fr))] gap-4'>
+        <div className={SERVICE_GRID}>
           {visible.map((s) => (
             <ServiceCard key={`${s.nodeId}:${s.key}`} service={s} showNode={nodeCount > 1} />
           ))}

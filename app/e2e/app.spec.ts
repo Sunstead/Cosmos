@@ -1,6 +1,6 @@
 import { createSocket } from 'node:dgram';
 import { expect, test } from '@playwright/test';
-import { addNode, addNodeOnline, agentUrl, apiToken, nextSignIn, overflowing, PAGES } from './helpers';
+import { addNode, addNodeOnline, agentUrl, apiToken, nextSignIn, overflowing, PAGES, section } from './helpers';
 
 test.describe('empty app', () => {
   test('every page keeps its header with no nodes', async ({ page }) => {
@@ -83,7 +83,7 @@ test.describe('with a node', () => {
     await expect(page.getByText('Viewer')).toBeVisible();
 
     await page.goto('/network');
-    const wol = page.locator('[data-slot=card]', { hasText: 'Wake-on-LAN' });
+    const wol = section(page, 'Wake-on-LAN');
     await expect(wol).toBeVisible();
     await expect(wol.getByRole('button', { name: 'Add' })).toHaveCount(0);
   });
@@ -125,16 +125,49 @@ test.describe('with a node', () => {
   test('network page lists the tailnet', async ({ page }) => {
     await addNodeOnline(page);
     await page.goto('/network');
-    const section = page.locator('[data-slot=card]', { hasText: 'Tailnet' });
+    const card = section(page, 'Tailnet');
     // The agent reads the fake tailscaled from global-setup.
-    await expect(section.getByRole('row', { name: /desktop/ })).toContainText('Direct', { timeout: 15_000 });
-    await expect(section.getByRole('row', { name: /pixel/ })).toContainText('Relay sea');
-    await expect(section.getByRole('row', { name: /air/ })).toContainText('Seen');
+    await expect(card.getByRole('row', { name: /desktop/ })).toContainText('Direct', { timeout: 15_000 });
+    await expect(card.getByRole('row', { name: /pixel/ })).toContainText('Relay sea');
+    await expect(card.getByRole('row', { name: /air/ })).toContainText('Seen');
     // The agent's own device is this node.
-    await expect(section.getByRole('row', { name: /e2e-node/ }).getByRole('link', { name: 'Node' })).toBeVisible();
+    await expect(card.getByRole('row', { name: /e2e-node/ }).getByRole('link', { name: 'Node' })).toBeVisible();
 
     await page.getByPlaceholder('Search devices and ports').fill('pixel');
-    await expect(section.getByRole('row')).toHaveCount(2);
+    await expect(card.getByRole('row')).toHaveCount(2);
+  });
+
+  test('network page is two columns when wide and fits when narrow', async ({ page }) => {
+    await addNodeOnline(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/network');
+    const tailnet = section(page, 'Tailnet');
+    const wol = section(page, 'Wake-on-LAN');
+    await expect(tailnet.getByRole('row', { name: /desktop/ })).toBeVisible({ timeout: 15_000 });
+
+    // Side by side, not stacked.
+    const [t, w] = [(await tailnet.boundingBox())!, (await wol.boundingBox())!];
+    expect(Math.abs(t.y - w.y)).toBeLessThan(2);
+    expect(w.x).toBeGreaterThan(t.x + t.width - 1);
+
+    // A summary row sits above the sections.
+    await expect(page.getByTestId('network-summary')).toContainText('3/4');
+
+    // Quiet interfaces are folded away behind a toggle.
+    const interfaces = page.locator('[data-slot=card][data-interfaces]').first();
+    const toggle = interfaces.getByRole('button', { name: /more/ });
+    if (await toggle.count()) {
+      const before = await interfaces.getByRole('row').count();
+      await toggle.click();
+      expect(await interfaces.getByRole('row').count()).toBeGreaterThan(before);
+    }
+
+    for (const width of [900, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const c of await page.locator('main [data-slot=card]').all()) {
+        expect(await overflowing(c), `@${width}`).toEqual([]);
+      }
+    }
   });
 
   test('adds a machine and wakes it with a real magic packet', async ({ page, request }) => {
@@ -146,15 +179,15 @@ test.describe('with a node', () => {
 
     await addNodeOnline(page);
     await page.goto('/network');
-    const section = page.locator('[data-slot=card]', { hasText: 'Wake-on-LAN' });
+    const card = section(page, 'Wake-on-LAN');
 
     // Through the dialog.
-    await section.getByRole('button', { name: 'Add' }).click();
+    await card.getByRole('button', { name: 'Add' }).click();
     const dialog = page.getByRole('dialog');
     await dialog.getByLabel('Name').fill('laptop');
     await dialog.getByLabel('MAC address').fill('11-22-33-44-55-66');
     await dialog.getByRole('button', { name: 'Add' }).click();
-    await expect(section.getByRole('row', { name: /laptop/ })).toContainText('11:22:33:44:55:66');
+    await expect(card.getByRole('row', { name: /laptop/ })).toContainText('11:22:33:44:55:66');
 
     // Loopback isn't offered in the dialog, so this one goes in through the API.
     const res = await request.post(`${agentUrl()}/v1/wol/targets`, {
@@ -163,7 +196,7 @@ test.describe('with a node', () => {
     });
     expect(res.status()).toBe(201);
 
-    const row = section.getByRole('row', { name: /desktop/ });
+    const row = card.getByRole('row', { name: /desktop/ });
     await expect(row).toBeVisible({ timeout: 15_000 });
     await row.getByRole('button', { name: 'Wake desktop' }).click();
 
@@ -178,7 +211,7 @@ test.describe('with a node', () => {
   test('the add machine dialog keeps every field inside it', async ({ page }, info) => {
     await addNodeOnline(page);
     await page.goto('/network');
-    await page.locator('[data-slot=card]', { hasText: 'Wake-on-LAN' }).getByRole('button', { name: 'Add' }).click();
+    await section(page, 'Wake-on-LAN').getByRole('button', { name: 'Add' }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByLabel('Send to')).toBeVisible();
     expect(await overflowing(dialog)).toEqual([]);
@@ -229,6 +262,25 @@ test.describe('with a node', () => {
     const c = body!.containers[0];
     await page.goto(`/logs?node=${nodeId}&container=${c.id}`);
     await expect(page.getByRole('combobox').filter({ hasText: c.name })).toBeVisible();
+  });
+
+  test('pages show skeletons, not empty states, while data is on its way', async ({ page }, info) => {
+    await addNodeOnline(page);
+    const detail = new URL(page.url()).pathname;
+    // The node is up (info and host pass) but nothing else has answered yet.
+    await page.route(`${agentUrl()}/**`, async (route) => {
+      const path = new URL(route.request().url()).pathname;
+      if (['/v1/info', '/v1/host', '/v1/host/stream'].includes(path)) return route.continue();
+      // Held: never answered while the spec looks.
+    });
+    const falseEmpty = /No containers|No volumes|No services yet|No machines yet|Loading devices|No ports published/;
+    for (const path of ['/containers', '/volumes', '/services', '/logs', '/network', '/overview', detail]) {
+      await page.goto(path);
+      await expect(page.locator('main [data-slot=skeleton]').first(), path).toBeVisible();
+      // The layout nests the scrolling <main> inside the sidebar inset's.
+      await expect(page.locator('main').last(), path).not.toContainText(falseEmpty);
+      await page.screenshot({ path: info.outputPath(`loading${path.replaceAll('/', '-')}.png`) });
+    }
   });
 
   test('screenshots of every page in both themes', async ({ page }, info) => {
