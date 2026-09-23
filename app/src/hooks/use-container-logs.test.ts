@@ -162,4 +162,73 @@ describe('useContainerLogs', () => {
       expect(result.current.lines[0].container).toBe('c1');
     });
   });
+
+  describe('a replaced socket that is still talking', () => {
+    // Seen in WebKit (the desktop app, Safari): the socket being replaced
+    // reports its close, sometimes as an error, after the new one has
+    // opened. The old hook let that re-stamp the session with the old
+    // target, so the new container's lines were ignored and the page sat on
+    // "Connecting" and its skeleton until a refresh. Chromium orders these
+    // events differently, which is why it only showed up there.
+    it('does not let the old socket\'s late close strand the new selection', () => {
+      const { result, rerender } = renderHook(
+        ({ id }) => useContainerLogs({ nodeId: 'n1', containerId: id, follow: true }),
+        { initialProps: { id: 'auto-picked' } },
+      );
+      const stale = FakeWebSocket.instances[0];
+      act(() => stale.open());
+      const staleError = stale.onerror;
+      const staleClose = stale.onclose;
+
+      rerender({ id: 'chosen' });
+      const fresh = FakeWebSocket.instances[1];
+      act(() => fresh.open());
+
+      act(() => {
+        staleError?.();
+        staleClose?.();
+      });
+      expect(result.current.state).toBe('streaming');
+
+      act(() => {
+        fresh.send(line('hello'));
+        vi.advanceTimersByTime(200);
+      });
+      expect(result.current.lines.map((l) => l.text)).toEqual(['hello']);
+    });
+
+    it('does not let a socket replaced mid-handshake strand it either', () => {
+      const { result, rerender } = renderHook(
+        ({ id }) => useContainerLogs({ nodeId: 'n1', containerId: id, follow: true }),
+        { initialProps: { id: 'auto-picked' } },
+      );
+      const staleError = FakeWebSocket.instances[0].onerror;
+      rerender({ id: 'chosen' });
+      act(() => FakeWebSocket.instances[1].open());
+      act(() => staleError?.());
+      expect(result.current.state).toBe('streaming');
+    });
+
+    it('drops lines the old socket delivers after the switch', () => {
+      const { result, rerender } = renderHook(
+        ({ id }) => useContainerLogs({ nodeId: 'n1', containerId: id, follow: true }),
+        { initialProps: { id: 'c1' } },
+      );
+      const stale = FakeWebSocket.instances[0];
+      const staleMessage = stale.onmessage;
+      act(() => stale.open());
+
+      rerender({ id: 'c2' });
+      const fresh = FakeWebSocket.instances[1];
+      act(() => {
+        fresh.open();
+        staleMessage?.({ data: JSON.stringify(line('from c1')) });
+        staleMessage?.({ data: JSON.stringify({ type: 'closed', reason: 'gone' }) });
+        fresh.send(line('from c2'));
+        vi.advanceTimersByTime(200);
+      });
+      expect(result.current.lines.map((l) => l.text)).toEqual(['from c2']);
+      expect(result.current.state).toBe('streaming');
+    });
+  });
 });
