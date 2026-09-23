@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { createSocket } from 'node:dgram';
 import { expect, test } from '@playwright/test';
 import { addNode, addNodeOnline, agentUrl, apiToken, nextSignIn, overflowing, PAGES, section } from './helpers';
@@ -295,4 +296,70 @@ test.describe('with a node', () => {
       }
     }
   });
+});
+
+test.describe('logs', () => {
+  test.use({ timezoneId: 'Asia/Kolkata' });
+
+    test('logs: all containers at once, coloured by level not stream, in local time', async ({ page }, info) => {
+      // Needs Docker and a local alpine image; never pulls one.
+      const docker = (...args: string[]) => execFileSync('docker', args, { encoding: 'utf8', stdio: 'pipe' });
+      try {
+        docker('image', 'inspect', 'alpine:3');
+      } catch {
+        test.skip(true, 'Docker or the alpine:3 image is not available');
+      }
+      const names = ['cosmos-e2e-chatty', 'cosmos-e2e-failing'];
+      const scripts = [
+        // Healthy output on stderr, the way nginx and Postgres write it.
+        'while true; do echo "[notice] worker started" >&2; sleep 1; done',
+        'while true; do echo "ERROR connection refused"; sleep 1; done',
+      ];
+      names.forEach((n, i) => docker('run', '-d', '--rm', '--name', n, 'alpine:3', 'sh', '-c', scripts[i]));
+      try {
+        await addNodeOnline(page);
+        await page.emulateMedia({ reducedMotion: 'reduce' });
+        await page.goto('/logs');
+        await page.getByRole('combobox', { name: 'Container' }).click();
+        await page.getByRole('option', { name: 'All containers' }).click();
+
+        const log = page.locator('[data-stream]');
+        const notice = log.filter({ hasText: 'worker started' }).first();
+        const failing = log.filter({ hasText: 'connection refused' }).first();
+        await expect(notice).toBeVisible({ timeout: 15_000 });
+        await expect(failing).toBeVisible();
+
+        // Tagged with the container it came from.
+        await expect(notice).toContainText('cosmos-e2e-chatty');
+        await expect(failing).toContainText('cosmos-e2e-failing');
+        // stderr is not an error; ERROR is, even on stdout.
+        await expect(notice).toHaveAttribute('data-stream', 'stderr');
+        await expect(notice).not.toHaveClass(/text-error/);
+        await expect(failing).toHaveClass(/text-error/);
+
+        // The time shown is the browser's zone (pinned to UTC+5:30 here), not
+        // the UTC digits in Docker's stamp.
+        const stamp = notice.locator('[data-ts]').first();
+        const ts = (await stamp.getAttribute('data-ts'))!;
+        const shown = (await stamp.textContent())!;
+        const local = await page.evaluate(
+          (iso) =>
+            new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(
+              new Date(`${iso.slice(0, 19)}Z`),
+            ),
+          ts,
+        );
+        expect(shown).toBe(local);
+        expect(shown).not.toContain(ts.slice(11, 19));
+        await page.screenshot({ path: info.outputPath('logs-all.png') });
+      } finally {
+        for (const n of names) {
+          try {
+            docker('rm', '-f', n);
+          } catch {
+            /* already gone */
+          }
+        }
+      }
+    });
 });
