@@ -8,6 +8,7 @@ import { matchesQuery, NO_VALUE } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { Section } from '@/components/section';
 import { EmptyState } from '@/components/empty-state';
+import { TableSkeleton } from '@/components/skeletons';
 import { SETUP } from '@/components/setup-hint';
 import { WakeButton } from '@/components/wol-section';
 import { Dot } from '@/components/dot';
@@ -37,26 +38,19 @@ function Presence({ device }: { device: Device }) {
   );
 }
 
+/** How traffic reaches the device, as a secondary line under its status. */
 function Path({ device }: { device: Device }) {
   const c = device.connection;
-  if (device.nodeId && device.reportedBy === device.nodeId) {
-    return <span className='text-muted-foreground'>This node</span>;
-  }
-  if (c.kind === 'direct') {
-    return (
-      <Badge variant='outline' className='text-2xs' title={c.endpoint}>
-        Direct
-      </Badge>
-    );
-  }
+  if (device.nodeId && device.reportedBy === device.nodeId) return <>This node</>;
+  if (c.kind === 'direct') return <span title={c.endpoint}>Direct</span>;
   if (c.kind === 'relay') {
     return (
-      <Badge variant='outline' className='text-2xs text-warning' title='Traffic goes through a Tailscale relay'>
+      <span className='text-warning' title='Traffic goes through a Tailscale relay'>
         Relay {c.region}
-      </Badge>
+      </span>
     );
   }
-  return <span className='text-muted-foreground'>Idle</span>;
+  return <>Idle</>;
 }
 
 function KeyExpiry({ device }: { device: Device }) {
@@ -105,9 +99,7 @@ export const TailnetSection = memo(function TailnetSection({
     if (error) {
       return <EmptyState size='inline' icon={CloudOff} title='Could not read the tailnet' description={error} />;
     }
-    if (loading && devices.length === 0) {
-      return <EmptyState size='inline' icon={Globe} title='Loading devices' />;
-    }
+    if (loading && devices.length === 0) return <TableSkeleton columns={4} />;
     if (visible.length === 0) {
       return <EmptyState size='inline' icon={SearchX} title='No matching devices' />;
     }
@@ -117,9 +109,7 @@ export const TailnetSection = memo(function TailnetSection({
           <TableRow className='hover:bg-transparent'>
             <TableHead className='h-9 text-xs'>Device</TableHead>
             <TableHead className='h-9 text-xs'>OS</TableHead>
-            <TableHead className='h-9 text-xs'>Address</TableHead>
             <TableHead className='h-9 text-xs'>Status</TableHead>
-            <TableHead className='h-9 text-xs'>Path</TableHead>
             <TableHead className='h-9 text-xs'>Key expiry</TableHead>
           </TableRow>
         </TableHeader>
@@ -142,12 +132,14 @@ export const TailnetSection = memo(function TailnetSection({
                     </Badge>
                   )}
                 </div>
-                <div className='selectable truncate text-xs text-muted-foreground'>{d.dns_name}</div>
+                <div
+                  className='selectable truncate font-mono text-xs tabular-nums text-muted-foreground'
+                  title={[d.dns_name, ...d.ips].join('\n')}
+                >
+                  {primaryIp(d) ?? d.dns_name}
+                </div>
               </TableCell>
               <TableCell>{osLabel(d.os)}</TableCell>
-              <TableCell className='selectable font-mono text-xs tabular-nums' title={d.ips.join('\n')}>
-                {primaryIp(d) ?? NO_VALUE}
-              </TableCell>
               <TableCell className='whitespace-nowrap'>
                 <div className='flex items-center gap-2'>
                   <Presence device={d} />
@@ -155,9 +147,9 @@ export const TailnetSection = memo(function TailnetSection({
                     <WakeButton item={wakeFor.get(d.id)!} size='xs' />
                   )}
                 </div>
-              </TableCell>
-              <TableCell>
-                <Path device={d} />
+                <div className='pl-4 text-xs text-muted-foreground'>
+                  <Path device={d} />
+                </div>
               </TableCell>
               <TableCell className='whitespace-nowrap'>
                 <KeyExpiry device={d} />

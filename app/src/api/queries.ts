@@ -135,7 +135,7 @@ export interface TailnetView {
 
 /**
  * The tailnet, merged from every agent that can see it. Polled rather than
- * streamed: it changes slowly, and each node already holds two of the ~6
+ * streamed: it changes slowly, and each node already holds three of the ~6
  * connections a browser allows per origin.
  */
 export function useTailnet(): TailnetView {
