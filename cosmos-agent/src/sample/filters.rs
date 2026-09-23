@@ -67,7 +67,11 @@ impl HostFilters {
             return Some(label.clone());
         }
         let host_path = match &self.root {
-            Some(root) if mount == root => "/".to_string(),
+            // The root itself is always reported, whatever backs it (some
+            // appliance and VM images run from an overlay).
+            Some(root) if mount == root => {
+                return Some("/".to_string());
+            }
             Some(root) => format!("/{}", mount.strip_prefix(root.as_str())?.strip_prefix('/')?),
             None if self.disk_labels.is_empty() => mount.to_string(),
             None => {
@@ -257,6 +261,8 @@ mod tests {
         assert_eq!(f.disk_label("/hostfs", "ext4"), Some("/".into()));
         assert_eq!(f.disk_label("/hostfs/srv", "ext4"), Some("/srv".into()));
         assert_eq!(f.disk_label("/hostfsx/srv", "ext4"), None, "a prefix of the name is not a parent");
+        // A host running from an overlay still has a root to report.
+        assert_eq!(f.disk_label("/hostfs", "overlay"), Some("/".into()));
     }
 
     #[test]
