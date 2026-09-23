@@ -103,7 +103,7 @@ Background samplers publish to `tokio::sync::watch` channels; handlers hand out 
 - **`network_mode: host` is required, not optional.** `/proc/net/dev` renders from the reading process's network namespace and sysinfo has no `HOST_PROC` escape hatch, so without it the agent reports the container's veth. Consequence: `ports:` does not apply, and `[host] net_exclude` becomes load-bearing.
 - **`:ro` on `docker.sock` is not a security control** — it applies to the inode, not the protocol. Anyone who can `connect()` has the full Docker API, which is root-equivalent. The real controls are `allow_actions = false` and network isolation.
 
-Disk mounts need `[[host.disks]]` entries to filter overlayfs noise and remap `/host/rootfs` → `/`.
+Disks (`sample/filters.rs`): in a container, the `[[host.disks]]` entry labelled `/` (or `[host] root`) says where the host root is mounted. The `/:/host/rootfs:ro,rslave` bind is recursive, so every other drive is discovered under it and reported by its host path; listing only the root used to hide them (a 2TB `/srv` never showed). Virtual filesystems, container storage and boot partitions are skipped, and mounts sharing a device are counted once (`pool_key`: the APFS container on macOS, the device path on Linux).
 
 **Web UI from the agent.** The image sets `COSMOS_AGENT_WEB_DIR`, and
 `api/web.rs` serves `app/dist` as a public fallback after the API routes:
