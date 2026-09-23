@@ -84,7 +84,8 @@ html[data-platform='macos'] {
   --foreground: oklch(0.141 0.005 285.823);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.141 0.005 285.823);
-  --popover: oklch(1 0 0);
+  /* Translucent so .glass has something to show; opaque white hid it. */
+  --popover: oklch(1 0 0 / 0.78);
   --popover-foreground: oklch(0.141 0.005 285.823);
   --primary: oklch(0.21 0.006 285.885);
   --primary-foreground: oklch(0.985 0 0);
@@ -263,10 +264,16 @@ html[data-platform='macos'] {
 
 @layer components {
   /* Frosted surface for floating panels. Applied per component, not globally,
-     because backdrop filters cost a composite on every paint. */
+     because backdrop filters cost a composite on every paint.
+     The prefixed declaration must come first: Lightning CSS (Tailwind's
+     minifier) treats a later -webkit- one as overriding the standard one and
+     drops it, which left production builds with no blur outside WebKit.
+     Nothing that should blur may sit inside an ancestor with opacity < 1 or
+     another .glass: both start a new backdrop root, so there is nothing
+     behind it to blur. */
   .glass {
-    backdrop-filter: blur(var(--glass-blur));
     -webkit-backdrop-filter: blur(var(--glass-blur));
+    backdrop-filter: blur(var(--glass-blur));
     background-image: linear-gradient(var(--glass-tint), var(--glass-tint));
   }
 
