@@ -58,6 +58,7 @@ export const LEGACY_CAPABILITIES: Capabilities = {
   wol: false,
   wol_actions: false,
   volume_stream: false,
+  all_logs: false,
 };
 
 /**
@@ -198,6 +199,13 @@ export class AgentClient {
     );
   }
 
+  /** The newest lines from every running container, oldest first. */
+  getAllLogs(opts: { tail?: number } = {}): Promise<LogsResponse> {
+    const params = new URLSearchParams();
+    if (opts.tail) params.set('tail', String(opts.tail));
+    return this.request<LogsResponse>(`/v1/logs?${params}`);
+  }
+
   // --- actions -------------------------------------------------------------
 
   containerAction(
@@ -278,6 +286,11 @@ export class AgentClient {
   }
 
   /** WebSocket URL for following a container's logs. */
+  /** Every running container's lines on one socket, tagged with `container`. */
+  allLogsSocketUrl(opts: { tail?: number } = {}): string {
+    return this.streamUrl('/v1/logs/ws', { tail: String(opts.tail ?? 200) }).replace(/^http/, 'ws');
+  }
+
   logsSocketUrl(id: string, opts: { tail?: number } = {}): string {
     const http = this.streamUrl(`/v1/containers/${encodeURIComponent(id)}/logs/ws`, {
       tail: String(opts.tail ?? 500),

@@ -78,7 +78,7 @@ Background samplers publish to `tokio::sync::watch` channels; handlers hand out 
 - `watch` not `broadcast`: subscribers only want the newest sample, and `watch` coalesces by construction.
 - Snapshots carry `json: Arc<str>` — serialization happens once per tick, not once per request per client.
 
-**Routes.** `/healthz` and `/v1/info` are public; everything else needs a token; every mutating route sits behind `require_write`, which needs both the node's top-level `allow_actions` and an admin `Principal` (and logs one `action` line saying who). `docker.allow_actions` is a deprecated alias. Logs use a WebSocket (`/v1/containers/:id/logs/ws`) because Docker log frames contain embedded newlines, `EventSource` reconnects uncontrollably against crash-looping containers, and browsers cap ~6 HTTP/1.1 connections per origin.
+**Routes.** `/healthz` and `/v1/info` are public; everything else needs a token; every mutating route sits behind `require_write`, which needs both the node's top-level `allow_actions` and an admin `Principal` (and logs one `action` line saying who). `docker.allow_actions` is a deprecated alias. `/v1/logs` and `/v1/logs/ws` (`all_logs` capability) merge every running container: the socket keeps each container's Docker stream in a `StreamMap`, adds containers that start later from the container snapshot's `running` IDs, and tags lines with `container`; the client orders the interleaved backlogs by timestamp (`compareLogTime`: Docker trims trailing fraction zeros, so the strings don't sort). Logs use a WebSocket (`/v1/containers/:id/logs/ws`) because Docker log frames contain embedded newlines, `EventSource` reconnects uncontrollably against crash-looping containers, and browsers cap ~6 HTTP/1.1 connections per origin.
 
 `/v1/info` is unauthenticated so the add-node flow can distinguish "nothing here" from "needs a token", but `node_name` and `principal` stay `null` until authenticated. The app narrows capabilities by `principal.admin` in `effectiveCapabilities` (`api/client.ts`), so UI code only ever checks capabilities. A **404 there means a pre-0.2 agent** → assume `api_version: 0`.
 
@@ -185,7 +185,17 @@ for both themes: semantic colours, `--text-2xs`, `--titlebar-height`,
 `.chrome` disables text selection on UI chrome (content stays selectable).
 Container log colours go through `lib/ansi.ts` (`--ansi-0..15` tokens); other
 escapes and control characters are stripped, and search/download use
-`stripAnsi`.
+`stripAnsi`. Never colour a log line by stream: lots of healthy software
+writes everything to stderr. `logLevel` (`lib/log-line.ts`) reads the level
+the line states; times render in the viewer's zone via `formatLogTime`
+(Docker's nanosecond stamps are cut to ms first, since WebKit's `Date.parse`
+has rejected longer fractions).
+
+**Loading.** Until a node sends its first containers or volumes, a page shows
+skeletons (`components/skeletons.tsx`, `DataTable loading`), never an empty
+state that isn't true. `useAwaiting(byNode)` says when: some connecting or
+online node has no entry yet, capped at `AWAIT_MS` so a node that never
+answers falls back to the real empty state.
 
 **Planets.** `lib/planet.ts` gives each node name a deterministic style
 (presets for jupiter, saturn, mars, etc.; seeded otherwise).

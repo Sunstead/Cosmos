@@ -2,6 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { LogFrame } from '@/generated/LogFrame';
 import { LogLine } from '@/generated/LogLine';
 import { getConnection } from '@/stores/nodes';
+import { compareLogTime } from '@/lib/log-line';
+
+/** Pseudo container ID: every running container on the node at once. */
+export const ALL_CONTAINERS = 'all';
+
+const byTime = (a: LogLine, b: LogLine) => compareLogTime(a.ts, b.ts);
 
 export type LogConnectionState = 'idle' | 'connecting' | 'streaming' | 'closed' | 'error';
 
@@ -66,10 +72,11 @@ export function useContainerLogs({ nodeId, containerId, follow, tail = 500 }: Op
         ...update,
       }));
 
+    const all = containerId === ALL_CONTAINERS;
+
     // Non-follow mode is a plain request; no socket needed.
     if (!follow) {
-      conn.client
-        .getLogs(containerId, { tail })
+      (all ? conn.client.getAllLogs({ tail }) : conn.client.getLogs(containerId, { tail }))
         .then((res) => !cancelled && patch({ lines: res.lines, status: 'closed' }))
         .catch(() => !cancelled && patch({ status: 'error' }));
       return () => {
@@ -77,7 +84,9 @@ export function useContainerLogs({ nodeId, containerId, follow, tail = 500 }: Op
       };
     }
 
-    const ws = new WebSocket(conn.client.logsSocketUrl(containerId, { tail }));
+    const ws = new WebSocket(
+      all ? conn.client.allLogsSocketUrl({ tail }) : conn.client.logsSocketUrl(containerId, { tail }),
+    );
 
     ws.onopen = () => patch({ status: 'streaming' });
 
@@ -126,7 +135,10 @@ export function useContainerLogs({ nodeId, containerId, follow, tail = 500 }: Op
       buffer.current = [];
       setSession((prev) => {
         if (prev.target !== target) return prev;
-        const next = prev.lines.concat(pending);
+        // Merged containers' backlogs arrive one after another; order them.
+        // Live lines are already nearly in order, which a stable sort
+        // handles in about linear time.
+        const next = all ? prev.lines.concat(pending).sort(byTime) : prev.lines.concat(pending);
         return {
           ...prev,
           lines: next.length > MAX_LINES ? next.slice(-MAX_LINES) : next,
