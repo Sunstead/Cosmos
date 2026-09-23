@@ -59,6 +59,7 @@ impl AppState {
             tailnet: self.tailnet_rx.is_some(),
             wol: self.wol.is_some(),
             wol_actions: self.wol.is_some() && self.cfg.allow_actions,
+            volume_stream: true,
         }
     }
 }

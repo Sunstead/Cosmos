@@ -32,9 +32,13 @@ struct Inner {
     /// The agent's own container, when it's running in one. Actions against
     /// it are refused so a stray click can't cut off access to the node.
     self_id: RwLock<Option<String>>,
-    /// Poked by the event watcher so the sampler can tick immediately after a
-    /// container starts or dies instead of waiting out its interval.
-    pub changed: tokio::sync::Notify,
+    /// Poked by the event watcher and by actions so each sampler runs now
+    /// instead of waiting out its interval. One per sampler, and poked with
+    /// `notify_one`: that stores a permit when the sampler is mid-sample, so
+    /// a change that lands during a sample triggers another one rather than
+    /// being lost until the next tick.
+    containers_changed: tokio::sync::Notify,
+    volumes_changed: tokio::sync::Notify,
 }
 
 impl DockerHandle {
@@ -51,7 +55,8 @@ impl DockerHandle {
                 client: RwLock::new(client),
                 socket,
                 self_id: RwLock::new(None),
-                changed: tokio::sync::Notify::new(),
+                containers_changed: tokio::sync::Notify::new(),
+                volumes_changed: tokio::sync::Notify::new(),
             }),
         }
     }
@@ -68,8 +73,22 @@ impl DockerHandle {
         )
     }
 
-    pub fn notify(&self) -> &tokio::sync::Notify {
-        &self.inner.changed
+    pub fn containers_changed(&self) -> &tokio::sync::Notify {
+        &self.inner.containers_changed
+    }
+
+    pub fn volumes_changed(&self) -> &tokio::sync::Notify {
+        &self.inner.volumes_changed
+    }
+
+    /// Something about the container list changed.
+    pub fn poke_containers(&self) {
+        self.inner.containers_changed.notify_one();
+    }
+
+    /// Something about volumes changed, including which containers use them.
+    pub fn poke_volumes(&self) {
+        self.inner.volumes_changed.notify_one();
     }
 
     /// Called by the sampler when the client is absent. Cheap — it verifies
@@ -175,7 +194,9 @@ impl DockerHandle {
             ).await
             .map_err(|e| from_docker("remove", id, e))?;
 
-        self.inner.changed.notify_waiters();
+        // Volumes too: their in-use state changes, and `v` deletes some.
+        self.poke_containers();
+        self.poke_volumes();
         Ok(ContainerActionResult {
             id: id.to_string(),
             action: ContainerAction::Remove,
@@ -191,7 +212,7 @@ impl DockerHandle {
         id: &str,
         action: ContainerAction
     ) -> Result<ContainerActionResult, AgentError> {
-        self.inner.changed.notify_waiters();
+        self.poke_containers();
 
         let state = docker
             .inspect_container(id, None).await
@@ -212,7 +233,7 @@ impl DockerHandle {
             .remove_volume(name, Some(bollard::volume::RemoveVolumeOptions { force })).await
             .map_err(|e| from_docker("remove volume", name, e))?;
 
-        self.inner.changed.notify_waiters();
+        self.poke_volumes();
         Ok(())
     }
 
