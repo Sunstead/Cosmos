@@ -63,9 +63,15 @@ export function useContainerLogs({ nodeId, containerId, follow, tail = 500 }: Op
     if (!conn) return;
 
     buffer.current = [];
+    // Set by cleanup. Every callback below checks it: a socket replaced
+    // mid-handshake reports its failure (`error`, then `close`) after the
+    // next socket may already be up, and a patch from it would re-stamp the
+    // session with the old target. The new selection's lines would then be
+    // ignored and the page would sit on its skeleton until a refresh.
     let cancelled = false;
 
     const patch = (update: Partial<Session>) =>
+      !cancelled &&
       setSession((prev) => ({
         ...(prev.target === target ? prev : { ...EMPTY, target }),
         target,
@@ -91,6 +97,7 @@ export function useContainerLogs({ nodeId, containerId, follow, tail = 500 }: Op
     ws.onopen = () => patch({ status: 'streaming' });
 
     ws.onmessage = (event) => {
+      if (cancelled) return;
       let frame: LogFrame;
       try {
         frame = JSON.parse(event.data) as LogFrame;
@@ -122,6 +129,7 @@ export function useContainerLogs({ nodeId, containerId, follow, tail = 500 }: Op
 
     ws.onerror = () => patch({ status: 'error' });
     ws.onclose = () =>
+      !cancelled &&
       setSession((prev) =>
         prev.target === target && prev.status !== 'error'
           ? { ...prev, status: 'closed' }
@@ -149,6 +157,7 @@ export function useContainerLogs({ nodeId, containerId, follow, tail = 500 }: Op
     return () => {
       cancelled = true;
       clearInterval(flush);
+      ws.onopen = ws.onmessage = ws.onerror = ws.onclose = null;
       ws.close();
     };
   }, [nodeId, containerId, follow, tail, target]);
