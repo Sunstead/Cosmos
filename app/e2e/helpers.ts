@@ -1,4 +1,4 @@
-import { APIRequestContext, expect, Page } from '@playwright/test';
+import { APIRequestContext, expect, Locator, Page } from '@playwright/test';
 
 export const WEB_PORT = 1431;
 export const agentUrl = () => process.env.E2E_AGENT_URL!;
@@ -46,4 +46,22 @@ export async function addNodeOnline(page: Page) {
   await dialog.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(/\/nodes\/[^/]+$/, { timeout: 15_000 });
   await expect(page.locator('header').getByText('1/1')).toBeVisible({ timeout: 15_000 });
+}
+
+/**
+ * Every descendant stays inside the container's box horizontally. Returns
+ * the offenders (tag, slot, how far past the edge) so a failure says what.
+ */
+export async function overflowing(container: Locator) {
+  return container.evaluate((root) => {
+    const box = root.getBoundingClientRect();
+    const out: string[] = [];
+    for (const el of root.querySelectorAll<HTMLElement>('*')) {
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || getComputedStyle(el).position === 'fixed') continue;
+      const past = Math.max(r.right - box.right, box.left - r.left);
+      if (past > 1) out.push(`${el.tagName.toLowerCase()}[${el.dataset.slot ?? el.id ?? ''}] +${Math.round(past)}px`);
+    }
+    return out;
+  });
 }

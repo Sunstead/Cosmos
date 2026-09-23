@@ -1,6 +1,6 @@
 import { createSocket } from 'node:dgram';
 import { expect, test } from '@playwright/test';
-import { addNode, addNodeOnline, agentUrl, apiToken, nextSignIn, PAGES } from './helpers';
+import { addNode, addNodeOnline, agentUrl, apiToken, nextSignIn, overflowing, PAGES } from './helpers';
 
 test.describe('empty app', () => {
   test('every page keeps its header with no nodes', async ({ page }) => {
@@ -173,6 +173,28 @@ test.describe('with a node', () => {
     expect(packet.subarray(0, 6).toString('hex')).toBe('ffffffffffff');
     expect(packet.subarray(6, 12).toString('hex')).toBe('aabbccddeeff');
     await expect(row).toContainText('Waking');
+  });
+
+  test('the add machine dialog keeps every field inside it', async ({ page }, info) => {
+    await addNodeOnline(page);
+    await page.goto('/network');
+    await page.locator('[data-slot=card]', { hasText: 'Wake-on-LAN' }).getByRole('button', { name: 'Add' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByLabel('Send to')).toBeVisible();
+    expect(await overflowing(dialog)).toEqual([]);
+
+    // The longest option: an interface with its CIDR.
+    await dialog.getByLabel('Send to').click();
+    const options = page.getByRole('option');
+    const texts = await options.allTextContents();
+    const longest = texts.reduce((a, b) => (b.length > a.length ? b : a), '');
+    await options.filter({ hasText: longest }).first().click();
+    expect(await overflowing(dialog)).toEqual([]);
+    await dialog.screenshot({ path: info.outputPath('wol-dialog.png') });
+
+    // And on a phone.
+    await page.setViewportSize({ width: 375, height: 812 });
+    expect(await overflowing(dialog)).toEqual([]);
   });
 
   test('constellation canvas is stable over time', async ({ page }) => {
