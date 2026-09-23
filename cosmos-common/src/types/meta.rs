@@ -73,6 +73,10 @@ pub struct Capabilities {
     /// Wake and edit targets: `wol` plus `allow_actions`.
     #[serde(default)]
     pub wol_actions: bool,
+    /// `/v1/volumes/stream`. Absent from agents before 0.4, which the app
+    /// polls instead.
+    #[serde(default)]
+    pub volume_stream: bool,
 }
 
 impl Capabilities {
@@ -91,6 +95,7 @@ impl Capabilities {
             tailnet: false,
             wol: false,
             wol_actions: false,
+            volume_stream: false,
         }
     }
 }

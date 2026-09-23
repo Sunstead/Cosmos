@@ -57,6 +57,7 @@ export const LEGACY_CAPABILITIES: Capabilities = {
   tailnet: false,
   wol: false,
   wol_actions: false,
+  volume_stream: false,
 };
 
 /**
@@ -270,6 +271,10 @@ export class AgentClient {
 
   containersStreamUrl(): string {
     return this.streamUrl('/v1/containers/stream');
+  }
+
+  volumesStreamUrl(): string {
+    return this.streamUrl('/v1/volumes/stream');
   }
 
   /** WebSocket URL for following a container's logs. */
