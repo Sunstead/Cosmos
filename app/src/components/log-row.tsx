@@ -28,7 +28,11 @@ export const LogRow = memo(function LogRow({ line, container }: { line: LogLine;
       )}
     >
       {time && (
-        <span className='mr-3 text-muted-foreground/60 select-none' title={formatLogTimeFull(line.ts)}>
+        <span
+          className='mr-3 text-muted-foreground/60 select-none'
+          title={formatLogTimeFull(line.ts)}
+          data-ts={line.ts ?? undefined}
+        >
           {time}
         </span>
       )}
