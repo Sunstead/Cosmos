@@ -63,16 +63,24 @@ net_include = []   # non-empty turns this into an allowlist and wins outright
 
 # Which filesystems to report, and what to call them.
 #
-# Leave this out when running directly on a host and every mount is reported.
-# In a container you want it: otherwise you get overlayfs, tmpfs and every
-# bind mount. `path` is what the agent sees, `label` is what the UI shows.
+# Leave this out when running directly on a host: every real mount is
+# reported. In a container, name where the host's / is mounted. That bind is
+# recursive, so every other drive the host has mounted (a data disk at /srv, a
+# pool at /mnt/tank) is found under it and reported by its host path; they
+# need no entries of their own. Overlay, tmpfs, container storage and boot
+# partitions are skipped. `path` is what the agent sees, `label` is what the
+# UI shows.
 [[host.disks]]
 path  = "/host/rootfs"
 label = "/"
 
+# The same thing, without an entry. Defaults to the entry labelled "/".
+# root = "/host/rootfs"
+
+# An entry can still rename a discovered drive, or add one mounted elsewhere.
 # [[host.disks]]
-# path  = "/host/mnt/tank"
-# label = "/mnt/tank"
+# path  = "/host/rootfs/srv"
+# label = "storage"
 
 [docker]
 socket = "/var/run/docker.sock"

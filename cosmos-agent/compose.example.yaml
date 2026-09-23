@@ -54,7 +54,9 @@ services:
       # controls are `allow_actions` in the config and network isolation.
       - /var/run/docker.sock:/var/run/docker.sock
 
-      # Only the filesystems actually charted, named in [[host.disks]].
+      # The host's filesystems. The bind is recursive and `rslave` follows
+      # later mounts, so every drive the host mounts appears under it and is
+      # reported by its host path (see [[host.disks]] in the config).
       - /:/host/rootfs:ro,rslave
 
       # Backups: the status file scripts/backup.sh writes, and the systemd
