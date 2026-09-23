@@ -126,6 +126,11 @@ pub struct LogLine {
     /// RFC3339 from Docker when timestamps are enabled.
     pub ts: Option<String>,
     pub text: String,
+    /// The container's ID, set only on the all-containers streams, where
+    /// lines from every container share one connection.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub container: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, TS, Debug, Clone)]

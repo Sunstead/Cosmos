@@ -4,7 +4,8 @@ import { Download, Eraser, Logs, Pause, Play, ScrollText, SearchX } from 'lucide
 import { useNodeStore } from '@/stores/nodes';
 import { useContainersStore } from '@/stores/containers';
 import { useNodeMeta } from '@/api/queries';
-import { useContainerLogs } from '@/hooks/use-container-logs';
+import { ALL_CONTAINERS, useContainerLogs } from '@/hooks/use-container-logs';
+import { useAwaiting } from '@/hooks/use-awaiting';
 import { LogLine } from '@/generated/LogLine';
 import { PageHeader } from '@/components/page-header';
 import { NodeSelect, useSelectedNode } from '@/components/node-select';
@@ -24,14 +25,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { cn } from '@/lib/utils';
 import { stripAnsi } from '@/lib/ansi';
-import { AnsiText } from '@/components/ansi-text';
+import { LogRow } from '@/components/log-row';
+import { LogSkeleton } from '@/components/skeletons';
+import { SelectSeparator } from '@/components/ui/select';
 
 type Stream = 'all' | 'stdout' | 'stderr';
 
-function download(lines: LogLine[], name: string) {
-  const text = lines.map((l) => (l.ts ? `${l.ts} ${stripAnsi(l.text)}` : stripAnsi(l.text))).join('\n');
+/** Timestamps stay in UTC ISO form here: a saved file should be unambiguous. */
+function download(lines: LogLine[], name: string, nameOf: (id: string) => string | undefined) {
+  const text = lines
+    .map((l) => {
+      const who = l.container ? `[${nameOf(l.container) ?? l.container.slice(0, 12)}] ` : '';
+      return `${l.ts ? `${l.ts} ` : ''}${who}${stripAnsi(l.text)}`;
+    })
+    .join('\n');
   const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
   const a = Object.assign(document.createElement('a'), { href: url, download: `${name}.log` });
   a.click();
@@ -52,19 +60,25 @@ export function LogsPage() {
   const navigate = useNavigate({ from: '/logs' });
   const [storedNode, setStoredNode] = useSelectedNode();
   const nodeContainers = useContainersStore((s) => s.nodeContainers);
+  const awaiting = useAwaiting(nodeContainers, search.node ?? storedNode);
 
   const nodeId = search.node ?? storedNode;
   const containers = useMemo(
     () => [...(nodeId ? (nodeContainers[nodeId] ?? []) : [])].sort((a, b) => a.name.localeCompare(b.name)),
     [nodeContainers, nodeId],
   );
-  const containerId =
-    search.container && containers.some((c) => c.id === search.container)
-      ? search.container
-      : (containers.find((c) => c.state === 'running') ?? containers[0])?.id ?? null;
-  const container = containers.find((c) => c.id === containerId);
-
   const meta = useNodeMeta(nodeId);
+  const canAll = meta?.capabilities.all_logs ?? false;
+
+  const containerId =
+    search.container === ALL_CONTAINERS && canAll
+      ? ALL_CONTAINERS
+      : search.container && containers.some((c) => c.id === search.container)
+        ? search.container
+        : (containers.find((c) => c.state === 'running') ?? containers[0])?.id ?? null;
+  const container = containers.find((c) => c.id === containerId);
+  const showAll = containerId === ALL_CONTAINERS;
+  const names = useMemo(() => new Map(containers.map((c) => [c.id, c.name])), [containers]);
   const [follow, setFollow] = useState(true);
   const [query, setQuery] = useState('');
   const [stream, setStream] = useState<Stream>('all');
@@ -74,9 +88,13 @@ export function LogsPage() {
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return lines.filter(
-      (l) => (stream === 'all' || l.stream === stream) && (!q || stripAnsi(l.text).toLowerCase().includes(q)),
+      (l) =>
+        (stream === 'all' || l.stream === stream) &&
+        (!q ||
+          stripAnsi(l.text).toLowerCase().includes(q) ||
+          (!!l.container && !!names.get(l.container)?.toLowerCase().includes(q))),
     );
-  }, [lines, query, stream]);
+  }, [lines, query, stream, names]);
 
   // Stay pinned to the bottom while following, unless the user scrolled up.
   const viewport = useRef<HTMLDivElement>(null);
@@ -108,6 +126,16 @@ export function LogsPage() {
         />
       );
     }
+    if (containers.length === 0 && awaiting) {
+      return (
+        <Card className='min-h-0 flex-1 gap-0 py-0'>
+          <div className='h-10 shrink-0 border-b' />
+          <div className='p-3'>
+            <LogSkeleton />
+          </div>
+        </Card>
+      );
+    }
     if (containers.length === 0) {
       return <EmptyState size='page' icon={ScrollText} title='No containers on this node' />;
     }
@@ -131,24 +159,20 @@ export function LogsPage() {
           className='selectable min-h-0 flex-1 overflow-auto p-3 font-mono text-xs leading-relaxed'
         >
           {visible.length === 0 ? (
-            lines.length === 0 ? (
+            lines.length === 0 && state === 'connecting' ? (
+              <LogSkeleton />
+            ) : lines.length === 0 ? (
               <p className='text-muted-foreground'>Waiting for output</p>
             ) : (
               <EmptyState size='inline' icon={SearchX} title='No matching lines' />
             )
           ) : (
             visible.map((line, i) => (
-              <div
+              <LogRow
                 key={i}
-                className={cn('break-all whitespace-pre-wrap', line.stream === 'stderr' && 'text-error')}
-              >
-                {line.ts && (
-                  <span className='mr-3 text-muted-foreground/60 select-none'>
-                    {line.ts.slice(11, 19)}
-                  </span>
-                )}
-                <AnsiText text={line.text} />
-              </div>
+                line={line}
+                container={showAll && line.container ? (names.get(line.container) ?? line.container.slice(0, 12)) : undefined}
+              />
             ))
           )}
         </div>
@@ -170,6 +194,12 @@ export function LogsPage() {
                   <SelectValue placeholder='Container' />
                 </SelectTrigger>
                 <SelectContent>
+                  {canAll && (
+                    <>
+                      <SelectItem value={ALL_CONTAINERS}>All containers</SelectItem>
+                      <SelectSeparator />
+                    </>
+                  )}
                   {containers.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
                       <Dot variant={containerStateVariant(c.state)} />
@@ -211,7 +241,9 @@ export function LogsPage() {
                   size='icon'
                   aria-label='Download'
                   disabled={lines.length === 0}
-                  onClick={() => download(lines, container?.name ?? 'logs')}
+                  onClick={() =>
+                    download(lines, showAll ? 'all-containers' : (container?.name ?? 'logs'), (id) => names.get(id))
+                  }
                 >
                   <Download />
                 </Button>

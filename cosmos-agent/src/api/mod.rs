@@ -46,6 +46,8 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/containers/stream", get(containers::stream))
         .route("/v1/containers/:id/logs", get(logs::tail))
         .route("/v1/containers/:id/logs/ws", get(logs::follow))
+        .route("/v1/logs", get(logs::tail_all))
+        .route("/v1/logs/ws", get(logs::follow_all))
         .route("/v1/volumes", get(volumes::list))
         .route("/v1/volumes/stream", get(volumes::stream))
         .route("/v1/backups", get(backups::current))

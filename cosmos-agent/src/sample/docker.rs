@@ -25,9 +25,11 @@ use std::{ collections::{ HashMap, HashSet }, sync::Arc };
 
 /// Only the serialized form is retained: every consumer is an HTTP response,
 /// so keeping the typed value too would hold a second copy of the whole
-/// container list for the life of each tick.
+/// container list for the life of each tick. The one exception is the IDs of
+/// running containers, which the all-containers log stream follows.
 pub struct ContainerSnapshot {
     pub json: Arc<str>,
+    pub running: Arc<[String]>,
 }
 
 pub struct VolumeSnapshot {
@@ -46,8 +48,13 @@ fn encode<T: serde::Serialize>(value: &T, what: &str) -> Arc<str> {
 
 impl ContainerSnapshot {
     pub fn new(containers: Vec<ContainerInfo>) -> Self {
+        let running = containers
+            .iter()
+            .filter(|c| c.state == "running")
+            .map(|c| c.id.clone())
+            .collect();
         let response = ContainersResponse { containers, sampled_at: unix_now() };
-        Self { json: encode(&response, "containers") }
+        Self { json: encode(&response, "containers"), running }
     }
 
     pub fn empty() -> Self {
