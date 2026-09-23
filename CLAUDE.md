@@ -74,11 +74,11 @@ Background samplers publish to `tokio::sync::watch` channels; handlers hand out 
 
 - `sample/host.rs` — `HostProbe` owns persistent `System`/`Disks`/`Networks`, refreshed in place, on a dedicated OS thread (sysinfo does blocking `/proc` reads, and the loop owns `&mut System` for its lifetime). It exclusively owns `prev_net`/`prev_disk`, which is why rate deltas are correct with any number of clients. Absolute-deadline scheduling avoids drift and catch-up bursts. The one `MINIMUM_CPU_UPDATE_INTERVAL` sleep happens once at startup.
 - `sample/docker.rs` — `DockerProbe` computes container CPU % by differencing absolute counters across *our own* ticks (`one_shot: true` zeroes `precpu_stats`, so differencing against those is meaningless). `started_at` is cached against state transitions, so steady state costs zero inspect calls. `stats` calls are bounded by `buffer_unordered`.
-- `sample/mod.rs` — spawns everything. Host 1 s, containers 2 s, volumes 60 s, backups 30 s. A Docker event watcher pokes a `Notify` so the container list refreshes immediately after an action.
+- `sample/mod.rs` — spawns everything. Host 1 s, containers 2 s, volumes 60 s, backups 30 s. The Docker event watcher and the action handlers poke each sampler's own `Notify` (volume events and container create/destroy wake volumes too, since `in_use_by` changes) so lists refresh immediately. Pokes use `notify_one`, which stores a permit: `notify_waiters` lost any poke that landed mid-sample. Containers and volumes both stream (`/v1/volumes/stream`, `volume_stream` capability); older agents' volumes are polled every 30 s.
 - `watch` not `broadcast`: subscribers only want the newest sample, and `watch` coalesces by construction.
 - Snapshots carry `json: Arc<str>` — serialization happens once per tick, not once per request per client.
 
-**Routes.** `/healthz` and `/v1/info` are public; everything else needs a token; every mutating route sits behind `require_write`, which needs both the node's top-level `allow_actions` and an admin `Principal` (and logs one `action` line saying who). `docker.allow_actions` is a deprecated alias. Logs use a WebSocket (`/v1/containers/:id/logs/ws`) because Docker log frames contain embedded newlines, `EventSource` reconnects uncontrollably against crash-looping containers, and browsers cap ~6 HTTP/1.1 connections per origin.
+**Routes.** `/healthz` and `/v1/info` are public; everything else needs a token; every mutating route sits behind `require_write`, which needs both the node's top-level `allow_actions` and an admin `Principal` (and logs one `action` line saying who). `docker.allow_actions` is a deprecated alias. `/v1/logs` and `/v1/logs/ws` (`all_logs` capability) merge every running container: the socket keeps each container's Docker stream in a `StreamMap`, adds containers that start later from the container snapshot's `running` IDs, and tags lines with `container`; the client orders the interleaved backlogs by timestamp (`compareLogTime`: Docker trims trailing fraction zeros, so the strings don't sort). Logs use a WebSocket (`/v1/containers/:id/logs/ws`) because Docker log frames contain embedded newlines, `EventSource` reconnects uncontrollably against crash-looping containers, and browsers cap ~6 HTTP/1.1 connections per origin.
 
 `/v1/info` is unauthenticated so the add-node flow can distinguish "nothing here" from "needs a token", but `node_name` and `principal` stay `null` until authenticated. The app narrows capabilities by `principal.admin` in `effectiveCapabilities` (`api/client.ts`), so UI code only ever checks capabilities. A **404 there means a pre-0.2 agent** → assume `api_version: 0`.
 
@@ -103,7 +103,7 @@ Background samplers publish to `tokio::sync::watch` channels; handlers hand out 
 - **`network_mode: host` is required, not optional.** `/proc/net/dev` renders from the reading process's network namespace and sysinfo has no `HOST_PROC` escape hatch, so without it the agent reports the container's veth. Consequence: `ports:` does not apply, and `[host] net_exclude` becomes load-bearing.
 - **`:ro` on `docker.sock` is not a security control** — it applies to the inode, not the protocol. Anyone who can `connect()` has the full Docker API, which is root-equivalent. The real controls are `allow_actions = false` and network isolation.
 
-Disk mounts need `[[host.disks]]` entries to filter overlayfs noise and remap `/host/rootfs` → `/`.
+Disks (`sample/filters.rs`): in a container, the `[[host.disks]]` entry labelled `/` (or `[host] root`) says where the host root is mounted. The `/:/host/rootfs:ro,rslave` bind is recursive, so every other drive is discovered under it and reported by its host path; listing only the root used to hide them (a 2TB `/srv` never showed). Virtual filesystems, container storage and boot partitions are skipped, and mounts sharing a device are counted once (`pool_key`: the APFS container on macOS, the device path on Linux).
 
 **Web UI from the agent.** The image sets `COSMOS_AGENT_WEB_DIR`, and
 `api/web.rs` serves `app/dist` as a public fallback after the API routes:
@@ -185,7 +185,17 @@ for both themes: semantic colours, `--text-2xs`, `--titlebar-height`,
 `.chrome` disables text selection on UI chrome (content stays selectable).
 Container log colours go through `lib/ansi.ts` (`--ansi-0..15` tokens); other
 escapes and control characters are stripped, and search/download use
-`stripAnsi`.
+`stripAnsi`. Never colour a log line by stream: lots of healthy software
+writes everything to stderr. `logLevel` (`lib/log-line.ts`) reads the level
+the line states; times render in the viewer's zone via `formatLogTime`
+(Docker's nanosecond stamps are cut to ms first, since WebKit's `Date.parse`
+has rejected longer fractions).
+
+**Loading.** Until a node sends its first containers or volumes, a page shows
+skeletons (`components/skeletons.tsx`, `DataTable loading`), never an empty
+state that isn't true. `useAwaiting(byNode)` says when: some connecting or
+online node has no entry yet, capped at `AWAIT_MS` so a node that never
+answers falls back to the real empty state.
 
 **Planets.** `lib/planet.ts` gives each node name a deterministic style
 (presets for jupiter, saturn, mars, etc.; seeded otherwise).

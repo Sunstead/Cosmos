@@ -58,6 +58,8 @@ export function agentInfo(partial: Partial<AgentInfo> = {}): AgentInfo {
       tailnet: true,
       wol: true,
       wol_actions: true,
+      volume_stream: true,
+      all_logs: true,
     },
     ...partial,
   };

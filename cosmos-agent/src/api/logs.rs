@@ -1,4 +1,5 @@
-//! Container logs: a REST tail and a WebSocket follow.
+//! Container logs: a REST tail and a WebSocket follow, for one container or
+//! for every running container at once.
 //!
 //! WebSocket rather than SSE for the follow case, for three reasons that have
 //! nothing to do with auth headers (`?token=` handles those for both):
@@ -12,7 +13,12 @@
 //! 3. Browsers cap ~6 concurrent HTTP/1.1 connections per origin. Host SSE +
 //!    container SSE + three open log panes already reaches it.
 
-use crate::{ docker::DockerHandle, error::{ from_docker, AgentError }, state::AppState };
+use crate::{
+    docker::DockerHandle,
+    error::{ from_docker, AgentError },
+    sample::host::unix_now,
+    state::AppState,
+};
 use axum::{
     extract::{
         ws::{ Message, WebSocket, WebSocketUpgrade },
@@ -23,10 +29,12 @@ use axum::{
     response::Response,
     Json,
 };
-use bollard::container::LogOutput;
+use bollard::{ container::LogOutput, Docker };
 use cosmos_common::types::{ LogFrame, LogLine, LogStream, LogsResponse };
-use futures_util::StreamExt;
+use futures_util::{ Stream, StreamExt };
 use serde::Deserialize;
+use std::pin::Pin;
+use tokio_stream::StreamMap;
 
 #[derive(Deserialize)]
 pub struct LogQuery {
@@ -49,6 +57,18 @@ const WS_BUFFER: usize = 1024;
 /// Hard cap on a single REST tail so a pathological `tail` can't be used to
 /// pull a gigabyte through the agent.
 const MAX_TAIL: u32 = 10_000;
+
+/// Backlog per container in the all-containers views, so one chatty container
+/// can't crowd the others out of the first screen.
+const ALL_TAIL: u32 = 200;
+
+/// Docker log reads in flight at once for the all-containers tail.
+const ALL_CONCURRENCY: usize = 8;
+
+/// How far back a container that starts mid-stream is read from. The
+/// container list updates within an event's latency, so a few seconds covers
+/// its first lines without replaying an earlier run's output.
+const NEWCOMER_LOOKBACK_SECS: i64 = 3;
 
 pub async fn tail(
     State(state): State<AppState>,
@@ -165,6 +185,160 @@ async fn pump(mut socket: WebSocket, state: AppState, id: String, q: LogQuery) {
     let _ = socket.close().await;
 }
 
+// --- every running container ---------------------------------------------
+
+/// The newest lines from every running container, oldest first.
+pub async fn tail_all(
+    State(state): State<AppState>,
+    Query(q): Query<LogQuery>
+) -> Result<Json<LogsResponse>, AgentError> {
+    if !state.cfg.docker.allow_logs {
+        return Err(AgentError::NotEnabled("container logs"));
+    }
+    let docker = state.docker.require()?;
+    let per = q.tail.min(ALL_TAIL).to_string();
+    let ids = state.containers_rx.borrow().running.clone();
+
+    let mut lines: Vec<LogLine> = futures_util::stream
+        ::iter(ids.iter().cloned())
+        .map(|id| {
+            let docker = docker.clone();
+            let per = per.clone();
+            async move {
+                let mut out = Vec::new();
+                let mut logs = docker.logs(
+                    &id,
+                    Some(DockerHandle::logs_options(per, q.since, false))
+                );
+                // A container that stopped in between just contributes nothing.
+                while let Some(Ok(output)) = logs.next().await {
+                    out.extend(tagged(parse_output(&output), &id));
+                }
+                out
+            }
+        })
+        .buffer_unordered(ALL_CONCURRENCY)
+        .concat().await;
+
+    sort_by_time(&mut lines);
+    let excess = lines.len().saturating_sub(MAX_TAIL as usize);
+    lines.drain(..excess);
+
+    Ok(Json(LogsResponse { id: "all".into(), lines }))
+}
+
+pub async fn follow_all(
+    State(state): State<AppState>,
+    Query(q): Query<LogQuery>,
+    ws: WebSocketUpgrade
+) -> Result<Response, AgentError> {
+    if !state.cfg.docker.allow_logs {
+        return Err(AgentError::NotEnabled("container logs"));
+    }
+    state.docker.require()?;
+    Ok(ws.on_upgrade(move |socket| pump_all(socket, state, q)))
+}
+
+type DockerLogs = Pin<Box<dyn Stream<Item = Result<LogOutput, bollard::errors::Error>> + Send>>;
+
+fn open_logs(docker: &Docker, id: &str, tail: String, since: i64) -> DockerLogs {
+    Box::pin(docker.logs(id, Some(DockerHandle::logs_options(tail, since, true))))
+}
+
+/// One socket for every running container. Each container's Docker stream
+/// sits in a `StreamMap`, which polls them fairly and drops one when it ends
+/// (the container stopped). Containers that start later are added as the
+/// container list changes, so the view never needs reopening.
+///
+/// The initial backlogs arrive interleaved in no particular order; lines
+/// carry Docker's timestamps and the client orders them.
+async fn pump_all(mut socket: WebSocket, state: AppState, q: LogQuery) {
+    let Some(docker) = state.docker.client() else {
+        let _ = send_frame(
+            &mut socket,
+            &(LogFrame::Closed { reason: "docker unavailable".into() })
+        ).await;
+        return;
+    };
+
+    let per = q.tail.min(ALL_TAIL).to_string();
+    let mut containers = state.containers_rx.clone();
+    let mut streams: StreamMap<String, DockerLogs> = StreamMap::new();
+    for id in containers.borrow_and_update().running.iter() {
+        streams.insert(id.clone(), open_logs(&docker, id, per.clone(), q.since));
+    }
+
+    loop {
+        tokio::select! {
+            incoming = socket.recv() => {
+                match incoming {
+                    None | Some(Err(_)) | Some(Ok(Message::Close(_))) => break,
+                    Some(Ok(_)) => continue,
+                }
+            }
+
+            changed = containers.changed() => {
+                if changed.is_err() {
+                    break;
+                }
+                let running = containers.borrow_and_update().running.clone();
+                let since = unix_now() - NEWCOMER_LOOKBACK_SECS;
+                for id in running.iter() {
+                    if !streams.contains_key(id) {
+                        streams.insert(id.clone(), open_logs(&docker, id, "all".into(), since));
+                    }
+                }
+            }
+
+            Some((id, chunk)) = streams.next(), if !streams.is_empty() => {
+                let Ok(output) = chunk else {
+                    // This container's stream failed; the others carry on.
+                    streams.remove(&id);
+                    continue;
+                };
+                for line in tagged(parse_output(&output), &id) {
+                    if send_frame(&mut socket, &LogFrame::Line(line)).await.is_err() {
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    let _ = socket.close().await;
+}
+
+fn tagged(lines: Vec<LogLine>, id: &str) -> impl Iterator<Item = LogLine> + '_ {
+    lines.into_iter().map(move |mut l| {
+        l.container = Some(id.to_string());
+        l
+    })
+}
+
+/// Docker's timestamps are RFC3339 in UTC with the fraction's trailing zeros
+/// trimmed, so they don't sort as strings (`.1Z` after `.12Z`). Seconds
+/// compare as text; the fraction is padded to nanoseconds.
+fn time_key(ts: Option<&str>) -> (&str, u32) {
+    let Some(ts) = ts else {
+        return ("", 0);
+    };
+    let (secs, rest) = ts.split_at(ts.len().min(19));
+    let digits: String = rest
+        .strip_prefix('.')
+        .unwrap_or("")
+        .chars()
+        .take_while(char::is_ascii_digit)
+        .take(9)
+        .collect();
+    let nanos = format!("{digits:0<9}").parse().unwrap_or(0);
+    (secs, nanos)
+}
+
+/// Stable, so lines with equal (or no) timestamps keep their arrival order.
+fn sort_by_time(lines: &mut [LogLine]) {
+    lines.sort_by(|a, b| time_key(a.ts.as_deref()).cmp(&time_key(b.ts.as_deref())));
+}
+
 async fn send_frame(socket: &mut WebSocket, frame: &LogFrame) -> Result<(), axum::Error> {
     let text = serde_json::to_string(frame).unwrap_or_else(|_| "{}".into());
     socket.send(Message::Text(text)).await
@@ -190,7 +364,7 @@ fn parse_output(output: &LogOutput) -> Vec<LogLine> {
         .filter(|l| !l.is_empty())
         .map(|line| {
             let (ts, text) = split_timestamp(line);
-            LogLine { stream, ts, text }
+            LogLine { stream, ts, text, container: None }
         })
         .collect()
 }
@@ -271,6 +445,45 @@ mod tests {
         let lines = parse_output(&out);
         assert_eq!(lines.len(), 1, "a binary blob must not kill the stream");
         assert!(lines[0].text.contains("ok"));
+    }
+
+    fn at(ts: &str) -> LogLine {
+        LogLine { stream: LogStream::Stdout, ts: Some(ts.into()), text: ts.into(), container: None }
+    }
+
+    #[test]
+    fn orders_trimmed_fractions_by_value_not_text() {
+        // As text, ".1Z" sorts after ".12Z"; by value it is later still.
+        let mut lines = vec![
+            at("2024-03-01T12:00:00.1Z"),
+            at("2024-03-01T12:00:00.12Z"),
+            at("2024-03-01T12:00:00Z"),
+            at("2024-03-01T11:59:59.999999999Z"),
+        ];
+        sort_by_time(&mut lines);
+        let order: Vec<_> = lines.iter().map(|l| l.text.as_str()).collect();
+        assert_eq!(order, [
+            "2024-03-01T11:59:59.999999999Z",
+            "2024-03-01T12:00:00Z",
+            "2024-03-01T12:00:00.1Z",
+            "2024-03-01T12:00:00.12Z",
+        ]);
+    }
+
+    #[test]
+    fn lines_without_a_timestamp_sort_first_and_keep_their_order() {
+        let mut lines = vec![at("2024-03-01T12:00:00Z"), parse_output(&stdout("a\n")).remove(0), parse_output(&stdout("b\n")).remove(0)];
+        sort_by_time(&mut lines);
+        assert_eq!(lines[0].text, "a");
+        assert_eq!(lines[1].text, "b");
+    }
+
+    #[test]
+    fn tagging_names_the_container_and_single_streams_do_not() {
+        let plain = parse_output(&stdout("x\n"));
+        assert_eq!(plain[0].container, None);
+        let lines: Vec<_> = tagged(plain, "abc").collect();
+        assert_eq!(lines[0].container.as_deref(), Some("abc"));
     }
 
     #[test]

@@ -73,6 +73,14 @@ pub struct Capabilities {
     /// Wake and edit targets: `wol` plus `allow_actions`.
     #[serde(default)]
     pub wol_actions: bool,
+    /// `/v1/volumes/stream`. Absent from agents before 0.4, which the app
+    /// polls instead.
+    #[serde(default)]
+    pub volume_stream: bool,
+    /// `/v1/logs` and `/v1/logs/ws`: every running container's logs at once.
+    /// Absent from agents before 0.4.
+    #[serde(default)]
+    pub all_logs: bool,
 }
 
 impl Capabilities {
@@ -91,6 +99,8 @@ impl Capabilities {
             tailnet: false,
             wol: false,
             wol_actions: false,
+            volume_stream: false,
+            all_logs: false,
         }
     }
 }
