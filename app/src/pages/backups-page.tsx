@@ -86,14 +86,14 @@ function HealthAlert({ status }: { status: BackupsStatus }) {
   );
 }
 
-function Step({ label, step }: { label: string; step: StepStatus | null }) {
+function Step({ label, step }: { label: string; step: StepStatus | null | undefined }) {
   if (!step) return null;
   return (
     <div className='flex items-center justify-between px-4 py-2.5 text-sm'>
       <span>{label}</span>
       {step.ok ? (
         <span className='flex items-center gap-1 text-xs text-success'>
-          <CircleCheck className='size-3.5' /> OK
+          <CircleCheck className='size-3.5' /> {step.message ?? 'OK'}
         </span>
       ) : (
         <span className='flex items-center gap-1 text-xs text-error'>
@@ -170,6 +170,8 @@ export function BackupsPage() {
         <div className='grid gap-4 @4xl:grid-cols-[1fr_2fr]'>
           <Section title='Last run' contentClassName='divide-y'>
             <Step label='Database dumps' step={status.postgres_dump} />
+            <Step label='Copy to second disk' step={status.state_copy} />
+            <Step label='Free space' step={status.space_check} />
             <Step label='Heartbeat' step={status.heartbeat} />
             <div className='flex items-center justify-between px-4 py-2.5 text-sm'>
               <span>Exit code</span>
