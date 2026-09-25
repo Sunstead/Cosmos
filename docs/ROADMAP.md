@@ -1,0 +1,384 @@
+# Sunstead Roadmap: Cosmos, Homepage, and the App Suite
+
+Where my homelab and software suite are today, where they're headed, and the
+principles guiding the work. It's a handoff brief for Claude Code sessions
+working toward this plan.
+
+**How this relates to other docs:** `CLAUDE.md` in each repo is the authority on
+how the code works and its conventions. `docs/BACKUPS.md`, `docs/SSO.md` and
+`.github/workflows/deploy.yml` in the Jupiter repo describe how backups, sign-in
+and deployment work today. This roadmap covers *direction*. Where they disagree
+about current behavior, trust those docs and flag the discrepancy here.
+
+**Goal:** reduce reliance on third-party systems by running my own suite of
+services, with Cosmos as the control plane, a homepage as the front door, and
+independent apps that store data in open formats.
+
+**Naming:** "Sunstead" is my company/brand name and the prefix for my services
+(Sunstead Cosmos, Sunstead Solstice, etc.). It is not a separate system, server
+or filesystem path.
+
+---
+
+## 1. Current state
+
+*Last checked against both repos: 2026-09-24.*
+
+### Jupiter (primary server)
+- Debian 13. Disks:
+  - 1TB NVMe. The root filesystem is one 411G partition (`nvme0n1p5`: 204G used,
+    187G free) holding the OS, Docker (`/var/lib/docker`, so every named volume
+    and every Postgres) and `/srv/backups`. What's on the rest of the NVMe is
+    unconfirmed.
+  - 2TB HDD (1.8T) at `/srv/storage` (`STORAGE_PATH`): 186G used. Gitea,
+    Nextcloud and Immich files.
+- Other nodes (Saturn, Mars, etc.) are planned. Servers are named after planets.
+- Docker Compose stack: Caddy, Authentik (own Postgres), Nextcloud, Immich (own
+  Postgres), Gitea (shared Postgres), Uptime Kuma, Portainer, Tailscale, and the
+  Cosmos agent/UI.
+- Caddy serves `*.jupiter.sunstead.net` with wildcard TLS via Cloudflare DNS-01.
+- Access is **Tailscale-only**. A Cloudflare Tunnel was tried and rolled back
+  (SSL limits on second-level subdomains, 100MB upload cap).
+
+### Deployment (working)
+- **GitHub is the source of truth for git and deployment**, not the self-hosted
+  Gitea. Self-hosting the thing that deploys everything else is too fragile.
+- A **self-hosted GitHub Actions runner on Jupiter** runs `deploy.yml` on every
+  push to `main` (or manually): reset the real checkout at `DEPLOY_PATH` to
+  `origin/main`, `compose config -q`, `pull` with retries, `up -d
+  --remove-orphans`, restart Caddy and cosmos-agent if their bind-mounted config
+  is newer than the container, prune images.
+- Secrets live in the server's `.env`, not in git.
+- **Every image is pinned to an explicit tag** (no digests), including
+  `ghcr.io/sunstead/cosmos-agent`. Watchtower is gone. **Renovate** (Mend's
+  hosted app) opens grouped update PRs; its rules keep Immich server and ML
+  together, hold back Immich's Postgres and major Postgres/Redis versions, and
+  step Nextcloud one major at a time. This is a stopgap: see 3C.
+
+### Sign-in (working)
+- Authentik at `auth.jupiter.sunstead.net` is the single login, with MFA
+  (passkey or authenticator) required.
+- Authentik is configured through **blueprints in git** (`authentik/blueprints/`).
+  **Exception:** Immich's OIDC client has no blueprint; it was set up by hand.
+- Groups: `homelab-users` (can use apps) and `homelab-admins` (admin inside apps
+  that map it, including Cosmos actions).
+- Cosmos, Gitea, Nextcloud, Immich and Portainer use OIDC/OAuth. Uptime Kuma uses
+  Caddy forward auth, with `/api/push/*`, status pages and badges exempted.
+- Every service keeps a local-account fallback if Authentik is down (`SSO.md`).
+
+### Backups (working, with a real gap)
+- A systemd timer runs nightly at 03:00: `pg_dumpall` of each Postgres, then an
+  encrypted **restic** snapshot of `STORAGE_PATH`, the dumps, small volumes
+  (Authentik, Nextcloud app dir, Caddy, Uptime Kuma, Portainer) and the server
+  `.env`. Retention 7 daily, 4 weekly, 6 monthly. Repository at
+  `/srv/backups/restic`.
+- Each run writes `restic-status.json`, which the Cosmos agent reads for its
+  Backups page (including staleness detection). A heartbeat pings Uptime Kuma.
+- **The gap:** `/srv/backups` is on the NVMe root, not a separate drive.
+  - HDD failure is covered: the originals are in restic on the NVMe.
+  - **NVMe failure is not.** The live databases, their dumps and the whole
+    restic repository go together. Nextcloud calendars and contacts live in its
+    database, not in files, so they'd be lost with it.
+  - **Growth will fill the root disk.** The repo holds a copy of the HDD on a
+    partition with 187G free. When it fills, Docker and every Postgres fail with
+    it.
+  - Immich thumbnails and transcoded video are backed up nightly although
+    they're rebuildable.
+  - No offsite copy, and no restore has been tested.
+
+### Cosmos (see CLAUDE.md for detail)
+- Cargo workspace: `cosmos-agent` (axum, port 7700), `cosmos-common` (shared types
+  via ts-rs), `app/src-tauri` (Tauri 2 desktop; the Android target is unused).
+- The agent provides: host metrics with SQLite history tiers, container and
+  volume streaming, container actions behind `require_write` (admin principal +
+  `allow_actions`), merged container logs over WebSocket, restic backup status,
+  Tailscale status, Wake-on-LAN, a `state.db` for UI-edited state with
+  append-only migrations, OIDC auth via Authentik, and capability negotiation so
+  older agents degrade gracefully.
+- Service discovery through the `cosmos.service` Docker labels (`system` marks
+  infrastructure).
+- **Each agent is independent; there is no central Cosmos server.** The app
+  connects to every agent directly. Anything "server-side" runs per node.
+- Jupiter runs agent 0.4.0 with `allow_actions = true`. The web UI is served by
+  the agent at `cosmos.jupiter.sunstead.net`; on my iPhone I use that.
+
+### Other Sunstead projects
+- **Solstice:** Tauri/React markdown note-taking app with wikilinks. iOS sync is
+  planned.
+- **Starbook:** self-hosted personal CRM / contact tracker. It will be renamed
+  and brought into the suite.
+
+---
+
+## 2. Target architecture
+
+Three layers with clear responsibilities.
+
+### Layer 1: Cosmos (control plane, admin only)
+Cosmos runs things: nodes, containers, deploys, updates, backups, health,
+routing, secrets, logs and notifications. Only admins can act; `homelab-users`
+can view at most.
+
+### Layer 2: Homepage (front door for users; name undecided)
+Quick launching of apps and services, unified search across services, an AI
+assistant that can query and act across services, and an index of service
+content.
+
+### Layer 3: Apps (custom and off-the-shelf)
+Each app is its own service with its own data. Apps store data in **open formats
+on disk** (markdown, `.ics`, `.vcf`, original photos, plain files), authenticate
+through **Authentik**, and keep working when Cosmos or the homepage is down.
+
+**Build vs. adopt:** custom where I can do meaningfully better or the scope is
+manageable (Solstice, the contacts app, the homepage); established open-source
+apps where it's too complex (drive, photos). Those still fit the suite: Cosmos
+manages them, Authentik handles login, the homepage indexes them, and they keep
+data readable on disk wherever possible.
+
+### Shared platform services
+Used by all layers but not features of any one app: identity (Authentik),
+notifications (ntfy first), an event bus, the search index and the AI tool
+gateway.
+
+### Core principles
+- **Blast radius:** breaking Cosmos must never take down user apps. Alerts
+  shouldn't depend on Cosmos either: apps and scripts can post to the
+  notification service directly.
+- **Permissions:** homepage and app users never get admin functions.
+- **Files are the truth:** apps are indexers or editors over open files wherever
+  possible. Anything that must live in a database is exported regularly.
+- **Git is the source of truth for configuration:** Compose files, the
+  Caddyfile, agent config and Authentik blueprints. Secrets stay in `.env`.
+  Settings edited from the Cosmos UI live in the agent's `state.db`.
+- **Secrets stay out of network-facing processes.** The agent doesn't run restic
+  or hold its password. The same goes for anything that can push to the deploy
+  repo: that's root on the server (see 3C).
+- **Runtime-agnostic Cosmos:** Docker/Compose for now. New agent modules consume
+  the samplers' snapshots rather than calling Docker directly; the existing
+  Docker code isn't refactored until a second runtime is real.
+
+---
+
+## 3. Priorities
+
+Build order: **backup safety → notifications (with the event log) → health
+checks → updates → backup controls → homepage.**
+
+### 0. Backup safety (Jupiter only; no new hardware)
+*In progress: InventorPWB/Jupiter#15, with the Cosmos Backups page showing the
+new steps.* Get the data into a shape where a new drive or an offsite target is
+a config change, and close what can be closed with two disks:
+- Stop backing up derived data (Immich `thumbs/`, `encoded-video/`).
+- **Cross-disk copy of the state:** databases dumps, small volumes and `.env` are
+  small; keep a second copy on the HDD, so either disk can fail alone.
+- Guard the root disk: the backup refuses to run (and reports why) below a
+  free-space floor, instead of filling `/`.
+- One real restore test (files and a database dump into throwaway containers).
+- Confirm `RESTIC_PASSWORD` and `.env` are in a password manager.
+- Later, with hardware: point the originals repo at a separate drive, then
+  offsite (`restic copy`).
+
+### A. Cosmos: event log and notifications
+- One append-only **event log** per agent in `state.db`: container died or
+  restarted, health check failed or recovered, backup failed or stale, update
+  applied, machine woken, and every admin action with who did it. The event
+  timeline is a page over this log, and it doubles as the audit log 3E needs.
+- **Notifications are routing rules** over events: which kinds, at what
+  severity, go to which channels, with de-duplication and quiet recovery.
+- Channels are pluggable. Always: the in-app inbox, and Tauri desktop
+  notifications while the app runs. First external channel: **ntfy**, self-hosted
+  on the tailnet (the iPhone app needs ntfy.sh as an APNs relay, which sees a
+  message ID only). Kept open for: a generic webhook (Home Assistant, Gotify,
+  chat apps), Web Push to the home-screen web app, email.
+- Follows the agent's patterns: background tasks, never on the request path,
+  capability flag, types in `cosmos-common`.
+- **Watching the watcher:** nothing on Jupiter can report Jupiter being down.
+  Short term, the desktop app notifies when a node stays offline. Long term,
+  agents on other nodes watch each other.
+
+### B. Cosmos: health checks (replaces Uptime Kuma)
+- HTTP, TCP and ping probes per service with uptime history; targets default
+  from the `cosmos.service` labels.
+- Failures and recoveries become events, so they notify and show on the timeline.
+- The backup heartbeat moves to the agent's own staleness check. Then retire Kuma
+  (and skip its v2 upgrade).
+
+### C. Cosmos: updates (replaces Renovate)
+No GitHub PRs to merge. Updates happen from a Cosmos screen or automatically.
+- The agent checks registries for newer tags of the images it runs, on a slow
+  schedule. The UI lists them with a release-notes link.
+- **Per-service policy:** manual (default), patch automatically, or fully
+  automatic.
+- Update rules that Renovate encodes today (groups that move together, held
+  majors, one Nextcloud major at a time) move into compose labels, so they live
+  in git.
+- **The agent never gets write access to the repo.** A token that can push to
+  Jupiter's `main` is root on Jupiter. Proposed: approving an update makes the
+  agent dispatch an `update.yml` workflow in the Jupiter repo with `(service,
+  tag)`, using a token limited to triggering workflows on that repo. The
+  workflow checks the request against the registry and the compose files, takes
+  the pre-update backup, commits the bump and deploys. A commit made by a
+  workflow doesn't trigger `deploy.yml`, so `deploy.yml` becomes a reusable
+  workflow that `update.yml` calls.
+- Rollback is the same flow with the previous tag.
+- Renovate stays until this ships, then is removed.
+
+### D. Cosmos: backup controls
+- **Trigger backups from the UI** without the agent holding the restic password:
+  the agent writes a request file into a directory the host watches (a systemd
+  `.path` unit), which starts `jupiter-backup.service`. The status file reports
+  the result. The pre-update backup uses the same mechanism.
+- **Guided restore:** show snapshots and walk through restoring files or a
+  database per `BACKUPS.md`, with destructive steps behind explicit confirmation.
+- **Automated restore drills:** periodically restore into a throwaway container
+  and verify.
+
+### E. Homepage
+- App launcher built on `cosmos.service` label discovery.
+- Unified search: full-text (Tantivy) plus embeddings later. Off-the-shelf apps
+  indexed through their APIs or on-disk files.
+- **Search and AI results respect permissions:** a user only sees data they own
+  or that's shared with them.
+- Sign-in through Authentik, reusing Cosmos's OIDC approach.
+- AI through an **MCP gateway** exposing tools per service. Read-only first, then
+  tiers: reads free; reversible writes need a quick confirmation; destructive or
+  infrastructure actions always need explicit approval.
+- Every AI tool call is written to the audit log (the event log from 3A).
+- Content ingested from emails, documents and files is untrusted and never
+  triggers actions on its own.
+- The gateway is Tailscale-only and authenticated per client.
+
+### F. Mobile
+- My phone is an iPhone, so mobile means the web UI in iOS Safari (installable to
+  the home screen) or a Tauri iOS target. The Android target isn't a priority.
+- A mobile app for the homepage, likely also Tauri.
+
+---
+
+## 4. Filesystem and multi-user design
+
+### Multi-user: design for it now, build for myself
+- Authentik groups already exist. What's missing is **data ownership**.
+- Every piece of data has an owner, encoded in its path and keyed by a **stable**
+  identifier. Proposed: the Authentik username, treated as immutable (readable
+  paths; Immich's storage label can take the same value).
+- Cosmos stays admin-only for actions. Sharing starts with shared spaces (e.g.
+  family photos), not fine-grained sharing.
+
+### Data classes
+| Class | Examples | Storage | Backup |
+|---|---|---|---|
+| Originals | photos, files, notes, calendars, contacts | HDD (`/srv/storage`) | restic + off-disk copy + offsite |
+| State | databases, app configs | NVMe | Nightly dumps + restic, copied to the other disk |
+| Derived | thumbnails, transcodes, search index | Anywhere with space | Not backed up (rebuildable) |
+
+### Proposed layout
+`/srv/storage` stays the root for originals. State and derived data paths are
+decided in the layout plan; the NVMe root has limited free space, so derived data
+may stay on the HDD, just excluded from backups.
+```
+/srv/storage/            # HDD: originals
+  data/
+    files/<user>/        # drive app
+    notes/<user>/        # Solstice
+    photos/              # Immich's upload location (its own library/<user>/ inside)
+    dav/<user>/          # calendars and contacts
+    kin/<user>/          # contacts app (Starbook, renamed)
+    shared/<space>/      # shared spaces
+
+<NVMe path>/state/<app>/ # databases, app configs
+<derived path>/          # thumbnails, index; excluded from backups
+```
+App-first, then per user, because that matches how containers mount data. Each
+container mounts only its own folders. Off-the-shelf apps keep their own internal
+layout inside their folder.
+
+**Immich:** the storage template is already on
+(`library/<user>/<year>/<day>/<file>`). Keep it. Its `thumbs/` and
+`encoded-video/` are derived and can be mounted elsewhere; its `backups/` holds
+Immich's own database dumps, which already sit on the HDD. Albums, people, faces
+and favourites live only in its database, so the dumps and an API export matter.
+Immich writes `.immich` marker files and refuses to start if they vanish, so
+moving its folders is a planned migration, never an `mv`.
+
+### Multiple drives and nodes
+- Apps see paths by purpose (`/srv/storage/data/...`), never physical disks.
+- New drives use **ZFS or btrfs** (checksums plus snapshots), with datasets per
+  data class. mergerfs plus SnapRAID is the alternative for mismatched drives.
+- Each dataset has a **home node**, and apps run next to their data. No databases
+  over network mounts.
+- Other nodes receive copies (restic copies or filesystem replication), not live
+  access.
+- Cosmos keeps a **storage registry** mapping logical names (e.g.
+  `photos/<user>`) to node, path and data class, enabling service migration
+  later.
+
+---
+
+## 5. Later
+
+- **Replace Nextcloud:** leading option is **OpenCloud** with the PosixFS storage
+  driver. Calendars and contacts move to **Radicale** (plain `.ics`/`.vcf`;
+  Apple devices connect natively). Run OpenCloud alongside Nextcloud, move files,
+  move calendars, retire Nextcloud. Each new service gets a blueprint and joins
+  the backup set. Sync endpoints (CalDAV, WebDAV, native clients) use app
+  passwords or basic auth; web UIs use SSO.
+- **Immich readability:** XMP sidecars, maybe an external library so a plain
+  folder is the source of truth. Export albums and faces via the API.
+- **Retire Portainer** once Cosmos covers what I use it for.
+- **Starbook** joins the suite as a custom Sunstead app (renamed).
+- **Solstice sync:** a dedicated sync service, likely CRDT-based (Automerge or
+  Yjs), enabling iOS Solstice.
+- **Service migration** between nodes and idle auto-sleep for nodes (building on
+  Wake-on-LAN).
+
+---
+
+## 6. Decisions
+
+| Date | Decision |
+|---|---|
+| 2026-09-24 | This roadmap lives at `docs/ROADMAP.md` in the Cosmos repo. |
+| 2026-09-24 | Backup safety comes first, before any Cosmos feature work. |
+| 2026-09-24 | Notifications: ntfy first, behind a pluggable channel design. |
+| 2026-09-24 | Updates: a custom Cosmos flow plus auto-update policies, not Renovate PRs. |
+| 2026-09-24 | Mobile means iOS / the web UI, not Android. |
+| 2026-09-24 | Keep the Windows partition. The primary repo stays on `/`, guarded by a free-space floor (`BACKUP_MIN_FREE_GB`, 50). |
+| 2026-09-24 | The state (dumps, volumes, `.env`) gets a second restic repo on the HDD, `/srv/storage/backups/restic-state`. |
+| 2026-09-24 | Old snapshots holding Immich thumbnails age out; no history rewrite. |
+| 2026-09-24 | Immich's `library/<user>/<year>/<day>/` storage template stays as it is. |
+
+### Open
+- **Homepage name:** Sunstead Crest, Arc, Vista, Lume.
+- **Starbook name:** Sunstead Kin (current favorite), Tether, Folk.
+- **Homepage repo:** inside the Cosmos workspace or its own repo with a shared UI
+  package.
+- **Infra repos per node:** one repo per server (like `Jupiter`) or one repo with
+  a directory per node. Matters once Saturn exists, and for 3C.
+- **Filesystem:** ZFS vs. btrfs when a second drive is added.
+- **Backup copy target:** second local drive, another node, or offsite.
+- **Update policy storage:** compose labels (git) or the Cosmos UI (`state.db`).
+- **Image digests:** pin tag plus digest, or tags only (digests block silent
+  rebuilds of the same tag, including security rebuilds, until Cosmos proposes
+  them).
+- **AI model:** local (Ollama), hosted, or hybrid.
+- **Mobile:** Tauri iOS for Cosmos, and how the homepage app is built.
+
+---
+
+## 7. Instructions for Claude Code
+
+### Working agreements
+- **Read `CLAUDE.md` first** in each repo and follow its conventions. This
+  roadmap doesn't override them.
+- **Explore before changing.** Summarize what exists before proposing a
+  reorganization.
+- **Never run destructive commands against Jupiter, `/srv/storage` or the backup
+  repository without explicit confirmation.** Data there is irreplaceable. Plan
+  data migrations as written steps first.
+- **Pushing to `main` in the Jupiter repo deploys to production.** Use branches
+  and PRs.
+- **Never commit secrets.** Keep them in `.env`. Authentik changes go through
+  blueprints.
+- Small, reviewable increments; propose a plan before large refactors.
+- Keep this document updated as decisions are made, in the Decisions table.
