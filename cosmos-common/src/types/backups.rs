@@ -66,5 +66,15 @@ pub struct BackupsStatus {
     pub snapshots: Vec<BackupSnapshotInfo>,
     pub retention: Option<RetentionPolicy>,
     pub postgres_dump: Option<StepStatus>,
+    /// The second copy of the state (dumps, volumes, config) on another disk.
+    /// Absent from agents before 0.5, and null when the script doesn't make one.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub state_copy: Option<StepStatus>,
+    /// Whether the repository's filesystem had room for tonight's backup; the
+    /// message says how much was free. Absent from agents before 0.5.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub space_check: Option<StepStatus>,
     pub heartbeat: Option<StepStatus>,
 }
