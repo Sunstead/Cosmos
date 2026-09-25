@@ -40,6 +40,10 @@ struct StatusFile {
     #[serde(default)]
     postgres_dump: Option<StepStatus>,
     #[serde(default)]
+    state_copy: Option<StepStatus>,
+    #[serde(default)]
+    space_check: Option<StepStatus>,
+    #[serde(default)]
     heartbeat: Option<StepStatus>,
 }
 
@@ -141,6 +145,8 @@ impl BackupsProvider {
             snapshots: file.snapshots,
             retention: file.retention,
             postgres_dump: file.postgres_dump,
+            state_copy: file.state_copy,
+            space_check: file.space_check,
             heartbeat: file.heartbeat,
         }
     }
@@ -162,6 +168,8 @@ impl BackupsProvider {
             snapshots: Vec::new(),
             retention: None,
             postgres_dump: None,
+            state_copy: None,
+            space_check: None,
             heartbeat: None,
         }
     }
@@ -334,6 +342,8 @@ mod tests {
                     "duration_secs": 412,
                     "repo_size_bytes": 12345678,
                     "retention": {{ "daily": 7, "weekly": 4, "monthly": 6 }},
+                    "state_copy": {{ "ok": true, "at": "{now}", "message": null }},
+                    "space_check": {{ "ok": false, "at": "{now}", "message": "12G free, need 50G" }},
                     "snapshots": [
                         {{
                             "id": "abcdef0123456789",
@@ -363,6 +373,10 @@ mod tests {
         assert_eq!(status.repo_label, "jupiter/restic");
         assert_eq!(status.retention.as_ref().unwrap().daily, 7);
         assert_eq!(status.last_exit_code, Some(0));
+        assert!(status.state_copy.as_ref().unwrap().ok);
+        let space = status.space_check.as_ref().unwrap();
+        assert!(!space.ok);
+        assert_eq!(space.message.as_deref(), Some("12G free, need 50G"));
 
         let snap = provider.poll(false).expect("first poll always produces a snapshot");
 
