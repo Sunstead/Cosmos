@@ -98,6 +98,13 @@ Background samplers publish to `tokio::sync::watch` channels; handlers hand out 
 
 ## Deployment
 
+Production is the Jupiter repo (`InventorPWB/Jupiter`, usually checked out
+beside this one), where a push to `main` deploys. It pins the agent to a
+semver tag, and Renovate opens the bump PR once a `v*` tag has published.
+An agent refuses config it doesn't understand, so a release that changes
+`agent.toml` needs its image published before the Jupiter PR that uses it
+merges.
+
 `cosmos-agent/compose.example.yaml` and `agent.example.toml`. Two things are easy to get wrong:
 
 - **`network_mode: host` is required, not optional.** `/proc/net/dev` renders from the reading process's network namespace and sysinfo has no `HOST_PROC` escape hatch, so without it the agent reports the container's veth. Consequence: `ports:` does not apply, and `[host] net_exclude` becomes load-bearing.
