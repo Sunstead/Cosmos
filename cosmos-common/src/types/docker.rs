@@ -67,9 +67,17 @@ pub struct ContainerInfo {
     pub created_unix: i64,
     pub restart_count: u32,
     pub compose_project: Option<String>,
+    /// The service name in compose. Absent from agents before 0.8.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub compose_service: Option<String>,
     pub cosmos_service: Option<String>,
     pub cosmos_service_description: Option<String>,
     pub cosmos_service_url: Option<String>,
+    /// The `cosmos.update*` labels, for the agent's update rules only.
+    #[serde(skip)]
+    #[ts(skip)]
+    pub update_labels: std::collections::BTreeMap<String, String>,
     /// Percent of one core x online cores, differenced across agent ticks.
     /// 0.0 on a container's first sighting; correct from the next tick.
     pub cpu_pct: f32,

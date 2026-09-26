@@ -18,6 +18,7 @@ mod sample;
 mod sse;
 mod state;
 mod store;
+mod updates;
 mod uptime;
 mod wol;
 
@@ -28,6 +29,21 @@ use state::{ AppState, Inner };
 use std::{ process::ExitCode, sync::Arc };
 
 fn main() -> ExitCode {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if let [flag, path] = args.as_slice() {
+        if flag == "--check-config" {
+            return match Config::check_file(path) {
+                Ok(()) => {
+                    println!("cosmos-agent {}: {path} is valid", env!("CARGO_PKG_VERSION"));
+                    ExitCode::SUCCESS
+                }
+                Err(e) => {
+                    eprintln!("cosmos-agent {}: {e}", env!("CARGO_PKG_VERSION"));
+                    ExitCode::FAILURE
+                }
+            };
+        }
+    }
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
@@ -125,7 +141,7 @@ async fn serve(cfg: Config, mode: config::AuthMode) -> Result<(), Box<dyn std::e
 
     // Like history, a broken state database disables the features that
     // need it rather than the agent.
-    let store = if cfg.wol.enabled || cfg.events.enabled || cfg.uptime.enabled {
+    let store = if cfg.wol.enabled || cfg.events.enabled || cfg.uptime.enabled || cfg.updates.enabled {
         match store::Store::open(&cfg.state.path) {
             Ok(store) => Some(store),
             Err(e) => {
@@ -203,6 +219,24 @@ async fn serve(cfg: Config, mode: config::AuthMode) -> Result<(), Box<dyn std::e
         _ => None,
     };
 
+    let updates = match (&store, cfg.updates.enabled) {
+        (Some(store), true) =>
+            Some(
+                updates::spawn(&cfg.updates, updates::Inputs {
+                    store: store.clone(),
+                    docker: docker.clone(),
+                    containers: containers_rx.clone(),
+                    backups: backups_rx.clone(),
+                    uptime: uptime.clone(),
+                    events: events.clone(),
+                })
+            ),
+        _ => None,
+    };
+    if cfg.updates.token.is_some() && cfg.updates.repo.is_none() {
+        tracing::warn!("COSMOS_AGENT_GITHUB_TOKEN is set but [updates] repo isn't; updates are only listed");
+    }
+
     let state = AppState::new(Inner {
         auth: match (mode, &cfg.auth.oidc) {
             (config::AuthMode::Oidc { .. }, Some(oidc)) => auth::Auth::oidc(oidc, cfg.auth.allow_query_token),
@@ -221,6 +255,7 @@ async fn serve(cfg: Config, mode: config::AuthMode) -> Result<(), Box<dyn std::e
         events: events.clone(),
         notify,
         uptime,
+        updates,
         cfg: cfg.clone(),
     });
 

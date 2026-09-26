@@ -15,6 +15,7 @@ export const PAGES = [
   '/logs',
   '/backups',
   '/events',
+  '/updates',
   '/settings',
 ] as const;
 

@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Boxes, ChevronRight, Database, Hexagon, Server } from 'lucide-react';
+import { Boxes, ChevronRight, Database, Hexagon, PackageCheck, Server } from 'lucide-react';
 import { useNodeStore } from '@/stores/nodes';
 import { useContainersStore } from '@/stores/containers';
 import { useVolumesStore } from '@/stores/volumes';
@@ -17,7 +17,7 @@ import { Section } from '@/components/section';
 import { GetStarted, useSetupSteps } from '@/components/get-started';
 import { Dot } from '@/components/dot';
 import { ServiceIcon } from '@/lib/service-icons';
-import { useUptime } from '@/api/queries';
+import { useUpdates, useUptime } from '@/api/queries';
 import { serviceCheck } from '@/lib/uptime';
 import { ServiceCheckChip } from '@/components/uptime-bar';
 
@@ -37,6 +37,7 @@ export function OverviewPage() {
   );
   const steps = useSetupSteps();
   const uptime = useUptime(60_000);
+  const updates = useUpdates(5 * 60_000);
 
   const services = useMemo(() => userFacingServices(allServices), [allServices]);
 
@@ -99,6 +100,19 @@ export function OverviewPage() {
           value={`${stats.volumesInUse} / ${stats.volumes}`}
           loading={awaitingVolumes && stats.volumes === 0}
         />
+        {updates.nodes.length > 0 && (
+          <StatCard
+            icon={PackageCheck}
+            label='Updates'
+            value={updates.items.filter((u) => u.available).length}
+            sublabel={(() => {
+              const broken = updates.items.filter((u) => u.run?.state === 'broken').length;
+              return broken ? `${broken} broken` : null;
+            })()}
+            tone='error'
+            loading={updates.loading && updates.items.length === 0}
+          />
+        )}
       </StatRow>
 
       <div className='grid gap-4 @5xl:grid-cols-3'>

@@ -82,7 +82,9 @@ export default async function globalSetup() {
       `requests_dir = "${path.join(dir, 'inbox')}"\nrequest_results_dir = "${path.join(dir, 'results')}"\n` +
       `[cors]\nextra_origins = ["http://localhost:${WEB_PORT}"]\n` +
       `[tailscale]\nenabled = true\nsocket = "${socket}"\ninterval_ms = 2000\n` +
-      `[wol]\nenabled = true\n[state]\npath = "${path.join(dir, 'state.db')}"\n`,
+      `[wol]\nenabled = true\n[state]\npath = "${path.join(dir, 'state.db')}"\n` +
+      // So the app offers to apply updates; specs mock what the agent lists.
+      `[updates]\nrepo = "e2e/infrastructure"\n`,
   );
 
   const agent = spawn(path.join(root, 'target/debug/cosmos-agent'), [], {
@@ -96,6 +98,7 @@ export default async function globalSetup() {
       COSMOS_AGENT_HISTORY_PATH: path.join(dir, 'history.db'),
       // Wake-on-LAN specs need it. No spec starts or stops a container.
       COSMOS_AGENT_ALLOW_ACTIONS: '1',
+      COSMOS_AGENT_GITHUB_TOKEN: 'e2e-not-a-token',
       RUST_LOG: 'warn',
     },
     stdio: process.env.E2E_DEBUG ? 'inherit' : 'ignore',
