@@ -56,7 +56,25 @@ To remove those prompts later:
 ## Agent
 
 Every push to `main` that touches the agent, shared types or web UI publishes
-`:latest` after the image smoke test passes. For a pinned version, tag
-`v<version>` (e.g. `v0.3.0`), which also publishes `:0.3.0` and `:0.3`.
-Watchtower on Jupiter pulls `:latest` at 04:00, or run
-`docker compose pull cosmos-agent && docker compose up -d cosmos-agent`.
+`:latest` after the image smoke test passes. Nothing runs `:latest`, though:
+Jupiter pins a version in `compose/cosmos.yml`, and an agent refuses a config
+it doesn't understand, so each release is a tag plus a Jupiter PR.
+
+1. On an up-to-date `main`, set `version` in `cosmos-agent/Cargo.toml`, run
+   `cargo check -p cosmos-agent` so `Cargo.lock` follows, and commit
+   `Release agent v<version>`.
+2. Tag it and push both:
+   ```bash
+   git tag v0.5.0 && git push origin main v0.5.0
+   ```
+   The **Agent image** workflow publishes `:0.5.0` and `:0.5`.
+3. Wait for that run to pass and the image to exist before touching Jupiter:
+   ```bash
+   docker manifest inspect ghcr.io/sunstead/cosmos-agent:0.5.0
+   ```
+4. In the Jupiter repo, bump the image in `compose/cosmos.yml` (Renovate opens
+   this PR on its own, or do it by hand), in the same PR as any
+   `cosmos-agent.toml` change the release needs. Merging deploys it.
+
+The web UI is inside the agent image, so it ships with the agent. Only the
+desktop app has its own tag and release, above.
