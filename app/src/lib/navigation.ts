@@ -4,6 +4,7 @@ import {
   ChartLine,
   Container,
   Database,
+  HeartPulse,
   Hexagon,
   LayoutDashboard,
   Logs,
@@ -22,6 +23,7 @@ export type PagePath =
   | '/volumes'
   | '/network'
   | '/monitoring'
+  | '/uptime'
   | '/logs'
   | '/backups'
   | '/events'
@@ -42,6 +44,7 @@ export const PAGES: PageDef[] = [
   { path: '/volumes', label: 'Volumes', icon: Database, shortcut: 'go.volumes' },
   { path: '/network', label: 'Network', icon: Network, shortcut: 'go.network' },
   { path: '/monitoring', label: 'Monitoring', icon: ChartLine, shortcut: 'go.monitoring' },
+  { path: '/uptime', label: 'Uptime', icon: HeartPulse, shortcut: 'go.uptime' },
   { path: '/logs', label: 'Logs', icon: Logs, shortcut: 'go.logs' },
   { path: '/backups', label: 'Backups', icon: Archive, shortcut: 'go.backups' },
   { path: '/events', label: 'Events', icon: Activity, shortcut: 'go.events' },
@@ -51,7 +54,7 @@ export const PAGES: PageDef[] = [
 export const NAV_GROUPS: { label: string | null; paths: PagePath[] }[] = [
   { label: null, paths: ['/overview', '/nodes', '/services'] },
   { label: 'Infrastructure', paths: ['/containers', '/volumes', '/network'] },
-  { label: 'Operations', paths: ['/monitoring', '/logs', '/events', '/backups'] },
+  { label: 'Operations', paths: ['/monitoring', '/uptime', '/logs', '/events', '/backups'] },
   { label: null, paths: ['/settings'] },
 ];
 

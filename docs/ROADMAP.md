@@ -22,7 +22,7 @@ or filesystem path.
 
 ## 1. Current state
 
-*Last checked against both repos: 2026-09-24.*
+*Last checked against both repos: 2026-09-26.*
 
 ### Jupiter (primary server)
 - Debian 13. Disks:
@@ -99,7 +99,8 @@ or filesystem path.
   infrastructure).
 - **Each agent is independent; there is no central Cosmos server.** The app
   connects to every agent directly. Anything "server-side" runs per node.
-- Jupiter runs agent 0.4.0 with `allow_actions = true`. The web UI is served by
+- Jupiter runs agent 0.5.1 with `allow_actions = true`. The agent, web UI and
+  desktop app share one version (`npm run release`, see `RELEASING.md`). The web UI is served by
   the agent at `cosmos.jupiter.sunstead.net`; on my iPhone I use that.
 
 ### Other Sunstead projects
@@ -162,7 +163,10 @@ gateway.
 ## 3. Priorities
 
 Build order: **backup safety → notifications (with the event log) → health
-checks → updates → backup controls → homepage.**
+checks → backup controls → updates → homepage.** Backup controls moved ahead of
+updates (2026-09-26): an update's pre-update backup goes through the same
+request mechanism, and a broken update is noticed by the health checks. One
+release per stage: 0.6 health checks, 0.7 backup controls, 0.8 updates.
 
 ### 0. Backup safety (Jupiter only; no new hardware)
 *In progress: InventorPWB/Jupiter#15, with the Cosmos Backups page showing the
@@ -179,6 +183,8 @@ a config change, and close what can be closed with two disks:
   offsite (`restic copy`).
 
 ### A. Cosmos: event log and notifications
+*Done in 0.5 (Cosmos#13, #14; Jupiter#18, #19): the event log, ntfy on the
+iPhone, desktop notifications and "node unreachable" alerts.*
 - One append-only **event log** per agent in `state.db`: container died or
   restarted, health check failed or recovered, backup failed or stale, update
   applied, machine woken, and every admin action with who did it. The event
@@ -197,6 +203,9 @@ a config change, and close what can be closed with two disks:
   agents on other nodes watch each other.
 
 ### B. Cosmos: health checks (replaces Uptime Kuma)
+*In progress for 0.6: an HTTP check per labelled service, custom HTTP and TCP
+checks edited in the UI, certificate expiry, an Uptime page. No ICMP: the agent
+runs with no capabilities, and TCP covers what ping would.*
 - HTTP, TCP and ping probes per service with uptime history; targets default
   from the `cosmos.service` labels.
 - Failures and recoveries become events, so they notify and show on the timeline.
@@ -208,7 +217,8 @@ No GitHub PRs to merge. Updates happen from a Cosmos screen or automatically.
 - The agent checks registries for newer tags of the images it runs, on a slow
   schedule. The UI lists them with a release-notes link.
 - **Per-service policy:** manual (default), patch automatically, or fully
-  automatic.
+  automatic. The policy is set in the Cosmos UI (`state.db`); the rules below
+  live in compose labels (decided 2026-09-26).
 - Update rules that Renovate encodes today (groups that move together, held
   majors, one Nextcloud major at a time) move into compose labels, so they live
   in git.
@@ -229,7 +239,8 @@ No GitHub PRs to merge. Updates happen from a Cosmos screen or automatically.
   `.path` unit), which starts `jupiter-backup.service`. The status file reports
   the result. The pre-update backup uses the same mechanism.
 - **Guided restore:** show snapshots and walk through restoring files or a
-  database per `BACKUPS.md`, with destructive steps behind explicit confirmation.
+  database per `BACKUPS.md`. A guide only: Cosmos generates the commands and
+  you run them (decided 2026-09-26).
 - **Automated restore drills:** periodically restore into a throwaway container
   and verify.
 
@@ -347,6 +358,13 @@ moving its folders is a planned migration, never an `mv`.
 | 2026-09-24 | The state (dumps, volumes, `.env`) gets a second restic repo on the HDD, `/srv/storage/backups/restic-state`. |
 | 2026-09-24 | Old snapshots holding Immich thumbnails age out; no history rewrite. |
 | 2026-09-24 | Immich's `library/<user>/<year>/<day>/` storage template stays as it is. |
+| 2026-09-26 | Stage A shipped in 0.5. The agent, web UI and desktop app share one version. |
+| 2026-09-26 | Health checks: automatic per labelled service, extras and tweaks in the UI. HTTP and TCP only. |
+| 2026-09-26 | Updates: rules (groups, holds, one major at a time) in compose labels; per-service policy in the UI. |
+| 2026-09-26 | Pre-update backups only for services with a database. Auto-updates apply after a successful nightly backup, for versions first seen 3 or more days ago. |
+| 2026-09-26 | A broken update alerts and offers rollback (with a database restore where one migrated); nothing reverts on its own. |
+| 2026-09-26 | Restores from Cosmos are a guide only. |
+| 2026-09-26 | Order: health checks (0.6), backup controls (0.7), updates (0.8), one release each. |
 
 ### Open
 - **Homepage name:** Sunstead Crest, Arc, Vista, Lume.
@@ -357,7 +375,6 @@ moving its folders is a planned migration, never an `mv`.
   a directory per node. Matters once Saturn exists, and for 3C.
 - **Filesystem:** ZFS vs. btrfs when a second drive is added.
 - **Backup copy target:** second local drive, another node, or offsite.
-- **Update policy storage:** compose labels (git) or the Cosmos UI (`state.db`).
 - **Image digests:** pin tag plus digest, or tags only (digests block silent
   rebuilds of the same tag, including security rebuilds, until Cosmos proposes
   them).

@@ -12,6 +12,8 @@ import { CardGridSkeleton } from '@/components/skeletons';
 import { useNodeStore } from '@/stores/nodes';
 import { ServiceStatus, userFacingServices } from '@/lib/services';
 import { matchesQuery } from '@/lib/format';
+import { serviceCheck } from '@/lib/uptime';
+import { useUptime } from '@/api/queries';
 
 type Filter = 'all' | ServiceStatus;
 
@@ -23,6 +25,7 @@ export function ServicesPage() {
   const awaiting = useAwaiting(useContainersStore((s) => s.nodeContainers));
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
+  const uptime = useUptime(60_000);
 
   const services = useMemo(() => userFacingServices(allServices), [allServices]);
 
@@ -85,7 +88,12 @@ export function ServicesPage() {
       ) : (
         <div className={SERVICE_GRID}>
           {visible.map((s) => (
-            <ServiceCard key={`${s.nodeId}:${s.key}`} service={s} showNode={nodeCount > 1} />
+            <ServiceCard
+              key={`${s.nodeId}:${s.key}`}
+              service={s}
+              showNode={nodeCount > 1}
+              check={serviceCheck(uptime.items, s.nodeId, s.key)}
+            />
           ))}
         </div>
       )}

@@ -76,6 +76,12 @@ export const SETUP = {
     file: 'agent.toml',
     snippet: '[tailscale]\nenabled = true\nsocket = "/host/tailscale/tailscaled.sock"',
   },
+  uptime: {
+    summary:
+      'Update the agent to 0.6 or later. Checks are on by default; if the proxy on the node serves names that resolve somewhere the node cannot reach, list them here.',
+    file: 'agent.toml',
+    snippet: '[uptime]\nenabled = true\nlocal_domains = ["example.net"]',
+  },
   wol: {
     summary: 'Turn on Wake-on-LAN on the agent of a node on the same LAN. Waking also needs allow_actions.',
     file: 'agent.toml',

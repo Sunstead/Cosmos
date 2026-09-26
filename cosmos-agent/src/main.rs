@@ -18,6 +18,7 @@ mod sample;
 mod sse;
 mod state;
 mod store;
+mod uptime;
 mod wol;
 
 use config::Config;
@@ -121,7 +122,7 @@ async fn serve(cfg: Config, mode: config::AuthMode) -> Result<(), Box<dyn std::e
 
     // Like history, a broken state database disables the features that
     // need it rather than the agent.
-    let store = if cfg.wol.enabled || cfg.events.enabled {
+    let store = if cfg.wol.enabled || cfg.events.enabled || cfg.uptime.enabled {
         match store::Store::open(&cfg.state.path) {
             Ok(store) => Some(store),
             Err(e) => {
@@ -129,7 +130,7 @@ async fn serve(cfg: Config, mode: config::AuthMode) -> Result<(), Box<dyn std::e
                     path = %cfg.state.path.display(),
                     error = %e,
                     hint = history::diagnose(&cfg.state.path),
-                    "could not open the state database; wake-on-lan and the event log are disabled"
+                    "could not open the state database; wake-on-lan, the event log and uptime checks are disabled"
                 );
                 None
             }
@@ -194,6 +195,11 @@ async fn serve(cfg: Config, mode: config::AuthMode) -> Result<(), Box<dyn std::e
         _ => None,
     };
 
+    let uptime = match (&store, cfg.uptime.enabled) {
+        (Some(store), true) => Some(uptime::spawn(&cfg.uptime, store.clone(), containers_rx.clone(), events.clone())),
+        _ => None,
+    };
+
     let state = AppState::new(Inner {
         auth: match (mode, &cfg.auth.oidc) {
             (config::AuthMode::Oidc { .. }, Some(oidc)) => auth::Auth::oidc(oidc, cfg.auth.allow_query_token),
@@ -210,6 +216,7 @@ async fn serve(cfg: Config, mode: config::AuthMode) -> Result<(), Box<dyn std::e
         wol,
         events: events.clone(),
         notify,
+        uptime,
         cfg: cfg.clone(),
     });
 

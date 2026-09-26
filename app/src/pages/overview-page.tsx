@@ -17,6 +17,9 @@ import { Section } from '@/components/section';
 import { GetStarted, useSetupSteps } from '@/components/get-started';
 import { Dot } from '@/components/dot';
 import { ServiceIcon } from '@/lib/service-icons';
+import { useUptime } from '@/api/queries';
+import { serviceCheck } from '@/lib/uptime';
+import { ServiceCheckChip } from '@/components/uptime-bar';
 
 const QUICK_LAUNCH_MAX = 9;
 
@@ -33,6 +36,7 @@ export function OverviewPage() {
     s.nodes.filter((n) => ['offline', 'unauthorized'].includes(s.meta[n.id]?.status ?? '')).length,
   );
   const steps = useSetupSteps();
+  const uptime = useUptime(60_000);
 
   const services = useMemo(() => userFacingServices(allServices), [allServices]);
 
@@ -44,9 +48,12 @@ export function OverviewPage() {
       running: containers.filter((c) => c.state === 'running').length,
       volumes: volumes.length,
       volumesInUse: volumes.filter((v) => v.in_use_by.length > 0).length,
-      healthy: services.filter((s) => s.status === 'running').length,
+      // Running, with an uptime check that isn't down.
+      healthy: services.filter(
+        (s) => s.status === 'running' && serviceCheck(uptime.items, s.nodeId, s.key)?.state !== 'down',
+      ).length,
     };
-  }, [nodeContainers, nodeVolumes, services]);
+  }, [nodeContainers, nodeVolumes, services, uptime.items]);
 
   if (nodes.length === 0) {
     return (
@@ -134,14 +141,25 @@ export function OverviewPage() {
           <Section title='Service health' count={services.length} contentClassName='max-h-80 divide-y overflow-auto'>
             {services.map((s) => {
               const status = getServiceStatusDisplay(s.status);
+              const check = serviceCheck(uptime.items, s.nodeId, s.key);
+              const unreachable = check?.state === 'down';
               return (
                 <div key={`${s.nodeId}:${s.key}`} className='flex items-center gap-3 px-4 py-2 text-sm'>
                   <ServiceIcon service={s.key} size={18} />
                   <span className='min-w-0 flex-1 truncate'>{s.name}</span>
+                  {check && (
+                    <span className='text-xs'>
+                      <ServiceCheckChip check={check} />
+                    </span>
+                  )}
                   <span className='text-xs tabular-nums text-muted-foreground'>
                     {s.running}/{s.total}
                   </span>
-                  <Dot variant={status.dotVariant} title={status.label} pulse={s.status === 'running'} />
+                  <Dot
+                    variant={unreachable ? 'error' : status.dotVariant}
+                    title={unreachable ? 'Down' : status.label}
+                    pulse={s.status === 'running' && !unreachable}
+                  />
                 </div>
               );
             })}

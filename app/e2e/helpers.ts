@@ -11,6 +11,7 @@ export const PAGES = [
   '/volumes',
   '/network',
   '/monitoring',
+  '/uptime',
   '/logs',
   '/backups',
   '/events',
