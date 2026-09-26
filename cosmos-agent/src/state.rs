@@ -19,6 +19,7 @@ use crate::{
         tailnet::TailnetSnapshot,
         wol::WolHandle,
     },
+    uptime::UptimeHandle,
 };
 use cosmos_common::types::Capabilities;
 use std::{ ops::Deref, sync::Arc };
@@ -42,6 +43,7 @@ pub struct Inner {
     pub wol: Option<WolHandle>,
     pub events: Option<EventsHandle>,
     pub notify: Option<NotifyHandle>,
+    pub uptime: Option<UptimeHandle>,
 }
 
 impl AppState {
@@ -68,6 +70,8 @@ impl AppState {
             events: self.events.is_some(),
             notify: self.notify.is_some(),
             notify_actions: self.notify.is_some() && self.cfg.allow_actions,
+            uptime: self.uptime.is_some(),
+            uptime_actions: self.uptime.is_some() && self.cfg.allow_actions,
         }
     }
 }

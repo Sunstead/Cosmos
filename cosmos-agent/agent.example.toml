@@ -147,6 +147,18 @@ retain_days = 180
 disk_warn_pct = 85
 disk_critical_pct = 95
 
+[uptime]
+# The Uptime page: an HTTP check for every service with a cosmos.service.url
+# label, plus the HTTP and TCP checks added in the app (kept in [state] path).
+# Three failures in a row open a problem; two passes close it.
+enabled = true
+interval_secs = 60
+# Names under these domains are checked through 127.0.0.1, i.e. the reverse
+# proxy on this host, instead of wherever DNS points. Use it when the proxy's
+# names resolve to an address this host can't reach itself, such as its own
+# Tailscale IP.
+# local_domains = ["example.net"]
+
 [state]
 # Settings edited from the UI, and the event log. Must be on the writable
 # volume.

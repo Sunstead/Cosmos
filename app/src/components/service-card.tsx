@@ -13,6 +13,8 @@ import { formatBytes } from '@/lib/node-metrics';
 import { displayHost, serviceHref } from '@/lib/agent-url';
 import { openExternal } from '@/lib/open-external';
 import { useNow } from '@/api/queries';
+import { UptimeEntry } from '@/generated/UptimeEntry';
+import { ServiceCheckChip } from './uptime-bar';
 import { Card } from './ui/card';
 import { Dot } from './dot';
 import { ServiceActionsMenu } from './service-actions-menu';
@@ -30,9 +32,12 @@ function Metric({ label, value, className }: { label: string; value: string; cla
 export const ServiceCard = memo(function ServiceCard({
   service,
   showNode,
+  check,
 }: {
   service: ServiceInfo;
   showNode?: boolean;
+  /** Its uptime check, when it has one. */
+  check?: UptimeEntry;
 }) {
   const status = getServiceStatusDisplay(service.status);
   const href = serviceHref(service.url);
@@ -69,12 +74,13 @@ export const ServiceCard = memo(function ServiceCard({
           {sortContainersByState(service.containers).map((c) => (
             <Dot
               key={c.id || c.name}
-              variant={c.state === 'running' ? 'success' : 'disabled'}
-              title={`${c.name}: ${c.state}`}
+              variant={c.state !== 'running' ? 'disabled' : c.health === 'unhealthy' ? 'warning' : 'success'}
+              title={`${c.name}: ${c.state}${c.health ? `, ${c.health}` : ''}`}
               className='size-1.5'
             />
           ))}
         </span>
+        {check && <ServiceCheckChip check={check} />}
         {showNode && <NodeName nodeId={service.nodeId} />}
         <span className='flex-1' />
         {href && (

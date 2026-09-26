@@ -74,6 +74,34 @@ const MIGRATIONS: &[&str] = &[
         recoveries   INTEGER NOT NULL,
         categories   TEXT    NOT NULL
     );",
+    // 0.6: uptime checks (uptime/). Services get theirs from labels, so
+    // only their settings are stored; results roll up by the hour.
+    // AUTOINCREMENT so a new check never reuses a deleted one's id, and with
+    // it that check's history.
+    "CREATE TABLE uptime_checks (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        name          TEXT    NOT NULL UNIQUE COLLATE NOCASE,
+        kind          TEXT    NOT NULL,
+        target        TEXT    NOT NULL,
+        interval_secs INTEGER,
+        enabled       INTEGER NOT NULL,
+        any_status    INTEGER NOT NULL
+    );
+    CREATE TABLE uptime_services (
+        service    TEXT    PRIMARY KEY,
+        enabled    INTEGER NOT NULL,
+        path       TEXT,
+        any_status INTEGER NOT NULL
+    );
+    CREATE TABLE uptime_hourly (
+        check_id    TEXT    NOT NULL,
+        hour        INTEGER NOT NULL,
+        ok          INTEGER NOT NULL,
+        fail        INTEGER NOT NULL,
+        latency_sum INTEGER NOT NULL,
+        latency_max INTEGER NOT NULL,
+        PRIMARY KEY (check_id, hour)
+    ) WITHOUT ROWID;",
 ];
 
 #[derive(Clone)]

@@ -40,6 +40,7 @@ pub struct Config {
     pub tailscale: TailscaleConfig,
     pub wol: WolConfig,
     pub events: EventsConfig,
+    pub uptime: UptimeConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -55,6 +56,21 @@ pub struct EventsConfig {
     /// clears 5 points below.
     pub disk_warn_pct: u8,
     pub disk_critical_pct: u8,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct UptimeConfig {
+    /// HTTP checks for every service with a `cosmos.service.url` label, plus
+    /// the checks added in the UI (kept in `[state] path`).
+    pub enabled: bool,
+    /// How often each check runs, unless a check says otherwise.
+    pub interval_secs: u32,
+    /// Names under these domains are checked through 127.0.0.1, i.e. the
+    /// reverse proxy on this host, instead of what DNS says. For a proxy that
+    /// serves names resolving to an address this host can't reach itself,
+    /// such as its own Tailscale IP.
+    pub local_domains: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -321,6 +337,12 @@ impl Default for EventsConfig {
     }
 }
 
+impl Default for UptimeConfig {
+    fn default() -> Self {
+        Self { enabled: true, interval_secs: 60, local_domains: Vec::new() }
+    }
+}
+
 impl Default for StateConfig {
     fn default() -> Self {
         Self { path: PathBuf::from("/var/lib/cosmos-agent/state.db") }
@@ -461,6 +483,12 @@ impl Config {
         }
         if self.events.retain_days == 0 {
             return Err(ConfigError::Invalid("events.retain_days must be at least 1".into()));
+        }
+        if !(20..=3_600).contains(&self.uptime.interval_secs) {
+            return Err(ConfigError::Invalid("uptime.interval_secs must be between 20 and 3600".into()));
+        }
+        if self.uptime.local_domains.iter().any(|d| d.trim_matches('.').is_empty()) {
+            return Err(ConfigError::Invalid("uptime.local_domains has an empty entry".into()));
         }
         let (warn, critical) = (self.events.disk_warn_pct, self.events.disk_critical_pct);
         if !(10..critical).contains(&warn) || critical > 100 {
@@ -619,6 +647,23 @@ mod tests {
         assert!(parse("[events]\ndisk_warn_pct = 95\ndisk_critical_pct = 90").validate().is_err());
         assert!(parse("[events]\ndisk_critical_pct = 101").validate().is_err());
         assert!(parse("[events]\nretain_days = 0").validate().is_err());
+    }
+
+    #[test]
+    fn the_example_config_is_valid() {
+        let cfg: Config = toml::from_str(include_str!("../agent.example.toml")).expect("the example parses");
+        cfg.validate().expect("the example validates");
+    }
+
+    #[test]
+    fn parses_uptime_settings() {
+        let parse = |s: &str| toml::from_str::<Config>(s).unwrap();
+        let cfg = parse("[uptime]\ninterval_secs = 30\nlocal_domains = [\"jupiter.example.net\"]");
+        assert!(cfg.validate().is_ok());
+        assert_eq!(cfg.uptime.local_domains, ["jupiter.example.net"]);
+        assert!(cfg.uptime.enabled);
+        assert!(parse("[uptime]\ninterval_secs = 5").validate().is_err());
+        assert!(parse("[uptime]\nlocal_domains = [\"\"]").validate().is_err());
     }
 
     #[test]
