@@ -31,7 +31,7 @@ npm run lint                       # 0 errors expected; ui/ is vendored and exem
 npm test                           # vitest + jsdom + Testing Library
 npx vitest run src/lib/lib.test.ts # single file
 npm run test:e2e                   # Playwright, see below
-npm run release -- 0.2.0 [--push]  # desktop release; see RELEASING.md
+npm run release -- 0.6.0 [--push]  # agent, web UI and desktop app together; see RELEASING.md
 ```
 
 `npm run test:e2e` builds and starts a real `cosmos-agent` (random port, temp
@@ -49,9 +49,10 @@ docker build -f cosmos-agent/Dockerfile -t cosmos-agent .   # build from the REP
 agent/common tests, clippy (`-D warnings`) and the frontend lint/test/build;
 the Tauri crate is skipped in CI because it needs WebKitGTK. `app-release.yml`
 builds the desktop app (universal macOS dmg, Windows msi/exe) on `app-v*` tags
-into a draft release; the version comes from `app/package.json`, which
-`tauri.conf.json` references, and `scripts/release.mjs` keeps `Cargo.toml` in
-step.
+into a draft release. **One version covers the agent, web UI and desktop app**:
+`app/package.json` (which `tauri.conf.json` references and Settings shows),
+the Tauri, agent and common `Cargo.toml`s, all set by `app/scripts/release.mjs`,
+which tags `v<version>` (agent image) and `app-v<version>` (desktop) together.
 
 ## Type sharing (Rust → TS)
 
