@@ -118,6 +118,18 @@ expected_interval_secs = 86400
 # A display name. Never the real repository path.
 repo_label = "jupiter/restic"
 
+# Optional: "Back up now" and "Run test now" on the Backups page (with
+# allow_actions, for admins). The agent drops a small request file in this
+# directory, mounted writable from the host, whose own service does the work;
+# the agent still never runs restic. Each result is a JSON file in
+# request_results_dir. Jupiter's scripts/request-dispatch.sh is one host side.
+# requests_dir = "/host/requests"
+# request_results_dir = "/host/backups/requests"
+
+# Optional: the latest restore test (scripts/restore-test.sh --status). A
+# failed one opens a problem, and so does none for 15 days.
+# restore_test_file = "/host/backups/restore-test-status.json"
+
 [tailscale]
 # Lists tailnet devices on the Network page and in the constellation. Reads
 # the host's tailscaled socket; tailscaled gives a non-root caller read-only

@@ -98,6 +98,10 @@ pub struct Capabilities {
     /// Adding and editing checks: `uptime` plus `allow_actions`.
     #[serde(default)]
     pub uptime_actions: bool,
+    /// Starting a backup or a restore test: `backups` with a requests
+    /// directory, plus `allow_actions`. Absent from agents before 0.7.
+    #[serde(default)]
+    pub backup_actions: bool,
 }
 
 impl Capabilities {
@@ -123,6 +127,7 @@ impl Capabilities {
             notify_actions: false,
             uptime: false,
             uptime_actions: false,
+            backup_actions: false,
         }
     }
 }

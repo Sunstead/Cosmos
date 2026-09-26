@@ -39,6 +39,8 @@ pub struct Inner {
     pub containers_rx: watch::Receiver<Arc<ContainerSnapshot>>,
     pub volumes_rx: watch::Receiver<Arc<VolumeSnapshot>>,
     pub backups_rx: Option<watch::Receiver<Arc<BackupSnapshot>>>,
+    /// Rereads the backup status now, as after a request.
+    pub backups_poke: Option<Arc<tokio::sync::Notify>>,
     pub tailnet_rx: Option<watch::Receiver<Arc<TailnetSnapshot>>>,
     pub wol: Option<WolHandle>,
     pub events: Option<EventsHandle>,
@@ -72,6 +74,9 @@ impl AppState {
             notify_actions: self.notify.is_some() && self.cfg.allow_actions,
             uptime: self.uptime.is_some(),
             uptime_actions: self.uptime.is_some() && self.cfg.allow_actions,
+            backup_actions: self.backups_rx.is_some() &&
+            self.cfg.backups.requests_dir.is_some() &&
+            self.cfg.allow_actions,
         }
     }
 }

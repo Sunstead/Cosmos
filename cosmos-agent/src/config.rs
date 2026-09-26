@@ -244,6 +244,14 @@ pub struct BackupsConfig {
     pub expected_interval_secs: u64,
     /// Display name. Never the real repository path.
     pub repo_label: String,
+    /// The host's request inbox, mounted writable. With it (and
+    /// `allow_actions`), admins can start a backup or a restore test: the agent
+    /// drops a small file here and the host does the rest.
+    pub requests_dir: Option<PathBuf>,
+    /// Where the host writes each request's result, one JSON file per request.
+    pub request_results_dir: Option<PathBuf>,
+    /// The latest restore test's result, written by the host.
+    pub restore_test_file: Option<PathBuf>,
 }
 
 // --- defaults --------------------------------------------------------------
@@ -357,6 +365,9 @@ impl Default for BackupsConfig {
             timer_stamp: None,
             expected_interval_secs: 86_400,
             repo_label: "restic".to_string(),
+            requests_dir: None,
+            request_results_dir: None,
+            restore_test_file: None,
         }
     }
 }

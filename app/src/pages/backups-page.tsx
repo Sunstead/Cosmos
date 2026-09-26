@@ -6,8 +6,10 @@ import {
   HardDrive,
   History,
   Layers,
+  RotateCcw,
   TriangleAlert,
 } from 'lucide-react';
+import { useState } from 'react';
 import { useNodeStore } from '@/stores/nodes';
 import { useBackups, useNodeMeta, useTick } from '@/api/queries';
 import { BackupsStatus } from '@/generated/BackupsStatus';
@@ -24,6 +26,14 @@ import { SETUP } from '@/components/setup-hint';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import {
+  BackUpNowButton,
+  RequestsSection,
+  RestoreTestSection,
+} from '@/components/backup-controls';
+import { RestoreGuide } from '@/components/restore-guide';
+import { BackupSnapshotInfo } from '@/generated/BackupSnapshotInfo';
 import {
   Table,
   TableBody,
@@ -42,7 +52,8 @@ export type BackupHealth = 'healthy' | 'stale' | 'interrupted' | 'failed';
 export function backupHealth(s: BackupsStatus): BackupHealth {
   const fired = s.timer_last_fired ? Date.parse(s.timer_last_fired) : NaN;
   const wrote = s.generated_at ? Date.parse(s.generated_at) : NaN;
-  if (Number.isFinite(fired) && Number.isFinite(wrote) && fired > wrote) return 'interrupted';
+  if (Number.isFinite(fired) && Number.isFinite(wrote) && fired > wrote)
+    return 'interrupted';
   if (s.last_exit_code !== null && s.last_exit_code !== 0) return 'failed';
   if (s.stale) return 'stale';
   return 'healthy';
@@ -61,7 +72,8 @@ function HealthAlert({ status }: { status: BackupsStatus }) {
         <AlertDescription>
           {[
             lastRun && `Last run ${lastRun}`,
-            status.duration_secs != null && `took ${secondsToDuration(status.duration_secs)}`,
+            status.duration_secs != null &&
+              `took ${secondsToDuration(status.duration_secs)}`,
             next && `next ${next}`,
           ]
             .filter(Boolean)
@@ -72,9 +84,15 @@ function HealthAlert({ status }: { status: BackupsStatus }) {
   }
 
   const copy = {
-    interrupted: ['Last backup did not finish', `Timer fired ${relativeTime(status.timer_last_fired)} but no status was written.`],
+    interrupted: [
+      'Last backup did not finish',
+      `Timer fired ${relativeTime(status.timer_last_fired)} but no status was written.`,
+    ],
     failed: ['Last backup failed', `Exited with code ${status.last_exit_code}.`],
-    stale: ['Backups are stale', lastRun ? `Last status ${lastRun}.` : 'No backup has reported yet.'],
+    stale: [
+      'Backups are stale',
+      lastRun ? `Last status ${lastRun}.` : 'No backup has reported yet.',
+    ],
   }[health];
 
   return (
@@ -110,6 +128,7 @@ export function BackupsPage() {
   const meta = useNodeMeta(nodeId);
   const { data: status, isLoading, error } = useBackups(nodeId);
   useTick(60_000);
+  const [restoring, setRestoring] = useState<BackupSnapshotInfo | null>(null);
 
   const enabled = meta?.capabilities.backups ?? false;
 
@@ -127,7 +146,13 @@ export function BackupsPage() {
       );
     }
     if (error) {
-      return <EmptyState size='page' icon={TriangleAlert} title='Could not load backup status' />;
+      return (
+        <EmptyState
+          size='page'
+          icon={TriangleAlert}
+          title='Could not load backup status'
+        />
+      );
     }
     if (isLoading || !status) {
       return (
@@ -151,7 +176,11 @@ export function BackupsPage() {
           <StatCard
             icon={HardDrive}
             label='Repository'
-            value={status.repo_size_bytes != null ? formatBytes(status.repo_size_bytes) : NO_VALUE}
+            value={
+              status.repo_size_bytes != null
+                ? formatBytes(status.repo_size_bytes)
+                : NO_VALUE
+            }
             sublabel={status.repo_label}
           />
           <StatCard icon={Layers} label='Snapshots' value={status.snapshot_count} />
@@ -168,21 +197,25 @@ export function BackupsPage() {
         </StatRow>
 
         <div className='grid gap-4 @4xl:grid-cols-[1fr_2fr]'>
-          <Section title='Last run' contentClassName='divide-y'>
-            <Step label='Database dumps' step={status.postgres_dump} />
-            <Step label='Copy to second disk' step={status.state_copy} />
-            <Step label='Free space' step={status.space_check} />
-            <Step label='Heartbeat' step={status.heartbeat} />
-            <div className='flex items-center justify-between px-4 py-2.5 text-sm'>
-              <span>Exit code</span>
-              <Badge
-                variant='outline'
-                className={`font-mono text-2xs ${status.last_exit_code === 0 ? 'text-success' : 'text-error'}`}
-              >
-                {status.last_exit_code ?? NO_VALUE}
-              </Badge>
-            </div>
-          </Section>
+          <div className='flex min-w-0 flex-col gap-4'>
+            <Section title='Last run' contentClassName='divide-y'>
+              <Step label='Database dumps' step={status.postgres_dump} />
+              <Step label='Copy to second disk' step={status.state_copy} />
+              <Step label='Free space' step={status.space_check} />
+              <Step label='Heartbeat' step={status.heartbeat} />
+              <div className='flex items-center justify-between px-4 py-2.5 text-sm'>
+                <span>Exit code</span>
+                <Badge
+                  variant='outline'
+                  className={`font-mono text-2xs ${status.last_exit_code === 0 ? 'text-success' : 'text-error'}`}
+                >
+                  {status.last_exit_code ?? NO_VALUE}
+                </Badge>
+              </div>
+            </Section>
+            <RequestsSection requests={status.requests ?? []} />
+            <RestoreTestSection nodeId={nodeId} status={status} />
+          </div>
 
           <Section title='Snapshots' count={status.snapshots.length || undefined}>
             {status.snapshots.length === 0 ? (
@@ -195,12 +228,17 @@ export function BackupsPage() {
                     <TableHead className='h-9 text-xs'>Taken</TableHead>
                     <TableHead className='h-9 text-xs'>Tags</TableHead>
                     <TableHead className='h-9 text-xs'>Paths</TableHead>
+                    <TableHead className='h-9 text-xs'>
+                      <span className='sr-only'>Restore</span>
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {status.snapshots.map((s) => (
                     <TableRow key={s.id}>
-                      <TableCell className='selectable font-mono text-xs'>{s.short_id}</TableCell>
+                      <TableCell className='selectable font-mono text-xs'>
+                        {s.short_id}
+                      </TableCell>
                       <TableCell className='whitespace-nowrap' title={s.time}>
                         {relativeTime(s.time) ?? NO_VALUE}
                       </TableCell>
@@ -219,6 +257,16 @@ export function BackupsPage() {
                       >
                         {s.paths.join(', ')}
                       </TableCell>
+                      <TableCell className='text-right'>
+                        <Button
+                          variant='ghost'
+                          size='sm'
+                          aria-label={`Restore from ${s.short_id}`}
+                          onClick={() => setRestoring(s)}
+                        >
+                          <RotateCcw /> Restore
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -226,13 +274,29 @@ export function BackupsPage() {
             )}
           </Section>
         </div>
+        {restoring && (
+          <RestoreGuide
+            open
+            onOpenChange={(open) => !open && setRestoring(null)}
+            snapshot={restoring}
+            databases={status.databases ?? []}
+          />
+        )}
       </>
     );
   };
 
   return (
     <>
-      <PageHeader title='Backups' actions={<NodeSelect value={nodeId} onChange={setNodeId} />} />
+      <PageHeader
+        title='Backups'
+        actions={
+          <>
+            <NodeSelect value={nodeId} onChange={setNodeId} />
+            <BackUpNowButton nodeId={nodeId} status={status} />
+          </>
+        }
+      />
       {body()}
     </>
   );

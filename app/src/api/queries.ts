@@ -122,9 +122,43 @@ export function useBackups(nodeId: string | null) {
       return conn.client.getBackups();
     },
     enabled: !!nodeId && supported && meta?.status === 'online',
-    refetchInterval: 60_000,
+    // Close behind a backup or restore test someone started.
+    refetchInterval: (q) =>
+      q.state.data?.requests?.some((r) => r.state === 'queued' || r.state === 'running')
+        ? 3_000
+        : 60_000,
     retry: 1,
   });
+}
+
+const RUN_LABEL: Record<'backup' | 'restore_test', string> = {
+  backup: 'Backup',
+  restore_test: 'Restore test',
+};
+
+/** Starts a backup or a restore test on the node's host, with a toast. */
+export function useBackupActions(nodeId: string | null) {
+  const client = useQueryClient();
+  return useCallback(
+    async (kind: 'backup' | 'restore_test') => {
+      const conn = nodeId ? getConnection(nodeId) : null;
+      if (!conn) return;
+      try {
+        await conn.client.runBackup(kind);
+        toast.success(`${RUN_LABEL[kind]} requested`, {
+          description: 'The server picks it up in a moment. This page follows it.',
+        });
+      } catch (e) {
+        toast.error(`Could not start the ${RUN_LABEL[kind].toLowerCase()}`, {
+          description: e instanceof Error ? e.message : undefined,
+        });
+        throw e;
+      } finally {
+        await client.invalidateQueries({ queryKey: ['backups', nodeId] });
+      }
+    },
+    [client, nodeId],
+  );
 }
 
 const TAILNET_POLL_MS = 15_000;

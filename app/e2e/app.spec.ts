@@ -1,6 +1,8 @@
 import { execFileSync } from 'node:child_process';
 import { createSocket } from 'node:dgram';
+import { readdirSync, readFileSync, unlinkSync } from 'node:fs';
 import { createServer } from 'node:http';
+import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { addNode, addNodeOnline, agentUrl, apiToken, nextSignIn, overflowing, PAGES, section } from './helpers';
 
@@ -294,6 +296,37 @@ test.describe('with a node', () => {
     await expect(page.getByText('Added e2e-refused, but it failed')).toBeVisible();
     const down = section(page, 'Checks').locator('[data-check]', { hasText: 'e2e-refused' });
     await expect(down).toContainText("couldn't connect");
+  });
+
+  test('back up now leaves a request for the host, and the page follows it', async ({ page }) => {
+    await addNodeOnline(page);
+    await page.goto('/backups');
+    await page.getByRole('button', { name: 'Back up now' }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByRole('button', { name: 'Back up', exact: true }).click();
+    await expect(dialog).toBeHidden();
+
+    const inbox = process.env.E2E_BACKUP_INBOX!;
+    await expect.poll(() => readdirSync(inbox).filter((f) => f.endsWith('.json'))).toHaveLength(1);
+    const [file] = readdirSync(inbox);
+    expect(JSON.parse(readFileSync(join(inbox, file), 'utf8'))).toMatchObject({
+      kind: 'backup',
+      requested_by: 'pwb',
+    });
+    await expect(section(page, 'Started from Cosmos')).toContainText('Waiting for the server');
+    await expect(page.getByRole('button', { name: 'Backing up' })).toBeDisabled();
+    unlinkSync(join(inbox, file));
+  });
+
+  test('the restore guide fills in the commands', async ({ page }) => {
+    await addNodeOnline(page);
+    await page.goto('/backups');
+    await page.getByRole('button', { name: 'Restore from 1a2b3c4d' }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByRole('radio', { name: 'A database' }).click();
+    await expect(dialog).toContainText('sudo scripts/restore.sh dump primary 1a2b3c4d immich');
+    await expect(dialog).toContainText('docker compose stop immich-server immich-machine-learning');
+    expect(await overflowing(dialog)).toEqual([]);
   });
 
   test('the add machine dialog keeps every field inside it', async ({ page }, info) => {

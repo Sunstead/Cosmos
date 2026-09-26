@@ -13,10 +13,25 @@
 //! not reachable from inside a container without mounting its private socket,
 //! which is equivalent to granting root on the host.
 
-use crate::config::BackupsConfig;
-use cosmos_common::types::{ BackupSnapshotInfo, BackupsStatus, RetentionPolicy, StepStatus };
+use crate::{ config::BackupsConfig, error::AgentError };
+use cosmos_common::types::{
+    BackupDatabase,
+    BackupRequest,
+    BackupRequestKind,
+    BackupRequestState,
+    BackupSnapshotInfo,
+    BackupsStatus,
+    RestoreTestStatus,
+    RetentionPolicy,
+    StepStatus,
+};
 use serde::Deserialize;
-use std::{ path::Path, sync::Arc, time::SystemTime };
+use std::{ path::{ Path, PathBuf }, sync::Arc, time::SystemTime };
+
+/// Requests shown on the page, newest first.
+const RECENT_REQUESTS: usize = 10;
+/// Anything bigger isn't one of ours.
+const MAX_REQUEST_FILE: u64 = 4_096;
 
 /// The on-disk contract with the backup script. Everything is optional so an
 /// older or partially-written script still produces a useful page.
@@ -45,6 +60,28 @@ struct StatusFile {
     space_check: Option<StepStatus>,
     #[serde(default)]
     heartbeat: Option<StepStatus>,
+    #[serde(default)]
+    databases: Vec<BackupDatabase>,
+}
+
+/// A request in the inbox (`{id, kind, requested_by}`), or its result from
+/// the host, which adds the rest.
+#[derive(Debug, Deserialize)]
+struct RequestFile {
+    id: String,
+    kind: String,
+    #[serde(default)]
+    requested_by: Option<String>,
+    #[serde(default)]
+    state: Option<String>,
+    #[serde(default)]
+    started_at: Option<String>,
+    #[serde(default)]
+    finished_at: Option<String>,
+    #[serde(default)]
+    exit_code: Option<i32>,
+    #[serde(default)]
+    message: Option<String>,
 }
 
 /// The serialized form for HTTP responses, and the typed status for the
@@ -149,6 +186,9 @@ impl BackupsProvider {
             state_copy: file.state_copy,
             space_check: file.space_check,
             heartbeat: file.heartbeat,
+            requests: self.requests(),
+            restore_test: self.restore_test(),
+            databases: file.databases,
         }
     }
 
@@ -172,7 +212,37 @@ impl BackupsProvider {
             state_copy: None,
             space_check: None,
             heartbeat: None,
+            requests: self.requests(),
+            restore_test: self.restore_test(),
+            databases: Vec::new(),
         }
+    }
+
+    /// Queued requests from the inbox and results from the host, newest
+    /// first. A request moves from one to the other when the host picks it up.
+    fn requests(&self) -> Vec<BackupRequest> {
+        let mut found: Vec<(SystemTime, BackupRequest)> = Vec::new();
+        if let Some(dir) = &self.cfg.request_results_dir {
+            found.extend(read_requests(dir, false));
+        }
+        if let Some(dir) = &self.cfg.requests_dir {
+            for (at, r) in read_requests(dir, true) {
+                if !found.iter().any(|(_, f)| f.id == r.id) {
+                    found.push((at, r));
+                }
+            }
+        }
+        found.sort_by_key(|f| std::cmp::Reverse(f.0));
+        found.into_iter().take(RECENT_REQUESTS).map(|(_, r)| r).collect()
+    }
+
+    fn restore_test(&self) -> Option<RestoreTestStatus> {
+        let path = self.cfg.restore_test_file.as_ref()?;
+        let raw = std::fs::read_to_string(path).ok()?;
+        serde_json
+            ::from_str(&raw)
+            .map_err(|e| tracing::warn!(path = %path.display(), error = %e, "restore test status is not valid"))
+            .ok()
     }
 
     /// The systemd timer stamp file's mtime equals the last time the timer
@@ -182,6 +252,78 @@ impl BackupsProvider {
         let path = self.cfg.timer_stamp.as_ref()?;
         mtime_rfc3339(path)
     }
+}
+
+/// The `.json` files in `dir` as requests: `queued` for the inbox, else the
+/// host's results. Anything unreadable or unknown is skipped.
+fn read_requests(dir: &Path, queued: bool) -> Vec<(SystemTime, BackupRequest)> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    entries
+        .flatten()
+        .filter(|e| e.path().extension().is_some_and(|x| x == "json"))
+        .filter_map(|e| {
+            let meta = e.metadata().ok().filter(|m| m.is_file() && m.len() <= MAX_REQUEST_FILE)?;
+            let file: RequestFile = serde_json::from_str(&std::fs::read_to_string(e.path()).ok()?).ok()?;
+            let state = if queued {
+                BackupRequestState::Queued
+            } else {
+                match file.state.as_deref()? {
+                    "running" => BackupRequestState::Running,
+                    "succeeded" => BackupRequestState::Succeeded,
+                    "failed" => BackupRequestState::Failed,
+                    _ => {
+                        return None;
+                    }
+                }
+            };
+            let request = BackupRequest {
+                id: file.id,
+                kind: BackupRequestKind::from_file_name(&file.kind)?,
+                requested_by: file.requested_by.filter(|b| !b.is_empty()),
+                state,
+                started_at: file.started_at,
+                finished_at: file.finished_at,
+                exit_code: file.exit_code,
+                message: file.message,
+            };
+            Some((meta.modified().unwrap_or(SystemTime::UNIX_EPOCH), request))
+        })
+        .collect()
+}
+
+/// Leaves a request in the host's inbox and returns its id. Written under a
+/// temporary name and renamed, so the host never sees half a file.
+pub fn request(dir: &Path, kind: BackupRequestKind, by: &str) -> Result<String, AgentError> {
+    static SEQ: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    let nanos = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let seq = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let id = format!("{}-{:x}", nanos / 1_000_000_000, (nanos % 1_000_000_000) ^ (u128::from(seq) << 30));
+
+    let body = serde_json::json!({ "id": id, "kind": kind.file_name(), "requested_by": by }).to_string();
+    let tmp: PathBuf = dir.join(format!("{id}.tmp"));
+    let unavailable = |e: std::io::Error| {
+        AgentError::Unavailable(
+            format!("the host isn't taking requests ({e}); is its request inbox installed and mounted writable?")
+        )
+    };
+    std::fs::write(&tmp, body).map_err(unavailable)?;
+    std::fs::rename(&tmp, dir.join(format!("{id}.json"))).map_err(|e| {
+        let _ = std::fs::remove_file(&tmp);
+        unavailable(e)
+    })?;
+    Ok(id)
+}
+
+/// A request that hasn't finished, so the page should follow it closely.
+pub fn in_flight(status: &BackupsStatus) -> bool {
+    status.requests
+        .iter()
+        .any(|r| matches!(r.state, BackupRequestState::Queued | BackupRequestState::Running))
 }
 
 fn mtime_rfc3339(path: &Path) -> Option<String> {
@@ -315,6 +457,50 @@ mod tests {
     }
 
     #[test]
+    fn a_request_is_queued_until_the_host_reports_on_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let (inbox, results) = (dir.path().join("inbox"), dir.path().join("results"));
+        std::fs::create_dir_all(&inbox).unwrap();
+        std::fs::create_dir_all(&results).unwrap();
+        let provider = BackupsProvider::new(BackupsConfig {
+            status_file: dir.path().join("missing.json"),
+            requests_dir: Some(inbox.clone()),
+            request_results_dir: Some(results.clone()),
+            ..Default::default()
+        });
+
+        let id = request(&inbox, BackupRequestKind::Backup, "pwb").unwrap();
+        let names: Vec<String> = std::fs::read_dir(&inbox).unwrap().map(|e| e.unwrap().file_name().into_string().unwrap()).collect();
+        assert_eq!(names, [format!("{id}.json")], "no temporary file left behind");
+        let written: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(inbox.join(format!("{id}.json"))).unwrap()).unwrap();
+        assert_eq!(written, serde_json::json!({ "id": id, "kind": "backup", "requested_by": "pwb" }));
+
+        let queued = provider.requests();
+        assert_eq!(queued.len(), 1);
+        assert_eq!(queued[0].state, BackupRequestState::Queued);
+        assert!(in_flight(&provider.missing()));
+
+        // The host claims it and reports.
+        std::fs::remove_file(inbox.join(format!("{id}.json"))).unwrap();
+        std::fs::write(
+            results.join(format!("{id}.json")),
+            format!(r#"{{"id":"{id}","kind":"backup","requested_by":"pwb","state":"running","started_at":"2026-09-26T19:00:00Z"}}"#)
+        ).unwrap();
+        std::fs::write(results.join("junk.json"), "not json").unwrap();
+        std::fs::write(results.join("other.json"), r#"{"id":"x","kind":"format","state":"failed"}"#).unwrap();
+        let running = provider.requests();
+        assert_eq!(running.len(), 1, "junk and unknown kinds are skipped: {running:?}");
+        assert_eq!(running[0].state, BackupRequestState::Running);
+        assert_eq!(running[0].requested_by.as_deref(), Some("pwb"));
+    }
+
+    #[test]
+    fn a_request_fails_clearly_without_an_inbox() {
+        let err = request(Path::new("/nonexistent/inbox"), BackupRequestKind::Backup, "pwb").unwrap_err();
+        assert!(matches!(err, AgentError::Unavailable(ref m) if m.contains("inbox")), "{err}");
+    }
+
+    #[test]
     fn a_missing_status_file_reports_stale_rather_than_healthy() {
         let provider = BackupsProvider::new(BackupsConfig {
             status_file: "/nonexistent/restic-status.json".into(),
@@ -366,6 +552,7 @@ mod tests {
             expected_interval_secs: 86_400,
             repo_label: "jupiter/restic".into(),
             timer_stamp: None,
+            ..Default::default()
         });
 
         let status = provider.build();
