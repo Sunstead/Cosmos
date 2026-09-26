@@ -359,6 +359,8 @@ mod tests {
             created_unix: 0,
             restart_count: 0,
             compose_project: None,
+            compose_service: None,
+            update_labels: Default::default(),
             cosmos_service: Some(name.into()),
             cosmos_service_description: None,
             cosmos_service_url: None,

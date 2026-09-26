@@ -25,6 +25,7 @@ pub mod host;
 pub mod meta;
 pub mod notify;
 pub mod tailnet;
+pub mod updates;
 pub mod uptime;
 pub mod wol;
 
@@ -39,5 +40,6 @@ pub use host::*;
 pub use meta::*;
 pub use notify::*;
 pub use tailnet::*;
+pub use updates::*;
 pub use uptime::*;
 pub use wol::*;

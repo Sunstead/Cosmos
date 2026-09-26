@@ -102,6 +102,38 @@ const MIGRATIONS: &[&str] = &[
         latency_max INTEGER NOT NULL,
         PRIMARY KEY (check_id, hour)
     ) WITHOUT ROWID;",
+    // 0.8: image updates (updates/). When each newer tag was first seen (the
+    // minimum age before an automatic update), the policy per unit, and every
+    // update and rollback, which resume after a restart: a deploy can
+    // recreate the agent mid-run.
+    "CREATE TABLE update_seen (
+        repo       TEXT    NOT NULL,
+        tag        TEXT    NOT NULL,
+        first_seen INTEGER NOT NULL,
+        PRIMARY KEY (repo, tag)
+    ) WITHOUT ROWID;
+    CREATE TABLE update_policy (
+        unit   TEXT PRIMARY KEY,
+        policy TEXT NOT NULL,
+        paused TEXT
+    );
+    CREATE TABLE update_runs (
+        id           TEXT    PRIMARY KEY,
+        unit         TEXT    NOT NULL,
+        kind         TEXT    NOT NULL,
+        from_tag     TEXT    NOT NULL,
+        to_tag       TEXT    NOT NULL,
+        by           TEXT    NOT NULL,
+        services     TEXT    NOT NULL,
+        state        TEXT    NOT NULL,
+        requested_at INTEGER NOT NULL,
+        finished_at  INTEGER,
+        run_id       INTEGER,
+        run_url      TEXT,
+        detail       TEXT,
+        watch_until  INTEGER
+    );
+    CREATE INDEX update_runs_at ON update_runs (requested_at);",
 ];
 
 #[derive(Clone)]
