@@ -15,6 +15,10 @@ import { NotifySettings } from '@/generated/NotifySettings';
 import { VolumesResponse } from '@/generated/VolumesResponse';
 import { Capabilities } from '@/generated/Capabilities';
 import { TailnetStatus } from '@/generated/TailnetStatus';
+import { UptimeCheckInput } from '@/generated/UptimeCheckInput';
+import { UptimeEntry } from '@/generated/UptimeEntry';
+import { UptimeResponse } from '@/generated/UptimeResponse';
+import { UptimeServiceInput } from '@/generated/UptimeServiceInput';
 import { WolEntry } from '@/generated/WolEntry';
 import { WolNeighborsResponse } from '@/generated/WolNeighborsResponse';
 import { WolResponse } from '@/generated/WolResponse';
@@ -67,6 +71,8 @@ export const LEGACY_CAPABILITIES: Capabilities = {
   events: false,
   notify: false,
   notify_actions: false,
+  uptime: false,
+  uptime_actions: false,
 };
 
 /**
@@ -84,6 +90,7 @@ export function effectiveCapabilities(info: AgentInfo): Capabilities {
     // Channels are admin-only to read, not just to edit.
     notify: false,
     notify_actions: false,
+    uptime_actions: false,
   };
 }
 
@@ -176,6 +183,10 @@ export class AgentClient {
 
   getTailnet(): Promise<TailnetStatus> {
     return this.request<TailnetStatus>('/v1/tailnet');
+  }
+
+  getUptime(): Promise<UptimeResponse> {
+    return this.request<UptimeResponse>('/v1/uptime');
   }
 
   getWol(): Promise<WolResponse> {
@@ -297,6 +308,36 @@ export class AgentClient {
   wake(id: string): Promise<WolEntry> {
     return this.request<WolEntry>(`/v1/wol/targets/${encodeURIComponent(id)}/wake`, {
       method: 'POST',
+    });
+  }
+
+  /** Answers once the new check has run, with its first result. */
+  createUptimeCheck(input: UptimeCheckInput): Promise<UptimeEntry> {
+    return this.request<UptimeEntry>('/v1/uptime/checks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+  }
+
+  updateUptimeCheck(id: string, input: UptimeCheckInput): Promise<UptimeEntry> {
+    return this.request<UptimeEntry>(`/v1/uptime/checks/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+  }
+
+  deleteUptimeCheck(id: string): Promise<void> {
+    return this.request<void>(`/v1/uptime/checks/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
+  /** A service's own check: on or off, the path, and what counts as up. */
+  saveUptimeService(service: string, input: UptimeServiceInput): Promise<UptimeEntry> {
+    return this.request<UptimeEntry>(`/v1/uptime/services/${encodeURIComponent(service)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
     });
   }
 

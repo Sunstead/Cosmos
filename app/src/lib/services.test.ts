@@ -52,6 +52,15 @@ describe('deriveNodeServices', () => {
     expect(services[0].name).toBe('Uptime Kuma');
   });
 
+  it('reports partial when a running container fails its health check', () => {
+    const services = deriveNodeServices('n1', [
+      container({ id: 'a', cosmos_service: 'immich', health: 'unhealthy' }),
+      container({ id: 'b', cosmos_service: 'immich', health: 'healthy' }),
+    ]);
+    expect(services[0].status).toBe('partial');
+    expect(services[0].containers[0].health).toBe('unhealthy');
+  });
+
   it('reports partial when only some containers run', () => {
     const services = deriveNodeServices('n1', [
       container({ id: 'a', cosmos_service: 'immich', state: 'running' }),

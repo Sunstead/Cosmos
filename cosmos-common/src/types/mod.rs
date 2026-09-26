@@ -25,6 +25,7 @@ pub mod host;
 pub mod meta;
 pub mod notify;
 pub mod tailnet;
+pub mod uptime;
 pub mod wol;
 
 // Flat re-export: `cosmos_common::types::HostInfo` keeps working, and callers
@@ -38,4 +39,5 @@ pub use host::*;
 pub use meta::*;
 pub use notify::*;
 pub use tailnet::*;
+pub use uptime::*;
 pub use wol::*;

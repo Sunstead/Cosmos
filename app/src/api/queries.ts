@@ -3,6 +3,9 @@ import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { HostInfo } from '@/generated/HostInfo';
 import { MetricStep } from '@/generated/MetricStep';
+import { UptimeCheckInput } from '@/generated/UptimeCheckInput';
+import { UptimeEntry } from '@/generated/UptimeEntry';
+import { UptimeServiceInput } from '@/generated/UptimeServiceInput';
 import { WolEntry } from '@/generated/WolEntry';
 import { WolNetwork } from '@/generated/WolNetwork';
 import { WolTargetInput } from '@/generated/WolTargetInput';
@@ -296,6 +299,114 @@ export function useWolActions() {
   );
 
   return { wake, save, remove, pending };
+}
+
+const UPTIME_POLL_MS = 30_000;
+
+export interface UptimeItem extends UptimeEntry {
+  /** The node that runs the check. */
+  nodeId: string;
+}
+
+export interface UptimeView {
+  items: UptimeItem[];
+  /** Nodes with uptime checks. */
+  nodes: string[];
+  loading: boolean;
+  error: string | null;
+}
+
+/**
+ * Uptime checks across every node that has them. Problems reach the app
+ * through the event log; this is for the figures and heartbeat bars.
+ */
+export function useUptime(pollMs = UPTIME_POLL_MS): UptimeView {
+  const nodesKey = useNodeStore((s) =>
+    s.nodes
+      .filter((n) => s.meta[n.id]?.status === 'online' && s.meta[n.id]?.capabilities.uptime)
+      .map((n) => n.id)
+      .join('|'),
+  );
+  const nodes = nodesKey ? nodesKey.split('|') : [];
+
+  return useQueries({
+    queries: nodes.map((nodeId) => ({
+      queryKey: ['uptime', nodeId],
+      queryFn: () => {
+        const conn = getConnection(nodeId);
+        if (!conn) throw new Error('node is not connected');
+        return conn.client.getUptime();
+      },
+      refetchInterval: pollMs,
+      retry: 1,
+    })),
+    combine: (results) => {
+      const items: UptimeItem[] = [];
+      results.forEach((r, i) => {
+        if (!r.data) return;
+        for (const c of r.data.checks) items.push({ ...c, nodeId: nodes[i] });
+      });
+      const failed = results.find((r) => r.error);
+      return {
+        items,
+        nodes,
+        loading: results.some((r) => r.isLoading),
+        error: items.length === 0 && failed?.error ? failed.error.message : null,
+      };
+    },
+  });
+}
+
+/** Add, edit and remove checks, with toasts. Refreshes the node's list after. */
+export function useUptimeActions() {
+  const client = useQueryClient();
+
+  const refresh = useCallback(
+    (nodeId: string) => client.invalidateQueries({ queryKey: ['uptime', nodeId] }),
+    [client],
+  );
+
+  /** Resolves with the check's first result, so the form can say whether it works. */
+  const save = useCallback(
+    async (nodeId: string, input: UptimeCheckInput, id?: string) => {
+      const conn = getConnection(nodeId);
+      if (!conn) throw new Error('node is not connected');
+      const entry = id ? await conn.client.updateUptimeCheck(id, input) : await conn.client.createUptimeCheck(input);
+      await refresh(nodeId);
+      return entry;
+    },
+    [refresh],
+  );
+
+  const saveService = useCallback(
+    async (nodeId: string, service: string, input: UptimeServiceInput) => {
+      const conn = getConnection(nodeId);
+      if (!conn) throw new Error('node is not connected');
+      const entry = await conn.client.saveUptimeService(service, input);
+      await refresh(nodeId);
+      return entry;
+    },
+    [refresh],
+  );
+
+  const remove = useCallback(
+    async (nodeId: string, id: string, name: string) => {
+      const conn = getConnection(nodeId);
+      if (!conn) return false;
+      try {
+        await conn.client.deleteUptimeCheck(id);
+        await refresh(nodeId);
+        toast.success(`Removed ${name}`);
+        return true;
+      } catch (e) {
+        toast.error(`Could not remove ${name}`, { description: e instanceof Error ? e.message : undefined });
+        return false;
+      }
+    },
+    [refresh],
+  );
+
+  return { save, saveService, remove };
 }
 
 const PAST: Record<ContainerAction, string> = {

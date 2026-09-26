@@ -24,6 +24,8 @@ pub enum EventCategory {
     Wol,
     /// The agent and the host it runs on: restarts, upgrades, reboots.
     Agent,
+    /// HTTP and TCP checks, and certificate expiry. Absent before 0.6.
+    Uptime,
 }
 
 #[derive(Serialize, Deserialize, TS, Debug, Clone, Copy, PartialEq, Eq)]
@@ -56,6 +58,7 @@ text_enum!(EventCategory {
     Action => "action",
     Wol => "wol",
     Agent => "agent",
+    Uptime => "uptime",
 });
 text_enum!(ProblemState { Opened => "opened", Resolved => "resolved" });
 
@@ -153,6 +156,7 @@ mod tests {
             EventCategory::Action,
             EventCategory::Wol,
             EventCategory::Agent,
+            EventCategory::Uptime,
         ] {
             assert_eq!(serde_json::to_string(&c).unwrap(), format!("\"{}\"", c.as_str()));
             assert_eq!(EventCategory::parse(c.as_str()), Some(c));
