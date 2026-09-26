@@ -11,6 +11,7 @@ mod host;
 mod logs;
 mod meta;
 mod metrics;
+mod notify;
 mod tailnet;
 mod volumes;
 mod wol;
@@ -39,6 +40,10 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/wol/targets", post(wol::create))
         .route("/v1/wol/targets/:id", put(wol::update).delete(wol::remove))
         .route("/v1/wol/targets/:id/wake", post(wol::wake))
+        .route("/v1/notify/channels", post(notify::create))
+        .route("/v1/notify/channels/:id", put(notify::update).delete(notify::remove))
+        .route("/v1/notify/channels/:id/test", post(notify::test))
+        .route("/v1/notify/settings", put(notify::settings))
         .layer(from_fn_with_state(state.clone(), auth::require_write));
 
     let read = Router::new()
@@ -54,6 +59,8 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/volumes/stream", get(volumes::stream))
         .route("/v1/backups", get(backups::current))
         .route("/v1/events", get(events::list))
+        // Admin-only inside the handler, like the neighbours below.
+        .route("/v1/notify", get(notify::get))
         .route("/v1/tailnet", get(tailnet::current))
         .route("/v1/wol", get(wol::list))
         // Admin-only inside the handler: it reveals the LAN's MAC addresses.

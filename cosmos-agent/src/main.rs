@@ -13,6 +13,7 @@ mod docker;
 mod error;
 mod events;
 mod history;
+mod notify;
 mod sample;
 mod sse;
 mod state;
@@ -149,6 +150,12 @@ async fn serve(cfg: Config, mode: config::AuthMode) -> Result<(), Box<dyn std::e
         _ => None,
     };
 
+    // Before anything reports: the notifier only hears events stored after it
+    // subscribes, and the lifecycle check below reports straight away.
+    let notify = events
+        .as_ref()
+        .map(|events| notify::spawn(events.store.clone(), events, facts.node_name.clone()));
+
     // The container tracker needs the Docker event stream even when the
     // samplers don't.
     let forward = events.as_ref().map(|events| {
@@ -202,6 +209,7 @@ async fn serve(cfg: Config, mode: config::AuthMode) -> Result<(), Box<dyn std::e
         tailnet_rx,
         wol,
         events: events.clone(),
+        notify,
         cfg: cfg.clone(),
     });
 

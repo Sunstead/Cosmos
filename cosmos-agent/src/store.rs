@@ -61,6 +61,19 @@ const MIGRATIONS: &[&str] = &[
         key   TEXT PRIMARY KEY,
         value TEXT NOT NULL
     );",
+    // 0.5: where notifications go (notify/). `secret` is never sent back out.
+    "CREATE TABLE notify_channels (
+        id           INTEGER PRIMARY KEY,
+        name         TEXT    NOT NULL UNIQUE COLLATE NOCASE,
+        kind         TEXT    NOT NULL,
+        url          TEXT    NOT NULL,
+        topic        TEXT,
+        secret       TEXT,
+        enabled      INTEGER NOT NULL,
+        min_severity TEXT    NOT NULL,
+        recoveries   INTEGER NOT NULL,
+        categories   TEXT    NOT NULL
+    );",
 ];
 
 #[derive(Clone)]

@@ -10,6 +10,7 @@ use crate::{
     config::Config,
     docker::DockerHandle,
     events::EventsHandle,
+    notify::NotifyHandle,
     history::HistoryHandle,
     sample::{
         docker::{ ContainerSnapshot, VolumeSnapshot },
@@ -40,6 +41,7 @@ pub struct Inner {
     pub tailnet_rx: Option<watch::Receiver<Arc<TailnetSnapshot>>>,
     pub wol: Option<WolHandle>,
     pub events: Option<EventsHandle>,
+    pub notify: Option<NotifyHandle>,
 }
 
 impl AppState {
@@ -64,6 +66,8 @@ impl AppState {
             volume_stream: true,
             all_logs: self.cfg.docker.allow_logs,
             events: self.events.is_some(),
+            notify: self.notify.is_some(),
+            notify_actions: self.notify.is_some() && self.cfg.allow_actions,
         }
     }
 }
