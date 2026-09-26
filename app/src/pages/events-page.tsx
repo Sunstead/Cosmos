@@ -13,7 +13,7 @@ import { SearchInput } from '@/components/search-input';
 import { SegmentedControl } from '@/components/segmented-control';
 import { Section } from '@/components/section';
 import { EmptyState, NoNodesState } from '@/components/empty-state';
-import { SkeletonRows } from '@/components/skeletons';
+import { TableSkeleton } from '@/components/skeletons';
 import { SETUP } from '@/components/setup-hint';
 import { EventItem, ProblemItem } from '@/components/event-item';
 import { Button } from '@/components/ui/button';
@@ -113,7 +113,7 @@ export function EventsPage() {
       <>
         <Section title='Open problems' count={problems.length || undefined} contentClassName='divide-y'>
           {awaiting ? (
-            <SkeletonRows columns={2} rows={2} />
+            <TableSkeleton columns={2} rows={2} />
           ) : problems.length === 0 ? (
             <div className='flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground'>
               <CircleCheck className='size-4 text-success' />
@@ -126,7 +126,7 @@ export function EventsPage() {
 
         <Section title='Timeline' contentClassName='divide-y'>
           {awaiting ? (
-            <SkeletonRows columns={3} rows={6} />
+            <TableSkeleton columns={3} rows={6} />
           ) : visible.length === 0 ? (
             filtered ? (
               <EmptyState size='inline' icon={SearchX} title='No matching events' />

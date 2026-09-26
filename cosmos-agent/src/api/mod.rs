@@ -38,6 +38,7 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/containers/:id/restart", post(containers::restart))
         .route("/v1/containers/:id", delete(containers::remove))
         .route("/v1/volumes/:name", delete(volumes::remove))
+        .route("/v1/backups/run", post(backups::run))
         .route("/v1/wol/targets", post(wol::create))
         .route("/v1/wol/targets/:id", put(wol::update).delete(wol::remove))
         .route("/v1/wol/targets/:id/wake", post(wol::wake))

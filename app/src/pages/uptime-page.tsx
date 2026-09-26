@@ -33,7 +33,7 @@ import { SearchInput } from '@/components/search-input';
 import { SegmentedControl } from '@/components/segmented-control';
 import { Section } from '@/components/section';
 import { EmptyState, NoNodesState } from '@/components/empty-state';
-import { SkeletonRows } from '@/components/skeletons';
+import { TableSkeleton } from '@/components/skeletons';
 import { SETUP } from '@/components/setup-hint';
 import { Dot } from '@/components/dot';
 import { NodeName } from '@/components/node-name';
@@ -313,7 +313,7 @@ export function UptimePage() {
         }
       >
         {uptime.loading && uptime.items.length === 0 ? (
-          <SkeletonRows columns={3} rows={4} />
+          <TableSkeleton columns={3} rows={4} />
         ) : uptime.items.length === 0 ? (
           <EmptyState
             size='card'

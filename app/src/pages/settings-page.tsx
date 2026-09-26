@@ -30,6 +30,7 @@ const CAPS = [
   ['backups', 'Backups'],
   ['tailnet', 'Tailnet'],
   ['uptime', 'Uptime'],
+  ['backup_actions', 'Backup now'],
 ] as const;
 
 function NodeRow({ nodeId }: { nodeId: string }) {
