@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { createSocket } from 'node:dgram';
+import { createServer } from 'node:http';
 import { expect, test } from '@playwright/test';
 import { addNode, addNodeOnline, agentUrl, apiToken, nextSignIn, overflowing, PAGES, section } from './helpers';
 
@@ -207,6 +208,63 @@ test.describe('with a node', () => {
     expect(packet.subarray(0, 6).toString('hex')).toBe('ffffffffffff');
     expect(packet.subarray(6, 12).toString('hex')).toBe('aabbccddeeff');
     await expect(row).toContainText('Waking');
+  });
+
+  test('the events page shows an action with who took it', async ({ page, request }) => {
+    await addNodeOnline(page);
+    const res = await request.post(`${agentUrl()}/v1/wol/targets`, {
+      headers: { Authorization: `Bearer ${await apiToken(request)}` },
+      data: { name: 'events-nas', mac: '02:00:00:00:00:01' },
+    });
+    expect(res.status()).toBe(201);
+
+    await page.goto('/events');
+    // The app polls every 10 seconds.
+    const row = section(page, 'Timeline').locator('[data-event]', { hasText: 'Added events-nas' });
+    await expect(row).toBeVisible({ timeout: 20_000 });
+    await expect(row).toContainText('by pwb');
+
+    await page.getByRole('radio', { name: 'Actions' }).click();
+    await expect(row).toBeVisible();
+  });
+
+  test('a webhook channel gets a test sent from settings', async ({ page, request }) => {
+    const received: { title: string; message: string }[] = [];
+    const server = createServer((req, res) => {
+      let body = '';
+      req.on('data', (chunk) => (body += chunk));
+      req.on('end', () => {
+        received.push(JSON.parse(body));
+        res.end();
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as { port: number }).port;
+
+    await addNodeOnline(page);
+    const res = await request.post(`${agentUrl()}/v1/notify/channels`, {
+      headers: { Authorization: `Bearer ${await apiToken(request)}` },
+      data: {
+        name: 'e2e-hook',
+        kind: 'webhook',
+        url: `http://127.0.0.1:${port}/`,
+        secret: 'not-sent-back',
+        enabled: true,
+        min_severity: 'warning',
+        recoveries: true,
+        categories: [],
+      },
+    });
+    expect(res.status()).toBe(201);
+    expect(await res.text()).not.toContain('not-sent-back');
+
+    await page.goto('/settings');
+    const channel = section(page, /Notifications from/).locator('[data-channel]', { hasText: 'e2e-hook' });
+    await channel.getByRole('button', { name: 'Send test' }).click();
+    await expect.poll(() => received.length).toBe(1);
+    expect(received[0].title).toContain('Test notification');
+    await expect(channel).toContainText('Delivered');
+    server.close();
   });
 
   test('the add machine dialog keeps every field inside it', async ({ page }, info) => {

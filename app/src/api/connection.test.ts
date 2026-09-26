@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { NodeConnection, NodeMeta, TokenProvider } from './connection';
+import { EventsUpdate, NodeConnection, NodeMeta, TokenProvider } from './connection';
+import { EventsResponse } from '@/generated/EventsResponse';
 import { FakeEventSource, mockFetch, settle } from '@/test/fakes';
-import { agentInfo, hostInfo } from '@/test/fixtures';
+import { agentInfo, event, eventsResponse, hostInfo, problem } from '@/test/fixtures';
 
 const URL_BASE = 'http://agent.test:7700';
 
@@ -317,6 +318,120 @@ describe('NodeConnection', () => {
     conn.start();
     await settle();
     expect(metas.at(-1)?.capabilities.container_actions).toBe(true);
+    conn.stop();
+  });
+});
+
+describe('NodeConnection events', () => {
+  beforeEach(() => {
+    FakeEventSource.reset();
+    vi.stubGlobal('EventSource', FakeEventSource);
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  /** Answers /v1/events from `events` by its query, like the agent. */
+  function connectWithEvents(respond: (params: URLSearchParams) => EventsResponse, info = agentInfo()) {
+    const calls: string[] = [];
+    const routes = mockFetch({
+      '/v1/info': { body: info },
+      '/v1/host': { body: hostInfo() },
+      '/v1/volumes': { body: { volumes: [], sampled_at: 0 } },
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(typeof input === 'string' ? input : input.toString());
+        if (url.pathname !== '/v1/events') return routes(input);
+        calls.push(url.search);
+        return new Response(JSON.stringify(respond(url.searchParams)), {
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }),
+    );
+    const conn = new NodeConnection('n1', URL_BASE, async () => 'tok');
+    const updates: EventsUpdate[] = [];
+    conn.onEvents((u) => updates.push(u));
+    return { conn, updates, calls };
+  }
+
+  it('loads the newest events once, then polls for what comes after', async () => {
+    const { conn, updates, calls } = connectWithEvents((q) =>
+      q.has('after')
+        ? eventsResponse({ events: [event({ id: 4 })], latest_id: 4 })
+        : eventsResponse({
+            events: [event({ id: 3 }), event({ id: 2 }), event({ id: 1 })],
+            problems: [problem()],
+            latest_id: 3,
+            more: true,
+          }),
+    );
+    conn.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(updates[0].initial).toBe(true);
+    expect(updates[0].more).toBe(true);
+    expect(updates[0].events.map((e) => e.id)).toEqual([1, 2, 3]);
+    expect(updates[0].problems).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(calls.at(-1)).toContain('after=3');
+    expect(updates[1].initial).toBe(false);
+    expect(updates[1].events.map((e) => e.id)).toEqual([4]);
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(calls.at(-1)).toContain('after=4');
+    conn.stop();
+  });
+
+  it('starts over when the log was replaced', async () => {
+    let replaced = false;
+    const { conn, updates } = connectWithEvents((q) => {
+      if (!q.has('after')) return eventsResponse({ events: [event({ id: replaced ? 1 : 9 })], latest_id: replaced ? 1 : 9 });
+      replaced = true;
+      return eventsResponse({ latest_id: 1 });
+    });
+    conn.start();
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    const last = updates.at(-1)!;
+    expect(last.initial).toBe(true);
+    expect(last.events.map((e) => e.id)).toEqual([1]);
+    conn.stop();
+  });
+
+  it('leaves agents without an event log alone', async () => {
+    const info = agentInfo({ capabilities: { ...agentInfo().capabilities, events: false } });
+    const { conn, calls } = connectWithEvents(() => eventsResponse(), info);
+    conn.start();
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(calls).toHaveLength(0);
+    conn.stop();
+  });
+
+  it('reconnects when the host stream goes quiet without closing', async () => {
+    const { conn } = connectWithEvents(() => eventsResponse());
+    const metas: NodeMeta[] = [];
+    conn.onMeta((m) => metas.push(m));
+    conn.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    const first = FakeEventSource.latest('/v1/host/stream')!;
+    for (let i = 0; i < 10; i += 1) {
+      first.emit(hostInfo({ seq: i }));
+      await vi.advanceTimersByTimeAsync(1_000);
+    }
+    expect(metas.at(-1)?.status).toBe('online');
+
+    await vi.advanceTimersByTimeAsync(25_000);
+    expect(metas.some((m) => m.status === 'offline' && m.error?.startsWith('no data'))).toBe(true);
+    expect(first.readyState).toBe(FakeEventSource.CLOSED);
+    expect(FakeEventSource.latest('/v1/host/stream')).not.toBe(first);
     conn.stop();
   });
 });
