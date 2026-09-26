@@ -1,5 +1,6 @@
 import { AgentInfo } from '@/generated/AgentInfo';
 import { ApiError } from '@/generated/ApiError';
+import { BackupRequestKind } from '@/generated/BackupRequestKind';
 import { BackupsStatus } from '@/generated/BackupsStatus';
 import { ContainerActionResult } from '@/generated/ContainerActionResult';
 import { ContainersResponse } from '@/generated/ContainersResponse';
@@ -73,6 +74,7 @@ export const LEGACY_CAPABILITIES: Capabilities = {
   notify_actions: false,
   uptime: false,
   uptime_actions: false,
+  backup_actions: false,
 };
 
 /**
@@ -91,6 +93,7 @@ export function effectiveCapabilities(info: AgentInfo): Capabilities {
     notify: false,
     notify_actions: false,
     uptime_actions: false,
+    backup_actions: false,
   };
 }
 
@@ -308,6 +311,15 @@ export class AgentClient {
   wake(id: string): Promise<WolEntry> {
     return this.request<WolEntry>(`/v1/wol/targets/${encodeURIComponent(id)}/wake`, {
       method: 'POST',
+    });
+  }
+
+  /** Asks the host to back up now or run the restore test. */
+  runBackup(kind: BackupRequestKind): Promise<{ id: string }> {
+    return this.request<{ id: string }>('/v1/backups/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind }),
     });
   }
 

@@ -117,7 +117,10 @@ async fn serve(cfg: Config, mode: config::AuthMode) -> Result<(), Box<dyn std::e
 
     sample::spawn_self_identification(docker.clone(), facts.hostname.clone());
 
-    let backups_rx = cfg.backups.enabled.then(|| sample::spawn_backups(&cfg));
+    let (backups_rx, backups_poke) = match cfg.backups.enabled.then(|| sample::spawn_backups(&cfg)) {
+        Some((rx, poke)) => (Some(rx), Some(poke)),
+        None => (None, None),
+    };
     let tailnet_rx = cfg.tailscale.enabled.then(|| sample::tailnet::spawn(&cfg.tailscale));
 
     // Like history, a broken state database disables the features that
@@ -212,6 +215,7 @@ async fn serve(cfg: Config, mode: config::AuthMode) -> Result<(), Box<dyn std::e
         containers_rx,
         volumes_rx,
         backups_rx,
+        backups_poke,
         tailnet_rx,
         wol,
         events: events.clone(),
