@@ -19,6 +19,32 @@ pub struct PortInfo {
     pub port_type: Option<PortType>,
 }
 
+/// A container's health check result, for containers that have one.
+#[derive(Serialize, Deserialize, TS, Debug, Clone, Copy, PartialEq, Eq)]
+#[ts(export, export_to = "../../app/src/generated/")]
+#[serde(rename_all = "snake_case")]
+pub enum ContainerHealth {
+    Starting,
+    Healthy,
+    Unhealthy,
+}
+
+impl ContainerHealth {
+    /// From the suffix Docker puts on its status string: "Up 3 hours
+    /// (healthy)", "(unhealthy)", "(health: starting)".
+    pub fn from_status(status: &str) -> Option<Self> {
+        if status.ends_with("(healthy)") {
+            Some(Self::Healthy)
+        } else if status.ends_with("(unhealthy)") {
+            Some(Self::Unhealthy)
+        } else if status.ends_with("(health: starting)") {
+            Some(Self::Starting)
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, TS, Debug, Clone)]
 #[ts(export, export_to = "../../app/src/generated/")]
 pub struct ContainerInfo {
@@ -29,6 +55,11 @@ pub struct ContainerInfo {
     pub status: String,
     /// Docker's machine state, e.g. "running", "exited".
     pub state: String,
+    /// `None` when the container has no health check. Absent from agents
+    /// before 0.5.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub health: Option<ContainerHealth>,
     pub ports: Vec<PortInfo>,
     /// RFC3339. Cached against state transitions rather than re-inspected.
     pub started_at: Option<String>,
@@ -155,4 +186,18 @@ pub enum LogFrame {
     Closed {
         reason: String,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ContainerHealth;
+
+    #[test]
+    fn health_comes_from_the_status_suffix() {
+        assert_eq!(ContainerHealth::from_status("Up 3 hours (healthy)"), Some(ContainerHealth::Healthy));
+        assert_eq!(ContainerHealth::from_status("Up 2 minutes (unhealthy)"), Some(ContainerHealth::Unhealthy));
+        assert_eq!(ContainerHealth::from_status("Up 5 seconds (health: starting)"), Some(ContainerHealth::Starting));
+        assert_eq!(ContainerHealth::from_status("Up 3 hours"), None);
+        assert_eq!(ContainerHealth::from_status("Exited (1) 2 minutes ago"), None);
+    }
 }

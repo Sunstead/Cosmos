@@ -6,6 +6,7 @@
 
 mod backups;
 mod containers;
+mod events;
 mod host;
 mod logs;
 mod meta;
@@ -15,7 +16,8 @@ mod volumes;
 mod wol;
 mod web;
 
-use crate::{ auth, state::AppState };
+use crate::{ auth, error::AgentError, events::NewEvent, state::AppState };
+use cosmos_common::types::{ EventCategory, Severity };
 use axum::{
     http::{ header, HeaderValue },
     middleware::from_fn_with_state,
@@ -51,6 +53,7 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/volumes", get(volumes::list))
         .route("/v1/volumes/stream", get(volumes::stream))
         .route("/v1/backups", get(backups::current))
+        .route("/v1/events", get(events::list))
         .route("/v1/tailnet", get(tailnet::current))
         .route("/v1/wol", get(wol::list))
         // Admin-only inside the handler: it reveals the LAN's MAC addresses.
@@ -91,6 +94,32 @@ pub fn router(state: AppState) -> Router {
         // with no CORS headers and the browser reports an opaque failure.
         .layer(auth::cors(&state.cfg))
         .with_state(state)
+}
+
+/// An admin action, for the event log: what it was, and the titles for it
+/// working and not.
+pub struct Action {
+    pub kind: &'static str,
+    pub subject: String,
+    pub service: Option<String>,
+    pub done: String,
+    pub failed: String,
+}
+
+/// Records who did what and how it went. The `require_write` log line says
+/// the same for the journal; this is the copy the Events page shows.
+pub fn record_action<T>(state: &AppState, by: &auth::Principal, action: Action, result: &Result<T, AgentError>) {
+    let Some(events) = &state.events else {
+        return;
+    };
+    let event = match result {
+        Ok(_) => NewEvent::new(EventCategory::Action, action.kind, Severity::Info, action.subject, action.done),
+        Err(e) =>
+            NewEvent::new(EventCategory::Action, action.kind, Severity::Warning, action.subject, action.failed).detail(
+                e.to_string()
+            ),
+    };
+    events.record(event.actor(by.name.clone()).service(action.service));
 }
 
 /// Serves a payload the sampler already serialized, skipping serde entirely
