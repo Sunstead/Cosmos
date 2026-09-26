@@ -28,6 +28,52 @@ const MIGRATIONS: &[&str] = &[
         wake_woke      INTEGER,
         wake_took_secs INTEGER
     );",
+    // 0.5: the event log (events/), with the problems open now and a few
+    // markers the lifecycle check compares across restarts.
+    "CREATE TABLE events (
+        id            INTEGER PRIMARY KEY,
+        at            INTEGER NOT NULL,
+        category      TEXT    NOT NULL,
+        kind          TEXT    NOT NULL,
+        severity      TEXT    NOT NULL,
+        subject       TEXT    NOT NULL,
+        title         TEXT    NOT NULL,
+        detail        TEXT,
+        actor         TEXT,
+        service       TEXT,
+        problem_key   TEXT,
+        problem_state TEXT
+    );
+    CREATE INDEX events_at ON events (at);
+    CREATE TABLE problems (
+        key       TEXT    PRIMARY KEY,
+        category  TEXT    NOT NULL,
+        kind      TEXT    NOT NULL,
+        severity  TEXT    NOT NULL,
+        subject   TEXT    NOT NULL,
+        title     TEXT    NOT NULL,
+        detail    TEXT,
+        service   TEXT,
+        opened_at INTEGER NOT NULL,
+        event_id  INTEGER NOT NULL
+    );
+    CREATE TABLE meta (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+    );",
+    // 0.5: where notifications go (notify/). `secret` is never sent back out.
+    "CREATE TABLE notify_channels (
+        id           INTEGER PRIMARY KEY,
+        name         TEXT    NOT NULL UNIQUE COLLATE NOCASE,
+        kind         TEXT    NOT NULL,
+        url          TEXT    NOT NULL,
+        topic        TEXT,
+        secret       TEXT,
+        enabled      INTEGER NOT NULL,
+        min_severity TEXT    NOT NULL,
+        recoveries   INTEGER NOT NULL,
+        categories   TEXT    NOT NULL
+    );",
 ];
 
 #[derive(Clone)]

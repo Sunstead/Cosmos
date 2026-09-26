@@ -30,11 +30,12 @@ pub struct HostSample {
 
 /// What subscribers receive.
 ///
-/// Only the serialized form is kept: the JSON is rendered once per tick here
-/// rather than once per request per client, so the HTTP path never touches
-/// serde, and there's no consumer for the typed value to justify retaining it.
+/// The JSON is rendered once per tick here rather than once per request per
+/// client, so the HTTP path never touches serde. The disks are also kept
+/// typed, for the event log's disk-space check.
 pub struct HostSnapshot {
     pub json: Arc<str>,
+    pub disks: Arc<[DiskInfo]>,
 }
 
 impl HostSnapshot {
@@ -59,7 +60,7 @@ impl HostSnapshot {
             load1: sample.load1,
             load5: sample.load5,
             load15: sample.load15,
-            disk: sample.disk,
+            disk: sample.disk.clone(),
             nets: sample.nets,
             net_rx_bps: sample.net_rx_bps,
             net_tx_bps: sample.net_tx_bps,
@@ -78,7 +79,7 @@ impl HostSnapshot {
             })
             .into();
 
-        Self { json }
+        Self { json, disks: sample.disk.into() }
     }
 }
 

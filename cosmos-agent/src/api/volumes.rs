@@ -1,8 +1,15 @@
-use crate::{ api::CachedJson, error::AgentError, sse, state::AppState };
+use crate::{
+    api::{ record_action, Action, CachedJson },
+    auth::Principal,
+    error::AgentError,
+    sse,
+    state::AppState,
+};
 use axum::{
     extract::{ Path, Query, State },
     http::StatusCode,
     response::{ sse::{ Event, Sse }, IntoResponse },
+    Extension,
 };
 use futures_util::Stream;
 use serde::Deserialize;
@@ -28,9 +35,18 @@ pub struct RemoveQuery {
 
 pub async fn remove(
     State(state): State<AppState>,
+    Extension(by): Extension<Principal>,
     Path(name): Path<String>,
     Query(q): Query<RemoveQuery>
 ) -> Result<StatusCode, AgentError> {
-    state.docker.remove_volume(&name, q.force).await?;
-    Ok(StatusCode::NO_CONTENT)
+    let result = state.docker.remove_volume(&name, q.force).await;
+    let action = Action {
+        kind: "volume_remove",
+        done: format!("Removed volume {name}"),
+        failed: format!("Couldn't remove volume {name}"),
+        subject: name,
+        service: None,
+    };
+    record_action(&state, &by, action, &result);
+    result.map(|()| StatusCode::NO_CONTENT)
 }

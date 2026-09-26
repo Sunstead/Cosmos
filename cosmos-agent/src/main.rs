@@ -11,7 +11,9 @@ mod backups;
 mod config;
 mod docker;
 mod error;
+mod events;
 mod history;
+mod notify;
 mod sample;
 mod sse;
 mod state;
@@ -112,38 +114,84 @@ async fn serve(cfg: Config, mode: config::AuthMode) -> Result<(), Box<dyn std::e
     let containers_rx = sample::spawn_containers(&cfg, docker.clone());
     let volumes_rx = sample::spawn_volumes(docker.clone());
 
-    if cfg.docker.watch_events {
-        sample::spawn_event_watcher(docker.clone());
-    }
     sample::spawn_self_identification(docker.clone(), facts.hostname.clone());
 
     let backups_rx = cfg.backups.enabled.then(|| sample::spawn_backups(&cfg));
     let tailnet_rx = cfg.tailscale.enabled.then(|| sample::tailnet::spawn(&cfg.tailscale));
 
-    // Like history, a broken state database disables the feature rather
-    // than the agent.
-    let wol = if cfg.wol.enabled {
+    // Like history, a broken state database disables the features that
+    // need it rather than the agent.
+    let store = if cfg.wol.enabled || cfg.events.enabled {
         match store::Store::open(&cfg.state.path) {
-            Ok(store) => {
-                let filters = sample::filters::HostFilters::from_config(&cfg.host);
-                Some(
-                    sample::wol::spawn(&cfg.wol, store, tailnet_rx.clone(), move |iface|
-                        filters.iface_allowed(iface)
-                    )
-                )
-            }
+            Ok(store) => Some(store),
             Err(e) => {
                 tracing::error!(
                     path = %cfg.state.path.display(),
                     error = %e,
                     hint = history::diagnose(&cfg.state.path),
-                    "could not open the state database; wake-on-lan is disabled"
+                    "could not open the state database; wake-on-lan and the event log are disabled"
                 );
                 None
             }
         }
     } else {
         None
+    };
+
+    let events = match (&store, cfg.events.enabled) {
+        (Some(store), true) =>
+            match events::spawn(&cfg.events, store.clone()).await {
+                Ok(handle) => Some(handle),
+                Err(e) => {
+                    tracing::error!(error = %e, "could not start the event log");
+                    None
+                }
+            }
+        _ => None,
+    };
+
+    // Before anything reports: the notifier only hears events stored after it
+    // subscribes, and the lifecycle check below reports straight away.
+    let notify = events
+        .as_ref()
+        .map(|events| notify::spawn(events.store.clone(), events, facts.node_name.clone()));
+
+    // The container tracker needs the Docker event stream even when the
+    // samplers don't.
+    let forward = events.as_ref().map(|events| {
+        let (tx, rx) = tokio::sync::mpsc::channel(256);
+        events::containers::spawn(events.clone(), rx, containers_rx.clone());
+        tx
+    });
+    if cfg.docker.watch_events || forward.is_some() {
+        sample::spawn_event_watcher(docker.clone(), cfg.docker.watch_events, forward);
+    }
+
+    if let Some(events) = &events {
+        if let Err(e) = events::lifecycle::start(events, facts.node_name.clone()).await {
+            tracing::warn!(error = %e, "cannot compare this run with the last");
+        }
+        events::disks::spawn(
+            events.clone(),
+            host_rx.clone(),
+            cfg.events.disk_warn_pct,
+            cfg.events.disk_critical_pct
+        );
+        if let Some(backups_rx) = &backups_rx {
+            events::backups::spawn(events.clone(), backups_rx.clone());
+        }
+    }
+
+    let wol = match (&store, cfg.wol.enabled) {
+        (Some(store), true) => {
+            let filters = sample::filters::HostFilters::from_config(&cfg.host);
+            Some(
+                sample::wol::spawn(&cfg.wol, store.clone(), tailnet_rx.clone(), events.clone(), move |iface|
+                    filters.iface_allowed(iface)
+                )
+            )
+        }
+        _ => None,
     };
 
     let state = AppState::new(Inner {
@@ -160,6 +208,8 @@ async fn serve(cfg: Config, mode: config::AuthMode) -> Result<(), Box<dyn std::e
         backups_rx,
         tailnet_rx,
         wol,
+        events: events.clone(),
+        notify,
         cfg: cfg.clone(),
     });
 
@@ -179,6 +229,12 @@ async fn serve(cfg: Config, mode: config::AuthMode) -> Result<(), Box<dyn std::e
         // Under Compose, `docker compose down` sends SIGTERM. Without this the
         // history writer's in-flight batch is lost.
         .with_graceful_shutdown(shutdown_signal()).await?;
+
+    // Only reached after a signal, so the next start knows this wasn't a
+    // crash or a power cut.
+    if let Some(events) = &events {
+        events::lifecycle::stopped_cleanly(&events.store).await;
+    }
 
     tracing::info!("shutdown complete");
     Ok(())

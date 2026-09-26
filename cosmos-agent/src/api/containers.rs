@@ -1,7 +1,14 @@
-use crate::{ api::CachedJson, error::AgentError, sse, state::AppState };
+use crate::{
+    api::{ record_action, Action, CachedJson },
+    auth::Principal,
+    error::AgentError,
+    sse,
+    state::AppState,
+};
 use axum::{
     extract::{ Path, Query, State },
     response::sse::{ Event, Sse },
+    Extension,
     Json,
 };
 use cosmos_common::types::{ ContainerActionRequest, ContainerActionResult };
@@ -21,6 +28,28 @@ pub async fn stream(
     sse::stream_watch(state.containers_rx.clone(), |snap| snap.json.clone())
 }
 
+/// The container's name and service, for the event log. Looked up before
+/// acting, since a removed container is gone from the list after.
+fn describe(state: &AppState, id: &str) -> (String, Option<String>) {
+    let snap = state.containers_rx.borrow();
+    snap.containers
+        .iter()
+        .find(|c| c.id == id || c.name == id || (id.len() >= 12 && c.id.starts_with(id)))
+        .map(|c| (c.name.clone(), c.cosmos_service.clone()))
+        .unwrap_or_else(|| (id.chars().take(12).collect(), None))
+}
+
+fn action(state: &AppState, id: &str, kind: &'static str, verb: &str, past: &str) -> Action {
+    let (name, service) = describe(state, id);
+    Action {
+        kind,
+        done: format!("{past} {name}"),
+        failed: format!("Couldn't {verb} {name}"),
+        subject: name,
+        service,
+    }
+}
+
 /// `timeout_secs` is optional in the body; an absent body is fine too.
 fn timeout_of(body: Option<Json<ContainerActionRequest>>) -> Option<u32> {
     body.and_then(|Json(b)| b.timeout_secs)
@@ -28,25 +57,37 @@ fn timeout_of(body: Option<Json<ContainerActionRequest>>) -> Option<u32> {
 
 pub async fn start(
     State(state): State<AppState>,
+    Extension(by): Extension<Principal>,
     Path(id): Path<String>
 ) -> Result<Json<ContainerActionResult>, AgentError> {
-    state.docker.start(&id).await.map(Json)
+    let action = action(&state, &id, "container_start", "start", "Started");
+    let result = state.docker.start(&id).await;
+    record_action(&state, &by, action, &result);
+    result.map(Json)
 }
 
 pub async fn stop(
     State(state): State<AppState>,
+    Extension(by): Extension<Principal>,
     Path(id): Path<String>,
     body: Option<Json<ContainerActionRequest>>
 ) -> Result<Json<ContainerActionResult>, AgentError> {
-    state.docker.stop(&id, timeout_of(body)).await.map(Json)
+    let action = action(&state, &id, "container_stop", "stop", "Stopped");
+    let result = state.docker.stop(&id, timeout_of(body)).await;
+    record_action(&state, &by, action, &result);
+    result.map(Json)
 }
 
 pub async fn restart(
     State(state): State<AppState>,
+    Extension(by): Extension<Principal>,
     Path(id): Path<String>,
     body: Option<Json<ContainerActionRequest>>
 ) -> Result<Json<ContainerActionResult>, AgentError> {
-    state.docker.restart(&id, timeout_of(body)).await.map(Json)
+    let action = action(&state, &id, "container_restart", "restart", "Restarted");
+    let result = state.docker.restart(&id, timeout_of(body)).await;
+    record_action(&state, &by, action, &result);
+    result.map(Json)
 }
 
 #[derive(Deserialize, Default)]
@@ -60,8 +101,12 @@ pub struct RemoveQuery {
 
 pub async fn remove(
     State(state): State<AppState>,
+    Extension(by): Extension<Principal>,
     Path(id): Path<String>,
     Query(q): Query<RemoveQuery>
 ) -> Result<Json<ContainerActionResult>, AgentError> {
-    state.docker.remove(&id, q.force, q.volumes).await.map(Json)
+    let action = action(&state, &id, "container_remove", "remove", "Removed");
+    let result = state.docker.remove(&id, q.force, q.volumes).await;
+    record_action(&state, &by, action, &result);
+    result.map(Json)
 }

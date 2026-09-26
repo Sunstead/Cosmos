@@ -59,6 +59,9 @@ export const LEGACY_CAPABILITIES: Capabilities = {
   wol_actions: false,
   volume_stream: false,
   all_logs: false,
+  events: false,
+  notify: false,
+  notify_actions: false,
 };
 
 /**
@@ -73,6 +76,9 @@ export function effectiveCapabilities(info: AgentInfo): Capabilities {
     container_actions: false,
     volume_actions: false,
     wol_actions: false,
+    // Channels are admin-only to read, not just to edit.
+    notify: false,
+    notify_actions: false,
   };
 }
 

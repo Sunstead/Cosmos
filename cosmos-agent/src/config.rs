@@ -39,6 +39,22 @@ pub struct Config {
     pub state: StateConfig,
     pub tailscale: TailscaleConfig,
     pub wol: WolConfig,
+    pub events: EventsConfig,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct EventsConfig {
+    /// The event log: what happened on this node, and the problems open now.
+    /// Kept in `[state] path`.
+    pub enabled: bool,
+    /// Events older than this are deleted, except one that opened a problem
+    /// still open.
+    pub retain_days: u32,
+    /// A filesystem this full opens a warning, and this full an error. Each
+    /// clears 5 points below.
+    pub disk_warn_pct: u8,
+    pub disk_critical_pct: u8,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -299,6 +315,12 @@ impl Default for WolConfig {
     }
 }
 
+impl Default for EventsConfig {
+    fn default() -> Self {
+        Self { enabled: true, retain_days: 180, disk_warn_pct: 85, disk_critical_pct: 95 }
+    }
+}
+
 impl Default for StateConfig {
     fn default() -> Self {
         Self { path: PathBuf::from("/var/lib/cosmos-agent/state.db") }
@@ -436,6 +458,17 @@ impl Config {
         }
         if self.docker.stats_concurrency == 0 {
             return Err(ConfigError::Invalid("docker.stats_concurrency must be at least 1".into()));
+        }
+        if self.events.retain_days == 0 {
+            return Err(ConfigError::Invalid("events.retain_days must be at least 1".into()));
+        }
+        let (warn, critical) = (self.events.disk_warn_pct, self.events.disk_critical_pct);
+        if !(10..critical).contains(&warn) || critical > 100 {
+            return Err(
+                ConfigError::Invalid(
+                    "events.disk_warn_pct must be at least 10 and below events.disk_critical_pct, which is at most 100".into()
+                )
+            );
         }
         Ok(())
     }
@@ -575,6 +608,17 @@ mod tests {
         assert_eq!(cfg.host.disks[0].label.as_deref(), Some("/"));
         // Untouched sections keep their defaults.
         assert_eq!(cfg.host.interval_ms, 1000);
+        assert!(cfg.events.enabled);
+        assert_eq!(cfg.events.retain_days, 180);
+    }
+
+    #[test]
+    fn disk_thresholds_must_be_in_order() {
+        let parse = |s: &str| toml::from_str::<Config>(s).unwrap();
+        assert!(parse("[events]\ndisk_warn_pct = 80\ndisk_critical_pct = 90").validate().is_ok());
+        assert!(parse("[events]\ndisk_warn_pct = 95\ndisk_critical_pct = 90").validate().is_err());
+        assert!(parse("[events]\ndisk_critical_pct = 101").validate().is_err());
+        assert!(parse("[events]\nretain_days = 0").validate().is_err());
     }
 
     #[test]

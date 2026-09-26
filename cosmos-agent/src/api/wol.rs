@@ -1,5 +1,5 @@
 use crate::{
-    api::CachedJson,
+    api::{ record_action, Action, CachedJson },
     auth::Principal,
     error::AgentError,
     sample::{ filters::HostFilters, wol::WolHandle },
@@ -33,36 +33,59 @@ pub async fn neighbors(
     Ok(Json(WolNeighborsResponse { neighbors }))
 }
 
+fn target_action(kind: &'static str, name: &str, done: &str, failed: &str) -> Action {
+    Action {
+        kind,
+        subject: name.to_string(),
+        service: None,
+        done: format!("{done} {name}"),
+        failed: format!("{failed} {name}"),
+    }
+}
+
 pub async fn create(
     State(state): State<AppState>,
+    Extension(by): Extension<Principal>,
     Json(input): Json<WolTargetInput>
 ) -> Result<(StatusCode, Json<WolTarget>), AgentError> {
     let wol = handle(&state)?;
     let target = wol::validate(input, String::new())?;
-    let saved = wol.store.call(move |c| store::insert_target(c, &target)).await?;
+    let action = target_action("wol_target_create", &target.name, "Added", "Couldn't add");
+    let result = wol.store.call(move |c| store::insert_target(c, &target)).await;
+    record_action(&state, &by, action, &result);
+    let saved = result?;
     wol.reload().await?;
     Ok((StatusCode::CREATED, Json(saved)))
 }
 
 pub async fn update(
     State(state): State<AppState>,
+    Extension(by): Extension<Principal>,
     Path(id): Path<String>,
     Json(input): Json<WolTargetInput>
 ) -> Result<Json<WolTarget>, AgentError> {
     let wol = handle(&state)?;
     let target = wol::validate(input, id)?;
     let saved = target.clone();
-    wol.store.call(move |c| store::update_target(c, &target)).await?;
+    let action = target_action("wol_target_update", &target.name, "Edited", "Couldn't edit");
+    let result = wol.store.call(move |c| store::update_target(c, &target)).await;
+    record_action(&state, &by, action, &result);
+    result?;
     wol.reload().await?;
     Ok(Json(saved))
 }
 
 pub async fn remove(
     State(state): State<AppState>,
+    Extension(by): Extension<Principal>,
     Path(id): Path<String>
 ) -> Result<StatusCode, AgentError> {
     let wol = handle(&state)?;
-    wol.store.call(move |c| store::delete_target(c, &id)).await?;
+    let name = wol.entry(&id).map_or_else(|| id.clone(), |e| e.target.name);
+    let action = target_action("wol_target_delete", &name, "Removed", "Couldn't remove");
+    let result = wol.store.call(move |c| store::delete_target(c, &id)).await;
+    record_action(&state, &by, action, &result);
+    result?;
     wol.reload().await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -78,7 +101,9 @@ pub async fn wake(
     let lookup = id.clone();
     let target = wol.store.call(move |c| store::get_target(c, &lookup)).await?.target;
 
-    let to = wol::send(&target).await?;
+    let sent = wol::send(&target).await;
+    record_action(&state, &principal, target_action("wol_wake", &target.name, "Sent a wake packet to", "Couldn't send a wake packet to"), &sent);
+    let to = sent?;
     tracing::info!(target = %target.name, mac = %target.mac, %to, by = %principal.name, "sent magic packet");
 
     wol.waking(id.clone(), principal.name).await?;

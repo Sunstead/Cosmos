@@ -14,10 +14,20 @@ use super::tailnet::TailnetSnapshot;
 use crate::{
     config::WolConfig,
     error::AgentError,
+    events::{ human_duration, EventsHandle, NewEvent },
     store::{ self, StoredTarget, Store },
     wol,
 };
-use cosmos_common::types::{ WolEntry, WolNetwork, WolResponse, WolState, WolTarget, WolWake };
+use cosmos_common::types::{
+    EventCategory,
+    Severity,
+    WolEntry,
+    WolNetwork,
+    WolResponse,
+    WolState,
+    WolTarget,
+    WolWake,
+};
 use std::{
     collections::HashMap,
     sync::Arc,
@@ -99,6 +109,7 @@ pub fn spawn(
     cfg: &WolConfig,
     store: Store,
     tailnet: Option<watch::Receiver<Arc<TailnetSnapshot>>>,
+    events: Option<EventsHandle>,
     iface_allowed: impl Fn(&str) -> bool + Send + Sync + 'static
 ) -> WolHandle {
     let (snap_tx, rx) = watch::channel(
@@ -126,7 +137,7 @@ pub fn spawn(
                 networks_at = Some(Instant::now());
             }
 
-            let entries = evaluate(&store, &mut targets, &mut waking, tailnet.as_ref(), timeout).await;
+            let entries = evaluate(&store, &mut targets, &mut waking, tailnet.as_ref(), events.as_ref(), timeout).await;
             if !publish(&snap_tx, entries, &networks) {
                 return;
             }
@@ -149,7 +160,7 @@ pub fn spawn(
                             done
                         }
                     };
-                    let entries = evaluate(&store, &mut targets, &mut waking, tailnet.as_ref(), timeout).await;
+                    let entries = evaluate(&store, &mut targets, &mut waking, tailnet.as_ref(), events.as_ref(), timeout).await;
                     publish(&snap_tx, entries, &networks);
                     let _ = done.send(());
                 }
@@ -185,6 +196,7 @@ async fn evaluate(
     targets: &mut [StoredTarget],
     waking: &mut HashMap<String, Attempt>,
     tailnet: Option<&watch::Receiver<Arc<TailnetSnapshot>>>,
+    events: Option<&EventsHandle>,
     timeout: Duration
 ) -> Vec<WolEntry> {
     let tailnet = tailnet.map(|rx| rx.borrow().clone());
@@ -209,6 +221,9 @@ async fn evaluate(
             if let Err(e) = store.call(move |c| store::record_wake(c, &sid, &w)).await {
                 tracing::warn!(error = %e, "cannot record wake outcome");
             }
+            if let Some(events) = events {
+                events.record(wake_event(&t.target.name, &wake));
+            }
             t.last_wake = Some(wake);
         }
 
@@ -224,6 +239,19 @@ async fn evaluate(
         });
     }
     entries
+}
+
+fn wake_event(name: &str, wake: &WolWake) -> NewEvent {
+    let event = |kind, severity, title: String| {
+        NewEvent::new(EventCategory::Wol, kind, severity, name, title).actor(wake.by.clone())
+    };
+    match (wake.woke, wake.took_secs) {
+        (Some(true), Some(took)) => event("woke", Severity::Info, format!("{name} woke up")).detail(format!("It came online {} after the magic packet.", human_duration(u64::from(took)))),
+        (Some(true), None) => event("woke", Severity::Info, format!("{name} woke up")),
+        _ => event("did_not_wake", Severity::Warning, format!("{name} didn't wake")).detail(
+            "It never came online after the magic packet. Check it's plugged in and has Wake-on-LAN enabled."
+        ),
+    }
 }
 
 /// The state machine, separate from I/O so it can be tested with a fake
@@ -396,7 +424,7 @@ mod tests {
         });
 
         let cfg = WolConfig { enabled: true, interval_ms: 60_000, wake_timeout_secs: 180 };
-        let handle = spawn(&cfg, store.clone(), Some(tailnet_rx), |_| true);
+        let handle = spawn(&cfg, store.clone(), Some(tailnet_rx), None, |_| true);
         handle.reload().await.unwrap();
         let entry = handle.entry(&saved.id).unwrap();
         assert_eq!(entry.state, WolState::Asleep);

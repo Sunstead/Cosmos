@@ -300,8 +300,12 @@ describe('NodeConnection', () => {
     expect(meta.principal).toEqual({ name: 'guest', admin: false });
     expect(meta.capabilities.container_actions).toBe(false);
     expect(meta.capabilities.volume_actions).toBe(false);
+    // Notification channels are admin-only to read, too.
+    expect(meta.capabilities.notify).toBe(false);
+    expect(meta.capabilities.notify_actions).toBe(false);
     // Reading is unaffected.
     expect(meta.capabilities.container_logs).toBe(true);
+    expect(meta.capabilities.events).toBe(true);
     conn.stop();
   });
 
