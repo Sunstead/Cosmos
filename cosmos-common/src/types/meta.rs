@@ -85,6 +85,13 @@ pub struct Capabilities {
     /// agents before 0.5.
     #[serde(default)]
     pub events: bool,
+    /// `/v1/notify`: notification channels (admins only). Absent from agents
+    /// before 0.5.
+    #[serde(default)]
+    pub notify: bool,
+    /// Editing channels: `notify` plus `allow_actions`.
+    #[serde(default)]
+    pub notify_actions: bool,
 }
 
 impl Capabilities {
@@ -106,6 +113,8 @@ impl Capabilities {
             volume_stream: false,
             all_logs: false,
             events: false,
+            notify: false,
+            notify_actions: false,
         }
     }
 }
