@@ -13,6 +13,7 @@ mod meta;
 mod metrics;
 mod notify;
 mod tailnet;
+mod updates;
 mod uptime;
 mod volumes;
 mod wol;
@@ -49,6 +50,10 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/uptime/checks", post(uptime::create))
         .route("/v1/uptime/checks/:id", put(uptime::update).delete(uptime::remove))
         .route("/v1/uptime/services/:service", put(uptime::service))
+        .route("/v1/updates/check", post(updates::check))
+        .route("/v1/updates/apply", post(updates::apply))
+        .route("/v1/updates/rollback", post(updates::rollback))
+        .route("/v1/updates/policy", put(updates::policy))
         .layer(from_fn_with_state(state.clone(), auth::require_write));
 
     let read = Router::new()
@@ -68,6 +73,7 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/notify", get(notify::get))
         .route("/v1/tailnet", get(tailnet::current))
         .route("/v1/uptime", get(uptime::list))
+        .route("/v1/updates", get(updates::list))
         .route("/v1/wol", get(wol::list))
         // Admin-only inside the handler: it reveals the LAN's MAC addresses.
         .route("/v1/wol/neighbors", get(wol::neighbors))

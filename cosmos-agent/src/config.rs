@@ -41,6 +41,7 @@ pub struct Config {
     pub wol: WolConfig,
     pub events: EventsConfig,
     pub uptime: UptimeConfig,
+    pub updates: UpdatesConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -56,6 +57,31 @@ pub struct EventsConfig {
     /// clears 5 points below.
     pub disk_warn_pct: u8,
     pub disk_critical_pct: u8,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct UpdatesConfig {
+    /// Checks registries for newer tags of the images running here. Read
+    /// only, and anonymous; applying one needs `repo` and a token.
+    pub enabled: bool,
+    pub check_interval_hours: u32,
+    /// A tag must have been seen this long before it applies on its own.
+    pub min_age_days: u32,
+    /// `owner/name` of the repository whose workflow applies an update: it
+    /// bumps the tag in compose, commits and deploys. Unset: updates are only
+    /// listed.
+    pub repo: Option<String>,
+    pub workflow: String,
+    #[serde(rename = "ref")]
+    pub git_ref: String,
+    /// How long after a deploy a failing check or restarts count as the
+    /// update's fault.
+    pub watch_minutes: u32,
+    /// From `COSMOS_AGENT_GITHUB_TOKEN` only, never the file: Actions read and
+    /// write on `repo`, nothing else.
+    #[serde(skip)]
+    pub token: Option<crate::updates::github::Secret>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -345,6 +371,21 @@ impl Default for EventsConfig {
     }
 }
 
+impl Default for UpdatesConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            check_interval_hours: 6,
+            min_age_days: 3,
+            repo: None,
+            workflow: "update.yml".into(),
+            git_ref: "main".into(),
+            watch_minutes: 10,
+            token: None,
+        }
+    }
+}
+
 impl Default for UptimeConfig {
     fn default() -> Self {
         Self { enabled: true, interval_secs: 60, local_domains: Vec::new() }
@@ -409,6 +450,17 @@ impl Config {
         Ok(())
     }
 
+    /// Whether this version accepts the config at `path`, without the
+    /// environment overlay. For `--check-config`: an update workflow runs the
+    /// new image against the live config before switching to it.
+    pub fn check_file(path: &str) -> Result<(), ConfigError> {
+        let mut cfg = Self::from_file(path)?;
+        cfg.migrate_deprecated()?;
+        cfg.validate()?;
+        cfg.auth_mode()?;
+        Ok(())
+    }
+
     fn from_file(path: &str) -> Result<Self, ConfigError> {
         let text = std::fs
             ::read_to_string(path)
@@ -463,6 +515,10 @@ impl Config {
         if let Ok(v) = std::env::var("COSMOS_AGENT_HISTORY_PATH") {
             self.history.path = PathBuf::from(v);
         }
+        if let Ok(v) = std::env::var("COSMOS_AGENT_GITHUB_TOKEN") {
+            let v = v.trim().to_string();
+            self.updates.token = (!v.is_empty()).then_some(crate::updates::github::Secret(v));
+        }
         if let Ok(v) = std::env::var("COSMOS_AGENT_WEB_DIR") {
             self.web.dir = (!v.is_empty()).then(|| PathBuf::from(v));
         }
@@ -494,6 +550,20 @@ impl Config {
         }
         if self.events.retain_days == 0 {
             return Err(ConfigError::Invalid("events.retain_days must be at least 1".into()));
+        }
+        if self.updates.check_interval_hours == 0 || self.updates.check_interval_hours > 168 {
+            return Err(ConfigError::Invalid("updates.check_interval_hours must be between 1 and 168".into()));
+        }
+        if !(1..=60).contains(&self.updates.watch_minutes) {
+            return Err(ConfigError::Invalid("updates.watch_minutes must be between 1 and 60".into()));
+        }
+        if let Some(repo) = &self.updates.repo {
+            let ok = repo
+                .split_once('/')
+                .is_some_and(|(o, n)| !o.is_empty() && !n.is_empty() && !n.contains('/'));
+            if !ok {
+                return Err(ConfigError::Invalid(format!("updates.repo is owner/name, not {repo}")));
+            }
         }
         if !(20..=3_600).contains(&self.uptime.interval_secs) {
             return Err(ConfigError::Invalid("uptime.interval_secs must be between 20 and 3600".into()));
@@ -664,6 +734,20 @@ mod tests {
     fn the_example_config_is_valid() {
         let cfg: Config = toml::from_str(include_str!("../agent.example.toml")).expect("the example parses");
         cfg.validate().expect("the example validates");
+    }
+
+    #[test]
+    fn parses_update_settings_and_hides_the_token() {
+        let parse = |s: &str| toml::from_str::<Config>(s).unwrap();
+        let mut cfg = parse("[updates]\nrepo = \"InventorPWB/Jupiter\"\nref = \"main\"\nmin_age_days = 5");
+        assert!(cfg.validate().is_ok());
+        assert_eq!(cfg.updates.repo.as_deref(), Some("InventorPWB/Jupiter"));
+        assert_eq!(cfg.updates.min_age_days, 5);
+        assert!(parse("[updates]\nrepo = \"Jupiter\"").validate().is_err());
+        assert!(toml::from_str::<Config>("[updates]\ntoken = \"x\"").is_err(), "never from the file");
+
+        cfg.updates.token = Some(crate::updates::github::Secret("github_pat_SECRET".into()));
+        assert!(!format!("{cfg:?}").contains("SECRET"));
     }
 
     #[test]

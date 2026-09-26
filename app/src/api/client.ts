@@ -16,6 +16,9 @@ import { NotifySettings } from '@/generated/NotifySettings';
 import { VolumesResponse } from '@/generated/VolumesResponse';
 import { Capabilities } from '@/generated/Capabilities';
 import { TailnetStatus } from '@/generated/TailnetStatus';
+import { UpdatePolicy } from '@/generated/UpdatePolicy';
+import { UpdateRun } from '@/generated/UpdateRun';
+import { UpdatesResponse } from '@/generated/UpdatesResponse';
 import { UptimeCheckInput } from '@/generated/UptimeCheckInput';
 import { UptimeEntry } from '@/generated/UptimeEntry';
 import { UptimeResponse } from '@/generated/UptimeResponse';
@@ -75,6 +78,8 @@ export const LEGACY_CAPABILITIES: Capabilities = {
   uptime: false,
   uptime_actions: false,
   backup_actions: false,
+  updates: false,
+  update_actions: false,
 };
 
 /**
@@ -94,6 +99,7 @@ export function effectiveCapabilities(info: AgentInfo): Capabilities {
     notify_actions: false,
     uptime_actions: false,
     backup_actions: false,
+    update_actions: false,
   };
 }
 
@@ -190,6 +196,10 @@ export class AgentClient {
 
   getUptime(): Promise<UptimeResponse> {
     return this.request<UptimeResponse>('/v1/uptime');
+  }
+
+  getUpdates(): Promise<UpdatesResponse> {
+    return this.request<UpdatesResponse>('/v1/updates');
   }
 
   getWol(): Promise<WolResponse> {
@@ -311,6 +321,35 @@ export class AgentClient {
   wake(id: string): Promise<WolEntry> {
     return this.request<WolEntry>(`/v1/wol/targets/${encodeURIComponent(id)}/wake`, {
       method: 'POST',
+    });
+  }
+
+  /** Checks the registries now; resolves with the new list. */
+  checkUpdates(): Promise<UpdatesResponse> {
+    return this.request<UpdatesResponse>('/v1/updates/check', { method: 'POST' });
+  }
+
+  applyUpdate(unit: string, tag: string): Promise<UpdateRun> {
+    return this.request<UpdateRun>('/v1/updates/apply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ unit, tag }),
+    });
+  }
+
+  rollbackUpdate(unit: string): Promise<UpdateRun> {
+    return this.request<UpdateRun>('/v1/updates/rollback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ unit }),
+    });
+  }
+
+  setUpdatePolicy(unit: string, policy: UpdatePolicy): Promise<UpdatesResponse> {
+    return this.request<UpdatesResponse>('/v1/updates/policy', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ unit, policy }),
     });
   }
 

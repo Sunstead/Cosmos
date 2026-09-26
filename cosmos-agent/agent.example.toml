@@ -171,6 +171,25 @@ interval_secs = 60
 # Tailscale IP.
 # local_domains = ["example.net"]
 
+[updates]
+# The Updates page: newer tags of the images running here, from their
+# registries (anonymous, tag lists only). Rules come from compose labels
+# (cosmos.update.*); the policy per image is set in the app.
+enabled = true
+check_interval_hours = 6
+# How long a tag must have been out before it applies on its own.
+min_age_days = 3
+# To apply updates: the repository whose update workflow bumps the tag in
+# compose, commits and deploys. The token is COSMOS_AGENT_GITHUB_TOKEN in the
+# environment (never here): fine-grained, that repository only, Actions read
+# and write. It can start the workflow; it can't read or push code.
+# repo = "owner/infrastructure"
+# workflow = "update.yml"
+# ref = "main"
+# After a deploy, a check going down or a container restarting within this
+# long marks the update broken and pauses automatic updates for it.
+watch_minutes = 10
+
 [state]
 # Settings edited from the UI, and the event log. Must be on the writable
 # volume.

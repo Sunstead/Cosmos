@@ -3,6 +3,7 @@ import {
   Container,
   HardDrive,
   HeartPulse,
+  PackageCheck,
   MousePointerClick,
   Power,
   Server,
@@ -25,6 +26,7 @@ export const CATEGORY: Record<EventCategory, { label: string; icon: LucideIcon }
   wol: { label: 'Wake-on-LAN', icon: Power },
   agent: { label: 'Agent', icon: Server },
   uptime: { label: 'Uptime', icon: HeartPulse },
+  update: { label: 'Update', icon: PackageCheck },
 };
 
 export function isResolution(e: Event): boolean {
