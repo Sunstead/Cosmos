@@ -61,7 +61,7 @@ checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
 name = "app"
-version = "0.3.0"
+version = "0.5.1"
 dependencies = [
  "base64 0.22.1",
  "getrandom 0.3.4",
@@ -744,7 +744,7 @@ dependencies = [
 
 [[package]]
 name = "cosmos-agent"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "axum",
  "bollard",
@@ -770,7 +770,7 @@ dependencies = [
 
 [[package]]
 name = "cosmos-common"
-version = "0.1.0"
+version = "0.5.1"
 dependencies = [
  "serde",
  "serde_json",
