@@ -329,6 +329,95 @@ test.describe('with a node', () => {
     expect(await overflowing(dialog)).toEqual([]);
   });
 
+  test('the updates page shows what can move, and why not', async ({ page }, info) => {
+    const now = Math.floor(Date.now() / 1000);
+    const unit = (name: string, extra: Record<string, unknown>) => ({
+      id: name,
+      name,
+      services: [name],
+      images: [name],
+      current: '1.0.0',
+      available: null,
+      patch: null,
+      held: null,
+      notes_url: null,
+      policy: 'manual',
+      paused: null,
+      backup: false,
+      blocked: null,
+      run: null,
+      previous: null,
+      ...extra,
+    });
+    await page.route('**/v1/updates', (route) =>
+      route.fulfill({
+        json: {
+          units: [
+            unit('immich', {
+              id: 'group:immich',
+              images: ['ghcr.io/immich-app/immich-server', 'ghcr.io/immich-app/immich-machine-learning'],
+              services: ['immich-server', 'immich-machine-learning'],
+              current: 'v3.2.2',
+              available: { tag: 'v3.3.0', change: 'minor', first_seen: now - 86_400 },
+              notes_url: 'https://github.com/immich-app/immich/releases',
+              backup: true,
+            }),
+            unit('nextcloud', {
+              current: '35.0.0-apache',
+              available: { tag: '36.0.3-apache', change: 'major', first_seen: now - 5 * 86_400 },
+              patch: { tag: '35.0.1-apache', change: 'patch', first_seen: now - 5 * 86_400 },
+              held: { tag: '37.0.0-apache', reason: 'one major version at a time' },
+              policy: 'patch',
+              backup: true,
+            }),
+            unit('ntfy', {
+              id: 'binwiederhier/ntfy',
+              images: ['binwiederhier/ntfy'],
+              current: 'v2.29.0',
+              previous: 'v2.28.0',
+              run: {
+                id: 'r1',
+                unit: 'binwiederhier/ntfy',
+                kind: 'update',
+                from: 'v2.28.0',
+                to: 'v2.29.0',
+                by: 'pwb',
+                state: 'watching',
+                requested_at: now - 120,
+                finished_at: null,
+                run_url: 'https://github.com/o/r/actions/runs/42',
+                detail: null,
+              },
+            }),
+            unit('immich-postgres', { blocked: 'updates are off for it (cosmos.update: off)' }),
+          ],
+          checked_at: now - 600,
+          errors: [],
+          can_apply: true,
+          token_expires_at: null,
+          history: [],
+          min_age_days: 3,
+        },
+      }),
+    );
+    await addNodeOnline(page);
+    await page.goto('/updates');
+    const rows = page.locator('[data-update]');
+    await expect(rows).toHaveCount(4);
+    await expect(rows.nth(0)).toContainText('Updating to v2.29.0: deployed, checking it stays up');
+    await expect(rows.nth(1)).toContainText('36.0.3-apache');
+    await expect(rows.nth(1)).toContainText('37.0.0-apache held: one major version at a time');
+    await expect(rows.nth(1)).toContainText('35.0.1-apache applies after the next nightly backup');
+    await expect(page.getByText('Not updated: updates are off for it')).toBeVisible();
+
+    await rows.nth(2).getByRole('button', { name: 'Update' }).click();
+    await expect(page.getByRole('dialog')).toContainText('backs up the databases');
+    await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+    await page.screenshot({ path: info.outputPath('updates.png'), fullPage: true });
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.screenshot({ path: info.outputPath('updates-phone.png'), fullPage: true });
+  });
+
   test('the add machine dialog keeps every field inside it', async ({ page }, info) => {
     await addNodeOnline(page);
     await page.goto('/network');

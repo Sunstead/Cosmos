@@ -123,6 +123,12 @@ const uptimeRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages/uptime-page'), 'UptimePage'),
 });
 
+const updatesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/updates',
+  component: lazyRouteComponent(() => import('./pages/updates-page'), 'UpdatesPage'),
+});
+
 const eventsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/events',
@@ -161,6 +167,7 @@ const routeTree = rootRoute.addChildren([
   logsRoute,
   backupsRoute,
   eventsRoute,
+  updatesRoute,
   settingsRoute,
   authCallbackRoute,
 ]);

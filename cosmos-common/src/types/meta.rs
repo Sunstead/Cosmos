@@ -102,6 +102,13 @@ pub struct Capabilities {
     /// directory, plus `allow_actions`. Absent from agents before 0.7.
     #[serde(default)]
     pub backup_actions: bool,
+    /// `/v1/updates`: newer image tags. Absent from agents before 0.8.
+    #[serde(default)]
+    pub updates: bool,
+    /// Applying updates: `updates` with a GitHub token and repository, plus
+    /// `allow_actions`.
+    #[serde(default)]
+    pub update_actions: bool,
 }
 
 impl Capabilities {
@@ -128,6 +135,8 @@ impl Capabilities {
             uptime: false,
             uptime_actions: false,
             backup_actions: false,
+            updates: false,
+            update_actions: false,
         }
     }
 }

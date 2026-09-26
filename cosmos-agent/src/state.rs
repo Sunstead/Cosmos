@@ -19,6 +19,7 @@ use crate::{
         tailnet::TailnetSnapshot,
         wol::WolHandle,
     },
+    updates::UpdatesHandle,
     uptime::UptimeHandle,
 };
 use cosmos_common::types::Capabilities;
@@ -46,6 +47,7 @@ pub struct Inner {
     pub events: Option<EventsHandle>,
     pub notify: Option<NotifyHandle>,
     pub uptime: Option<UptimeHandle>,
+    pub updates: Option<UpdatesHandle>,
 }
 
 impl AppState {
@@ -77,6 +79,8 @@ impl AppState {
             backup_actions: self.backups_rx.is_some() &&
             self.cfg.backups.requests_dir.is_some() &&
             self.cfg.allow_actions,
+            updates: self.updates.is_some(),
+            update_actions: self.updates.as_ref().is_some_and(|u| u.can_apply) && self.cfg.allow_actions,
         }
     }
 }

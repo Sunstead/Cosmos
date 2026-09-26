@@ -3,6 +3,9 @@ import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { HostInfo } from '@/generated/HostInfo';
 import { MetricStep } from '@/generated/MetricStep';
+import { UpdatePolicy } from '@/generated/UpdatePolicy';
+import { UpdatesResponse } from '@/generated/UpdatesResponse';
+import { UpdateUnit } from '@/generated/UpdateUnit';
 import { UptimeCheckInput } from '@/generated/UptimeCheckInput';
 import { UptimeEntry } from '@/generated/UptimeEntry';
 import { UptimeServiceInput } from '@/generated/UptimeServiceInput';
@@ -333,6 +336,109 @@ export function useWolActions() {
   );
 
   return { wake, save, remove, pending };
+}
+
+const UPDATES_POLL_MS = 60_000;
+/** While an update runs, so each step shows up. */
+const UPDATES_ACTIVE_POLL_MS = 5_000;
+
+export interface UpdateItem extends UpdateUnit {
+  nodeId: string;
+}
+
+export interface UpdatesView {
+  items: UpdateItem[];
+  /** Per node, the rest of its response: errors, whether it can apply, history. */
+  byNode: Record<string, UpdatesResponse>;
+  nodes: string[];
+  loading: boolean;
+  error: string | null;
+}
+
+const RUNNING_STATES = ['queued', 'dispatched', 'running', 'watching'];
+
+/** Update units across every node that checks for them. */
+export function useUpdates(pollMs = UPDATES_POLL_MS): UpdatesView {
+  const nodesKey = useNodeStore((s) =>
+    s.nodes
+      .filter((n) => s.meta[n.id]?.status === 'online' && s.meta[n.id]?.capabilities.updates)
+      .map((n) => n.id)
+      .join('|'),
+  );
+  const nodes = nodesKey ? nodesKey.split('|') : [];
+
+  return useQueries({
+    queries: nodes.map((nodeId) => ({
+      queryKey: ['updates', nodeId],
+      queryFn: () => {
+        const conn = getConnection(nodeId);
+        if (!conn) throw new Error('node is not connected');
+        return conn.client.getUpdates();
+      },
+      refetchInterval: (q: { state: { data?: UpdatesResponse } }) =>
+        q.state.data?.units.some((u) => u.run && RUNNING_STATES.includes(u.run.state))
+          ? UPDATES_ACTIVE_POLL_MS
+          : pollMs,
+      retry: 1,
+    })),
+    combine: (results) => {
+      const items: UpdateItem[] = [];
+      const byNode: Record<string, UpdatesResponse> = {};
+      results.forEach((r, i) => {
+        if (!r.data) return;
+        byNode[nodes[i]] = r.data;
+        for (const u of r.data.units) items.push({ ...u, nodeId: nodes[i] });
+      });
+      const failed = results.find((r) => r.error);
+      return {
+        items,
+        byNode,
+        nodes,
+        loading: results.some((r) => r.isLoading),
+        error: items.length === 0 && failed?.error ? failed.error.message : null,
+      };
+    },
+  });
+}
+
+/** Check, update, roll back and set policies, with toasts. */
+export function useUpdateActions() {
+  const client = useQueryClient();
+  const refresh = useCallback(
+    (nodeId: string) => client.invalidateQueries({ queryKey: ['updates', nodeId] }),
+    [client],
+  );
+  const run = useCallback(
+    async <T,>(nodeId: string, what: string, fn: (c: NonNullable<ReturnType<typeof getConnection>>) => Promise<T>) => {
+      const conn = getConnection(nodeId);
+      if (!conn) throw new Error('node is not connected');
+      try {
+        return await fn(conn);
+      } catch (e) {
+        toast.error(`Could not ${what}`, { description: e instanceof Error ? e.message : undefined });
+        throw e;
+      } finally {
+        await refresh(nodeId);
+      }
+    },
+    [refresh],
+  );
+
+  return {
+    check: (nodeId: string) => run(nodeId, 'check for updates', (c) => c.client.checkUpdates()),
+    apply: async (nodeId: string, unit: UpdateUnit, tag: string) => {
+      await run(nodeId, `update ${unit.name}`, (c) => c.client.applyUpdate(unit.id, tag));
+      toast.success(`Updating ${unit.name} to ${tag}`, {
+        description: 'The update workflow runs on the server. This page follows it.',
+      });
+    },
+    rollback: async (nodeId: string, unit: UpdateUnit) => {
+      await run(nodeId, `roll back ${unit.name}`, (c) => c.client.rollbackUpdate(unit.id));
+      toast.success(`Rolling back ${unit.name} to ${unit.previous}`);
+    },
+    policy: (nodeId: string, unit: UpdateUnit, policy: UpdatePolicy) =>
+      run(nodeId, `change updates for ${unit.name}`, (c) => c.client.setUpdatePolicy(unit.id, policy)),
+  };
 }
 
 const UPTIME_POLL_MS = 30_000;

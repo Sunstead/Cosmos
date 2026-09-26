@@ -217,6 +217,12 @@ impl DockerProbe {
             created_unix: c.created.unwrap_or(0),
             restart_count,
             compose_project: labels.get("com.docker.compose.project").cloned(),
+            compose_service: labels.get("com.docker.compose.service").cloned(),
+            update_labels: labels
+                .iter()
+                .filter(|(k, _)| k.as_str() == "cosmos.update" || k.starts_with("cosmos.update."))
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
             cosmos_service: labels.get("cosmos.service").cloned(),
             cosmos_service_description: labels.get("cosmos.service.description").cloned(),
             cosmos_service_url: labels.get("cosmos.service.url").cloned(),

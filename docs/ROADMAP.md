@@ -214,6 +214,10 @@ would. Kuma is retired once the checks have run for a while.*
   (and skip its v2 upgrade).
 
 ### C. Cosmos: updates (replaces Renovate)
+*In progress for 0.8: the Updates page, rules as compose labels, and
+`update.yml` in Jupiter as described below. Rollback of a service with a
+database also points at the `pre-update` backup, since a downgrade may not read
+a migrated database.*
 No GitHub PRs to merge. Updates happen from a Cosmos screen or automatically.
 - The agent checks registries for newer tags of the images it runs, on a slow
   schedule. The UI lists them with a release-notes link.
@@ -235,9 +239,9 @@ No GitHub PRs to merge. Updates happen from a Cosmos screen or automatically.
 - Renovate stays until this ships, then is removed.
 
 ### D. Cosmos: backup controls
-*In progress for 0.7 (Jupiter#22 for the host side): back up now, the weekly
-restore test with its result in Cosmos, and a restore guide that generates
-`scripts/restore.sh` commands.*
+*Shipped in 0.7 (Cosmos#16; Jupiter#22 for the host side): back up now, the
+weekly restore test with its result in Cosmos, and a restore guide that
+generates `scripts/restore.sh` commands.*
 - **Trigger backups from the UI** without the agent holding the restic password:
   the agent writes a request file into a directory the host watches (a systemd
   `.path` unit), which starts `jupiter-backup.service`. The status file reports

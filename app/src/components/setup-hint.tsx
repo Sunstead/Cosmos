@@ -82,6 +82,17 @@ export const SETUP = {
     file: 'agent.toml',
     snippet: '[uptime]\nenabled = true\nlocal_domains = ["example.net"]',
   },
+  updates: {
+    summary: 'Update the agent to 0.8 or later. Checking registries for newer tags is on by default.',
+    file: 'agent.toml',
+    snippet: '[updates]\nenabled = true',
+  },
+  updatesApply: {
+    summary:
+      'Set the repository whose update workflow bumps the tag and deploys, and give the agent a fine-grained GitHub token for it (Actions: read and write) as COSMOS_AGENT_GITHUB_TOKEN.',
+    file: 'agent.toml',
+    snippet: '[updates]\nrepo = "owner/infrastructure"\nworkflow = "update.yml"',
+  },
   wol: {
     summary: 'Turn on Wake-on-LAN on the agent of a node on the same LAN. Waking also needs allow_actions.',
     file: 'agent.toml',

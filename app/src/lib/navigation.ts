@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   Logs,
   Network,
+  PackageCheck,
   Server,
   Settings,
   type LucideIcon,
@@ -26,6 +27,7 @@ export type PagePath =
   | '/uptime'
   | '/logs'
   | '/backups'
+  | '/updates'
   | '/events'
   | '/settings';
 
@@ -48,13 +50,14 @@ export const PAGES: PageDef[] = [
   { path: '/logs', label: 'Logs', icon: Logs, shortcut: 'go.logs' },
   { path: '/backups', label: 'Backups', icon: Archive, shortcut: 'go.backups' },
   { path: '/events', label: 'Events', icon: Activity, shortcut: 'go.events' },
+  { path: '/updates', label: 'Updates', icon: PackageCheck, shortcut: 'go.updates' },
   { path: '/settings', label: 'Settings', icon: Settings, shortcut: 'settings' },
 ];
 
 export const NAV_GROUPS: { label: string | null; paths: PagePath[] }[] = [
   { label: null, paths: ['/overview', '/nodes', '/services'] },
   { label: 'Infrastructure', paths: ['/containers', '/volumes', '/network'] },
-  { label: 'Operations', paths: ['/monitoring', '/uptime', '/logs', '/events', '/backups'] },
+  { label: 'Operations', paths: ['/monitoring', '/uptime', '/logs', '/events', '/updates', '/backups'] },
   { label: null, paths: ['/settings'] },
 ];
 
