@@ -9,3 +9,4 @@ ts-rs = { version = "10", features = ["serde-compat"] }
 
 [dev-dependencies]
 ts-rs = { version = "10", features = ["serde-compat"] }
+serde_json = "1"

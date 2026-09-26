@@ -1,0 +1,170 @@
+use serde::{ Deserialize, Serialize };
+use ts_rs::TS;
+
+/// How much an event matters. Ordered, so a notification rule can compare
+/// against a minimum.
+#[derive(Serialize, Deserialize, TS, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[ts(export, export_to = "../../app/src/generated/")]
+#[serde(rename_all = "snake_case")]
+pub enum Severity {
+    Info,
+    Warning,
+    Error,
+}
+
+#[derive(Serialize, Deserialize, TS, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[ts(export, export_to = "../../app/src/generated/")]
+#[serde(rename_all = "snake_case")]
+pub enum EventCategory {
+    Container,
+    Backup,
+    Disk,
+    /// Something an admin did through Cosmos.
+    Action,
+    Wol,
+    /// The agent and the host it runs on: restarts, upgrades, reboots.
+    Agent,
+}
+
+#[derive(Serialize, Deserialize, TS, Debug, Clone, Copy, PartialEq, Eq)]
+#[ts(export, export_to = "../../app/src/generated/")]
+#[serde(rename_all = "snake_case")]
+pub enum ProblemState {
+    Opened,
+    Resolved,
+}
+
+/// The same names serde uses, for storing these as text.
+macro_rules! text_enum {
+    ($t:ty { $($variant:ident => $name:literal),+ $(,)? }) => {
+        impl $t {
+            pub fn as_str(self) -> &'static str {
+                match self { $(Self::$variant => $name),+ }
+            }
+            pub fn parse(s: &str) -> Option<Self> {
+                match s { $($name => Some(Self::$variant),)+ _ => None }
+            }
+        }
+    };
+}
+
+text_enum!(Severity { Info => "info", Warning => "warning", Error => "error" });
+text_enum!(EventCategory {
+    Container => "container",
+    Backup => "backup",
+    Disk => "disk",
+    Action => "action",
+    Wol => "wol",
+    Agent => "agent",
+});
+text_enum!(ProblemState { Opened => "opened", Resolved => "resolved" });
+
+/// Ties an event to the problem it opened or resolved.
+#[derive(Serialize, Deserialize, TS, Debug, Clone, PartialEq, Eq)]
+#[ts(export, export_to = "../../app/src/generated/")]
+pub struct ProblemRef {
+    pub key: String,
+    pub state: ProblemState,
+}
+
+/// One row of a node's event log. Append-only: nothing edits an event after
+/// it's written.
+#[derive(Serialize, Deserialize, TS, Debug, Clone, PartialEq)]
+#[ts(export, export_to = "../../app/src/generated/")]
+pub struct Event {
+    /// Increasing per node; the cursor for `?after=` and `?before=`.
+    #[ts(type = "number")]
+    pub id: i64,
+    /// Unix seconds.
+    #[ts(type = "number")]
+    pub at: i64,
+    pub category: EventCategory,
+    /// What happened within the category, e.g. `crashed`, `unhealthy`.
+    pub kind: String,
+    /// For a resolution, the severity of the problem it resolved.
+    pub severity: Severity,
+    /// What it happened to: a container name, a mount, a machine.
+    pub subject: String,
+    pub title: String,
+    pub detail: Option<String>,
+    /// Who did it, for actions taken through Cosmos.
+    pub actor: Option<String>,
+    /// The subject's `cosmos.service` label, when it has one.
+    pub service: Option<String>,
+    pub problem: Option<ProblemRef>,
+}
+
+/// A condition that's true now, such as a container that's unhealthy. It was
+/// opened by an event and is closed by a later one.
+#[derive(Serialize, Deserialize, TS, Debug, Clone, PartialEq)]
+#[ts(export, export_to = "../../app/src/generated/")]
+pub struct Problem {
+    /// Stable for the condition, e.g. `container:immich-server:unhealthy`.
+    pub key: String,
+    pub category: EventCategory,
+    pub kind: String,
+    pub severity: Severity,
+    pub subject: String,
+    pub title: String,
+    pub detail: Option<String>,
+    pub service: Option<String>,
+    #[ts(type = "number")]
+    pub opened_at: i64,
+    /// The event that opened it.
+    #[ts(type = "number")]
+    pub event_id: i64,
+}
+
+/// `GET /v1/events`.
+///
+/// With `?after=<id>`, the events after it, oldest first: what a client
+/// polling for new events appends. Otherwise the newest events (before
+/// `?before=<id>` if given), newest first: a page of the timeline.
+#[derive(Serialize, Deserialize, TS, Debug, Clone)]
+#[ts(export, export_to = "../../app/src/generated/")]
+pub struct EventsResponse {
+    pub events: Vec<Event>,
+    /// Every problem open now, whatever page was asked for.
+    pub problems: Vec<Problem>,
+    /// The newest event's id (0 for an empty log), so a client knows where
+    /// to poll from even when it asked for an older page.
+    #[ts(type = "number")]
+    pub latest_id: i64,
+    /// The page was cut at the limit: there are more events in the direction
+    /// asked for.
+    pub more: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The text form is what's stored, so it must match serde's exactly.
+    #[test]
+    fn text_names_match_serde() {
+        for s in [Severity::Info, Severity::Warning, Severity::Error] {
+            assert_eq!(serde_json::to_string(&s).unwrap(), format!("\"{}\"", s.as_str()));
+            assert_eq!(Severity::parse(s.as_str()), Some(s));
+        }
+        for c in [
+            EventCategory::Container,
+            EventCategory::Backup,
+            EventCategory::Disk,
+            EventCategory::Action,
+            EventCategory::Wol,
+            EventCategory::Agent,
+        ] {
+            assert_eq!(serde_json::to_string(&c).unwrap(), format!("\"{}\"", c.as_str()));
+            assert_eq!(EventCategory::parse(c.as_str()), Some(c));
+        }
+        for p in [ProblemState::Opened, ProblemState::Resolved] {
+            assert_eq!(serde_json::to_string(&p).unwrap(), format!("\"{}\"", p.as_str()));
+        }
+        assert_eq!(Severity::parse("fatal"), None);
+    }
+
+    #[test]
+    fn severities_order_by_how_much_they_matter() {
+        assert!(Severity::Info < Severity::Warning && Severity::Warning < Severity::Error);
+    }
+}

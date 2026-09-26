@@ -13,6 +13,7 @@ use bollard::{
     Docker,
 };
 use cosmos_common::types::{
+    ContainerHealth,
     ContainerInfo,
     ContainersResponse,
     PortInfo,
@@ -23,13 +24,15 @@ use cosmos_common::types::{
 use futures_util::StreamExt;
 use std::{ collections::{ HashMap, HashSet }, sync::Arc };
 
-/// Only the serialized form is retained: every consumer is an HTTP response,
-/// so keeping the typed value too would hold a second copy of the whole
-/// container list for the life of each tick. The one exception is the IDs of
-/// running containers, which the all-containers log stream follows.
+/// The serialized form for HTTP responses, plus the typed list for the
+/// consumers inside the agent: the all-containers log stream follows the
+/// running IDs, and the event log checks health and restarts. A few dozen
+/// small structs, shared by `Arc`, not copied per reader.
 pub struct ContainerSnapshot {
     pub json: Arc<str>,
     pub running: Arc<[String]>,
+    pub containers: Arc<[ContainerInfo]>,
+    pub sampled_at: i64,
 }
 
 pub struct VolumeSnapshot {
@@ -54,11 +57,18 @@ impl ContainerSnapshot {
             .map(|c| c.id.clone())
             .collect();
         let response = ContainersResponse { containers, sampled_at: unix_now() };
-        Self { json: encode(&response, "containers"), running }
+        Self {
+            json: encode(&response, "containers"),
+            running,
+            sampled_at: response.sampled_at,
+            containers: response.containers.into(),
+        }
     }
 
+    /// Before the first sample. `sampled_at` 0 tells the event log it isn't
+    /// an empty host.
     pub fn empty() -> Self {
-        Self::new(Vec::new())
+        Self { sampled_at: 0, ..Self::new(Vec::new()) }
     }
 }
 
@@ -178,11 +188,13 @@ impl DockerProbe {
 
         let (started_at, restart_count) = self.started_at(docker, &id, &state).await;
 
+        let status = c.status.unwrap_or_default();
         Some(ContainerInfo {
             id,
             name,
             image: c.image.unwrap_or_default(),
-            status: c.status.unwrap_or_default(),
+            health: ContainerHealth::from_status(&status),
+            status,
             state,
             ports: c.ports
                 .unwrap_or_default()

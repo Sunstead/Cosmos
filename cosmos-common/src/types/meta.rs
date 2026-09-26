@@ -81,6 +81,17 @@ pub struct Capabilities {
     /// Absent from agents before 0.4.
     #[serde(default)]
     pub all_logs: bool,
+    /// `/v1/events`: the node's event log and open problems. Absent from
+    /// agents before 0.5.
+    #[serde(default)]
+    pub events: bool,
+    /// `/v1/notify`: notification channels (admins only). Absent from agents
+    /// before 0.5.
+    #[serde(default)]
+    pub notify: bool,
+    /// Editing channels: `notify` plus `allow_actions`.
+    #[serde(default)]
+    pub notify_actions: bool,
 }
 
 impl Capabilities {
@@ -101,6 +112,9 @@ impl Capabilities {
             wol_actions: false,
             volume_stream: false,
             all_logs: false,
+            events: false,
+            notify: false,
+            notify_actions: false,
         }
     }
 }

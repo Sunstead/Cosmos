@@ -60,6 +60,9 @@ export function agentInfo(partial: Partial<AgentInfo> = {}): AgentInfo {
       wol_actions: true,
       volume_stream: true,
       all_logs: true,
+      events: true,
+      notify: true,
+      notify_actions: true,
     },
     ...partial,
   };

@@ -47,19 +47,20 @@ struct StatusFile {
     heartbeat: Option<StepStatus>,
 }
 
-/// Only the serialized form is retained, matching the other snapshot types:
-/// every consumer is an HTTP response.
+/// The serialized form for HTTP responses, and the typed status for the
+/// event log, which opens a problem when a backup fails or goes stale.
 pub struct BackupSnapshot {
     pub json: Arc<str>,
+    pub status: Arc<BackupsStatus>,
 }
 
 impl BackupSnapshot {
-    fn new(status: &BackupsStatus) -> Self {
+    fn new(status: BackupsStatus) -> Self {
         let json: Arc<str> = serde_json
-            ::to_string(status)
+            ::to_string(&status)
             .unwrap_or_else(|_| "{}".to_string())
             .into();
-        Self { json }
+        Self { json, status: Arc::new(status) }
     }
 }
 
@@ -99,7 +100,7 @@ impl BackupsProvider {
             self.last_mtime = mtime;
         }
 
-        Some(BackupSnapshot::new(&self.build()))
+        Some(BackupSnapshot::new(self.build()))
     }
 
     /// The typed status, before serialization.
@@ -204,7 +205,7 @@ fn is_stale(generated_at: &str, expected_interval_secs: u64) -> bool {
 
 /// Minimal RFC3339 parser for the `YYYY-MM-DDTHH:MM:SS` prefix, which is all
 /// the backup script emits. Avoids a date-time dependency for two functions.
-fn parse_rfc3339(s: &str) -> Option<i64> {
+pub(crate) fn parse_rfc3339(s: &str) -> Option<i64> {
     let bytes = s.as_bytes();
     if bytes.len() < 19 {
         return None;
@@ -232,7 +233,7 @@ fn parse_rfc3339(s: &str) -> Option<i64> {
     Some(secs)
 }
 
-fn format_rfc3339(unix: i64) -> String {
+pub(crate) fn format_rfc3339(unix: i64) -> String {
     let (days, rem) = (unix.div_euclid(86_400), unix.rem_euclid(86_400));
     let (y, m, d) = civil_from_days(days);
     format!(

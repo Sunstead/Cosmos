@@ -174,8 +174,14 @@ pub fn spawn_volumes(docker: DockerHandle) -> watch::Receiver<Arc<VolumeSnapshot
     rx
 }
 
-/// Watches the Docker event stream and pokes the samplers it affects.
-pub fn spawn_event_watcher(docker: DockerHandle) {
+/// Watches the Docker event stream. With `poke`, wakes the samplers an event
+/// affects; with `forward`, hands every event to the event log's container
+/// tracker. A full forward queue drops events rather than stall the pokes.
+pub fn spawn_event_watcher(
+    docker: DockerHandle,
+    poke: bool,
+    forward: Option<tokio::sync::mpsc::Sender<bollard::models::EventMessage>>
+) {
     tokio::spawn(async move {
         loop {
             let Some(client) = docker.client() else {
@@ -199,7 +205,14 @@ pub fn spawn_event_watcher(docker: DockerHandle) {
             tracing::debug!("watching docker events");
             while let Some(event) = events.next().await {
                 match event {
-                    Ok(event) => poke_for_event(&docker, &event),
+                    Ok(event) => {
+                        if poke {
+                            poke_for_event(&docker, &event);
+                        }
+                        if let Some(tx) = &forward {
+                            let _ = tx.try_send(event);
+                        }
+                    }
                     Err(e) => {
                         tracing::debug!(error = %e, "docker event stream ended");
                         break;
