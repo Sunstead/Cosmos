@@ -136,6 +136,18 @@ interval_ms = 10000
 # How long to watch for a machine to come up before calling the wake failed.
 wake_timeout_secs = 180
 
+[events]
+# The Events page: container crashes and health, backups, disk space, admin
+# actions and wakes, and the problems open now. Kept in [state] path.
+enabled = true
+# Older events are deleted, except one that opened a problem still open.
+retain_days = 180
+# A filesystem this full opens a warning, and this full an error. Each clears
+# 5 points below.
+disk_warn_pct = 85
+disk_critical_pct = 95
+
 [state]
-# Settings edited from the UI. Must be on the writable volume.
+# Settings edited from the UI, and the event log. Must be on the writable
+# volume.
 path = "/var/lib/cosmos-agent/state.db"

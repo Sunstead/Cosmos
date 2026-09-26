@@ -81,6 +81,10 @@ pub struct Capabilities {
     /// Absent from agents before 0.4.
     #[serde(default)]
     pub all_logs: bool,
+    /// `/v1/events`: the node's event log and open problems. Absent from
+    /// agents before 0.5.
+    #[serde(default)]
+    pub events: bool,
 }
 
 impl Capabilities {
@@ -101,6 +105,7 @@ impl Capabilities {
             wol_actions: false,
             volume_stream: false,
             all_logs: false,
+            events: false,
         }
     }
 }

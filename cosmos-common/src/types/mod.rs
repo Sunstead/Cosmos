@@ -19,6 +19,7 @@
 pub mod backups;
 pub mod docker;
 pub mod error;
+pub mod events;
 pub mod history;
 pub mod host;
 pub mod meta;
@@ -30,6 +31,7 @@ pub mod wol;
 pub use backups::*;
 pub use docker::*;
 pub use error::*;
+pub use events::*;
 pub use history::*;
 pub use host::*;
 pub use meta::*;

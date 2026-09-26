@@ -9,6 +9,7 @@ use crate::{
     backups::BackupSnapshot,
     config::Config,
     docker::DockerHandle,
+    events::EventsHandle,
     history::HistoryHandle,
     sample::{
         docker::{ ContainerSnapshot, VolumeSnapshot },
@@ -38,6 +39,7 @@ pub struct Inner {
     pub backups_rx: Option<watch::Receiver<Arc<BackupSnapshot>>>,
     pub tailnet_rx: Option<watch::Receiver<Arc<TailnetSnapshot>>>,
     pub wol: Option<WolHandle>,
+    pub events: Option<EventsHandle>,
 }
 
 impl AppState {
@@ -61,6 +63,7 @@ impl AppState {
             wol_actions: self.wol.is_some() && self.cfg.allow_actions,
             volume_stream: true,
             all_logs: self.cfg.docker.allow_logs,
+            events: self.events.is_some(),
         }
     }
 }
