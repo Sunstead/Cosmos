@@ -103,6 +103,12 @@ async fn attempt(client: &reqwest::Client, ch: &Channel, msg: &Message, e: &Even
     Err(if body.is_empty() { format!("HTTP {status}") } else { format!("HTTP {status}: {body}") })
 }
 
+/// One try, for a test from the app: whoever pressed the button wants the
+/// answer now, not after the retries.
+pub async fn deliver_once(client: &reqwest::Client, ch: &Channel, e: &Event, node: &str, link_url: Option<&str>) -> Result<(), String> {
+    attempt(client, ch, &message(e, node, link_url), e, node).await
+}
+
 /// Tries up to three times. A 4xx won't get better on its own, so it isn't
 /// retried.
 pub async fn deliver(client: &reqwest::Client, ch: &Channel, e: &Event, node: &str, link_url: Option<&str>) -> Result<(), String> {

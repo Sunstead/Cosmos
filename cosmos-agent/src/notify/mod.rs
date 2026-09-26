@@ -185,7 +185,7 @@ impl NotifyHandle {
     }
 
     /// Sends a test message now, whatever the channel's rules, and records
-    /// how it went.
+    /// how it went. One try, so a wrong address or token shows at once.
     pub async fn test(&self, ch: &Channel) -> Result<(), String> {
         let link = self.store.call(db::settings).await.ok().and_then(|s| s.link_url);
         let event = Event {
@@ -201,7 +201,7 @@ impl NotifyHandle {
             service: None,
             problem: None,
         };
-        let result = send::deliver(&self.client, ch, &event, &self.node, link.as_deref()).await;
+        let result = send::deliver_once(&self.client, ch, &event, &self.node, link.as_deref()).await;
         let _ = self.tx.send(Command::Delivered { id: ch.id, at: unix_now(), result: result.clone() }).await;
         result
     }
