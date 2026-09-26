@@ -267,6 +267,35 @@ test.describe('with a node', () => {
     server.close();
   });
 
+  test('an uptime check added in the dialog reports its first run', async ({ page }) => {
+    const server = createServer((_req, res) => res.writeHead(204).end());
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as { port: number }).port;
+
+    await addNodeOnline(page);
+    await page.goto('/uptime');
+    const add = async (name: string, url: string) => {
+      await page.getByRole('button', { name: 'Add check' }).click();
+      const dialog = page.getByRole('dialog');
+      await dialog.getByLabel('Name').fill(name);
+      await dialog.getByLabel('URL').fill(url);
+      expect(await overflowing(dialog)).toEqual([]);
+      await dialog.getByRole('button', { name: 'Add' }).click();
+      await expect(dialog).toBeHidden();
+    };
+
+    await add('e2e-up', `http://127.0.0.1:${port}/`);
+    await expect(page.getByText("It's up, answering in")).toBeVisible();
+    const up = section(page, 'Checks').locator('[data-check]', { hasText: 'e2e-up' });
+    await expect(up).toContainText('100%');
+
+    server.close();
+    await add('e2e-refused', `http://127.0.0.1:${port}/`);
+    await expect(page.getByText('Added e2e-refused, but it failed')).toBeVisible();
+    const down = section(page, 'Checks').locator('[data-check]', { hasText: 'e2e-refused' });
+    await expect(down).toContainText("couldn't connect");
+  });
+
   test('the add machine dialog keeps every field inside it', async ({ page }, info) => {
     await addNodeOnline(page);
     await page.goto('/network');

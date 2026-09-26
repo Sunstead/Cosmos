@@ -15,7 +15,7 @@ struct MenuPayload<'a> {
 }
 
 /// Id, label and accelerator; must match `SHORTCUTS` in `lib/shortcuts.ts`.
-const PAGES: [(&str, &str, &str); 10] = [
+const PAGES: [(&str, &str, &str); 11] = [
     ("overview", "Overview", "CmdOrCtrl+1"),
     ("nodes", "Nodes", "CmdOrCtrl+2"),
     ("services", "Services", "CmdOrCtrl+3"),
@@ -23,6 +23,7 @@ const PAGES: [(&str, &str, &str); 10] = [
     ("volumes", "Volumes", "CmdOrCtrl+5"),
     ("network", "Network", "CmdOrCtrl+6"),
     ("monitoring", "Monitoring", "CmdOrCtrl+7"),
+    ("uptime", "Uptime", "CmdOrCtrl+Shift+U"),
     ("logs", "Logs", "CmdOrCtrl+8"),
     ("backups", "Backups", "CmdOrCtrl+9"),
     ("events", "Events", "CmdOrCtrl+Shift+E"),

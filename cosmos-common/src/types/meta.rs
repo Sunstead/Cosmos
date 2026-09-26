@@ -92,6 +92,12 @@ pub struct Capabilities {
     /// Editing channels: `notify` plus `allow_actions`.
     #[serde(default)]
     pub notify_actions: bool,
+    /// `/v1/uptime`: HTTP and TCP checks. Absent from agents before 0.6.
+    #[serde(default)]
+    pub uptime: bool,
+    /// Adding and editing checks: `uptime` plus `allow_actions`.
+    #[serde(default)]
+    pub uptime_actions: bool,
 }
 
 impl Capabilities {
@@ -115,6 +121,8 @@ impl Capabilities {
             events: false,
             notify: false,
             notify_actions: false,
+            uptime: false,
+            uptime_actions: false,
         }
     }
 }

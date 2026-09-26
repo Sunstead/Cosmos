@@ -1,9 +1,12 @@
+import { ContainerHealth } from '@/generated/ContainerHealth';
 import { ContainerInfo } from '@/generated/ContainerInfo';
 
 export type ContainerSummary = {
   id: string;
   name: string;
   state: string;
+  /** Docker's health check, when the container has one. */
+  health?: ContainerHealth | null;
 };
 
 export type ServiceStatus = 'running' | 'partial' | 'stopped';
@@ -75,10 +78,11 @@ export function deriveNodeServices(
         .filter((t) => Number.isFinite(t))
         .sort((a, b) => a - b)[0] ?? null;
 
+    const unhealthy = runningContainers.some((c) => c.health === 'unhealthy');
     const status: ServiceStatus =
       runningContainers.length === 0
         ? 'stopped'
-        : runningContainers.length < total
+        : runningContainers.length < total || unhealthy
           ? 'partial'
           : 'running';
 
@@ -92,7 +96,7 @@ export function deriveNodeServices(
       cpu_pct: group.reduce((sum, c) => sum + c.cpu_pct, 0),
       mem_used_bytes: group.reduce((sum, c) => sum + c.mem_used_bytes, 0),
       startedAt,
-      containers: group.map((c) => ({ id: c.id, name: c.name, state: c.state })),
+      containers: group.map((c) => ({ id: c.id, name: c.name, state: c.state, health: c.health ?? null })),
       running: runningContainers.length,
       total,
       status,

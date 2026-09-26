@@ -19,6 +19,7 @@ export const SHORTCUTS = {
   'go.logs': 'mod+8',
   'go.backups': 'mod+9',
   'go.events': 'mod+shift+e',
+  'go.uptime': 'mod+shift+u',
 } as const satisfies Record<string, Chord>;
 
 export type ShortcutId = keyof typeof SHORTCUTS;
