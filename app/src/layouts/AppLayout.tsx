@@ -3,11 +3,13 @@ import { AppSidebar } from '@/components/app-sidebar';
 import { TitleBar } from '@/components/title-bar';
 import { CommandHost } from '@/components/command-host';
 import { WolWatcher } from '@/components/wol-watcher';
+import { NotificationWatcher } from '@/components/notification-watcher';
 import { AddNodeDialog } from '@/components/add-node';
 import { CommandPalette } from '@/components/command-palette';
 import { SidebarInset, SidebarProvider } from '@/components/ui/resizable-sidebar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useStatusToasts } from '@/hooks/use-status-toasts';
+import { useUnreachableAlerts } from '@/hooks/use-unreachable-alerts';
 
 export type PageLayout = 'scroll' | 'fill';
 
@@ -24,11 +26,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const matches = useMatches();
   const layout = matches.at(-1)?.staticData.layout ?? 'scroll';
   useStatusToasts();
+  useUnreachableAlerts();
 
   return (
     <SidebarProvider className='h-full flex-col'>
       <CommandHost />
       <WolWatcher />
+      <NotificationWatcher />
       <AddNodeDialog />
       <CommandPalette />
       <TitleBar />

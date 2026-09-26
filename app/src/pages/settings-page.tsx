@@ -21,6 +21,7 @@ import { PAGES } from '@/lib/navigation';
 import { ShortcutId } from '@/lib/shortcuts';
 import { getPlatform } from '@/lib/platform';
 import { ServerOff } from 'lucide-react';
+import { DeviceNotifications, NodeChannels } from '@/components/notify-settings';
 
 const CAPS = [
   ['container_actions', 'Actions'],
@@ -129,6 +130,14 @@ const PLATFORM_LABEL = { macos: 'macOS', windows: 'Windows', linux: 'Linux', web
 export function SettingsPage() {
   const nodes = useNodeStore((s) => s.nodes);
   const { theme, setTheme } = useTheme();
+  // Joined so the list only changes when a node gains or loses the feature.
+  const notifyKey = useNodeStore((s) =>
+    s.nodes
+      .filter((n) => s.meta[n.id]?.capabilities.notify)
+      .map((n) => n.id)
+      .join('|'),
+  );
+  const notifyNodes = notifyKey ? notifyKey.split('|') : [];
 
   return (
     <>
@@ -158,6 +167,11 @@ export function SettingsPage() {
       >
         <AccountList />
       </Section>
+
+      <DeviceNotifications />
+      {notifyNodes.map((id) => (
+        <NodeChannels key={id} nodeId={id} />
+      ))}
 
       <div className='grid gap-4 @4xl:grid-cols-2'>
         <Section title='Appearance' contentClassName='flex items-center justify-between gap-4 p-4'>
