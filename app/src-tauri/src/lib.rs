@@ -14,6 +14,7 @@ pub fn run() {
         ::default()
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(
             tauri::generate_handler![
                 oidc::oidc_sign_in,

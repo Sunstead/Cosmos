@@ -1,4 +1,5 @@
 import {
+  Activity,
   Archive,
   ChartLine,
   Container,
@@ -23,6 +24,7 @@ export type PagePath =
   | '/monitoring'
   | '/logs'
   | '/backups'
+  | '/events'
   | '/settings';
 
 export interface PageDef {
@@ -42,13 +44,14 @@ export const PAGES: PageDef[] = [
   { path: '/monitoring', label: 'Monitoring', icon: ChartLine, shortcut: 'go.monitoring' },
   { path: '/logs', label: 'Logs', icon: Logs, shortcut: 'go.logs' },
   { path: '/backups', label: 'Backups', icon: Archive, shortcut: 'go.backups' },
+  { path: '/events', label: 'Events', icon: Activity, shortcut: 'go.events' },
   { path: '/settings', label: 'Settings', icon: Settings, shortcut: 'settings' },
 ];
 
 export const NAV_GROUPS: { label: string | null; paths: PagePath[] }[] = [
   { label: null, paths: ['/overview', '/nodes', '/services'] },
   { label: 'Infrastructure', paths: ['/containers', '/volumes', '/network'] },
-  { label: 'Operations', paths: ['/monitoring', '/logs', '/backups'] },
+  { label: 'Operations', paths: ['/monitoring', '/logs', '/events', '/backups'] },
   { label: null, paths: ['/settings'] },
 ];
 

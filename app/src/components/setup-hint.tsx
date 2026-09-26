@@ -51,6 +51,11 @@ export const SETUP = {
     file: 'agent.toml',
     snippet: '[history]\nenabled = true',
   },
+  events: {
+    summary: 'Update the agent to 0.5 or later, and give it a writable state path. The event log is on by default.',
+    file: 'agent.toml',
+    snippet: '[events]\nenabled = true\n\n[state]\npath = "/var/lib/cosmos-agent/state.db"',
+  },
   backups: {
     summary: 'Enable backups on the agent, then call cosmos-backup-status.sh at the end of your backup job.',
     file: 'agent.toml',

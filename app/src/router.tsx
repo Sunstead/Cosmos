@@ -117,6 +117,12 @@ const logsRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages/logs-page'), 'LogsPage'),
 });
 
+const eventsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/events',
+  component: lazyRouteComponent(() => import('./pages/events-page'), 'EventsPage'),
+});
+
 const backupsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/backups',
@@ -147,6 +153,7 @@ const routeTree = rootRoute.addChildren([
   monitoringRoute,
   logsRoute,
   backupsRoute,
+  eventsRoute,
   settingsRoute,
   authCallbackRoute,
 ]);
