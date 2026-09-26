@@ -3,10 +3,15 @@ import { ApiError } from '@/generated/ApiError';
 import { BackupsStatus } from '@/generated/BackupsStatus';
 import { ContainerActionResult } from '@/generated/ContainerActionResult';
 import { ContainersResponse } from '@/generated/ContainersResponse';
+import { EventsResponse } from '@/generated/EventsResponse';
 import { HostInfo } from '@/generated/HostInfo';
 import { LogsResponse } from '@/generated/LogsResponse';
 import { MetricSeries } from '@/generated/MetricSeries';
 import { MetricStep } from '@/generated/MetricStep';
+import { NotifyChannel } from '@/generated/NotifyChannel';
+import { NotifyChannelInput } from '@/generated/NotifyChannelInput';
+import { NotifyResponse } from '@/generated/NotifyResponse';
+import { NotifySettings } from '@/generated/NotifySettings';
 import { VolumesResponse } from '@/generated/VolumesResponse';
 import { Capabilities } from '@/generated/Capabilities';
 import { TailnetStatus } from '@/generated/TailnetStatus';
@@ -177,6 +182,24 @@ export class AgentClient {
     return this.request<WolResponse>('/v1/wol');
   }
 
+  /**
+   * The event log. `after`: what's new since that id, oldest first. Otherwise
+   * the newest page (before `before`, if given), newest first. Always with the
+   * problems open now.
+   */
+  getEvents(opts: { after?: number; before?: number; limit?: number } = {}): Promise<EventsResponse> {
+    const params = new URLSearchParams();
+    if (opts.after !== undefined) params.set('after', String(opts.after));
+    if (opts.before !== undefined) params.set('before', String(opts.before));
+    if (opts.limit !== undefined) params.set('limit', String(opts.limit));
+    return this.request<EventsResponse>(`/v1/events?${params}`);
+  }
+
+  /** Admin only: notification channels (never their secrets) and settings. */
+  getNotify(): Promise<NotifyResponse> {
+    return this.request<NotifyResponse>('/v1/notify');
+  }
+
   /** Admin only: machines in the host's ARP table, to pick a MAC from. */
   getWolNeighbors(): Promise<WolNeighborsResponse> {
     return this.request<WolNeighborsResponse>('/v1/wol/neighbors');
@@ -274,6 +297,40 @@ export class AgentClient {
   wake(id: string): Promise<WolEntry> {
     return this.request<WolEntry>(`/v1/wol/targets/${encodeURIComponent(id)}/wake`, {
       method: 'POST',
+    });
+  }
+
+  createNotifyChannel(input: NotifyChannelInput): Promise<NotifyChannel> {
+    return this.request<NotifyChannel>('/v1/notify/channels', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+  }
+
+  /** Leave `secret` out of `input` to keep the saved one. */
+  updateNotifyChannel(id: string, input: NotifyChannelInput): Promise<NotifyChannel> {
+    return this.request<NotifyChannel>(`/v1/notify/channels/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+  }
+
+  deleteNotifyChannel(id: string): Promise<void> {
+    return this.request<void>(`/v1/notify/channels/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
+  /** Sends a test message now. Rejects with the channel's reason if it fails. */
+  testNotifyChannel(id: string): Promise<void> {
+    return this.request<void>(`/v1/notify/channels/${encodeURIComponent(id)}/test`, { method: 'POST' });
+  }
+
+  saveNotifySettings(settings: NotifySettings): Promise<NotifySettings> {
+    return this.request<NotifySettings>('/v1/notify/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settings),
     });
   }
 

@@ -8,6 +8,8 @@ import { sumDisk, getMemUsagePct } from '@/lib/node-metrics';
 import { clearNodeSeries, pushSample, resetNodeSeries } from './metrics-history';
 import { useContainersStore } from './containers';
 import { useVolumesStore } from './volumes';
+import { useEventsStore } from './events';
+import { Event } from '@/generated/Event';
 
 export interface NodeConfig {
   id: string;
@@ -75,6 +77,15 @@ export function onNodeStatusChange(fn: StatusListener): () => void {
   return () => statusListeners.delete(fn);
 }
 
+/** Events that are news: not the history loaded on connect. */
+type NewEventsListener = (nodeId: string, events: Event[]) => void;
+const newEventListeners = new Set<NewEventsListener>();
+
+export function onNewEvents(fn: NewEventsListener): () => void {
+  newEventListeners.add(fn);
+  return () => newEventListeners.delete(fn);
+}
+
 function attach(nodeId: string, url: string): NodeConnection {
   const conn = new NodeConnection(nodeId, url, getAccessToken);
   connections.set(nodeId, conn);
@@ -118,6 +129,13 @@ function attach(nodeId: string, url: string): NodeConnection {
     useVolumesStore.getState().setNodeVolumes(nodeId, volumes);
   });
 
+  conn.onEvents((update) => {
+    useEventsStore.getState().apply(nodeId, update);
+    if (!update.initial && update.events.length) {
+      for (const fn of newEventListeners) fn(nodeId, update.events);
+    }
+  });
+
   // Agent restarted: old points don't join up with the new deltas.
   conn.onReset(() => resetNodeSeries(nodeId));
 
@@ -131,6 +149,7 @@ function detach(nodeId: string) {
   clearNodeSeries(nodeId);
   useContainersStore.getState().removeNode(nodeId);
   useVolumesStore.getState().removeNode(nodeId);
+  useEventsStore.getState().removeNode(nodeId);
 }
 
 /** Accepts both the current shape and the pre-alias `{ name }` shape. */

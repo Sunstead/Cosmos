@@ -4,6 +4,9 @@ import { HostInfo } from '@/generated/HostInfo';
 import { TailnetDevice } from '@/generated/TailnetDevice';
 import { TailnetStatus } from '@/generated/TailnetStatus';
 import { WolEntry } from '@/generated/WolEntry';
+import { Event } from '@/generated/Event';
+import { EventsResponse } from '@/generated/EventsResponse';
+import { Problem } from '@/generated/Problem';
 
 export function hostInfo(partial: Partial<HostInfo> = {}): HostInfo {
   return {
@@ -152,4 +155,41 @@ export function signedIn(token = 'tok') {
       groups: ['homelab-admins'],
     },
   };
+}
+
+export function event(partial: Partial<Event> = {}): Event {
+  return {
+    id: 1,
+    at: 1_790_000_000,
+    category: 'container',
+    kind: 'crashed',
+    severity: 'error',
+    subject: 'gitea',
+    title: 'gitea crashed (exit 1)',
+    detail: 'Exited with code 1.',
+    actor: null,
+    service: 'gitea',
+    problem: null,
+    ...partial,
+  };
+}
+
+export function problem(partial: Partial<Problem> = {}): Problem {
+  return {
+    key: 'container:gitea:unhealthy',
+    category: 'container',
+    kind: 'unhealthy',
+    severity: 'warning',
+    subject: 'gitea',
+    title: 'gitea is unhealthy',
+    detail: null,
+    service: 'gitea',
+    opened_at: 1_790_000_000,
+    event_id: 1,
+    ...partial,
+  };
+}
+
+export function eventsResponse(partial: Partial<EventsResponse> = {}): EventsResponse {
+  return { events: [], problems: [], latest_id: 0, more: false, ...partial };
 }

@@ -9,6 +9,8 @@ import { WolTargetInput } from '@/generated/WolTargetInput';
 import { getConnection, useNodeStore } from '@/stores/nodes';
 import { Device, mergeTailnets } from '@/lib/tailnet';
 import { NodeMeta } from './connection';
+import { NotifyChannelInput } from '@/generated/NotifyChannelInput';
+import { NotifySettings } from '@/generated/NotifySettings';
 
 /**
  * Connection status, capabilities and agent version. Changes only on transitions.
@@ -391,4 +393,99 @@ export function useTick(intervalMs = 60_000): number {
 /** The current time, updated every `intervalMs`, without reading the clock in render. */
 export function useNow(intervalMs = 60_000): number {
   return useTick(intervalMs) * intervalMs;
+}
+
+/** Channels change rarely; the poll is for their delivery status. */
+const NOTIFY_POLL_MS = 30_000;
+
+/** A node's notification channels and settings. Admins only. */
+export function useNotify(nodeId: string | null) {
+  const meta = useNodeMeta(nodeId);
+  const supported = meta?.capabilities.notify ?? false;
+  return useQuery({
+    queryKey: ['notify', nodeId],
+    queryFn: () => {
+      const conn = getConnection(nodeId!);
+      if (!conn) throw new Error('node is not connected');
+      return conn.client.getNotify();
+    },
+    enabled: !!nodeId && supported && meta?.status === 'online',
+    refetchInterval: NOTIFY_POLL_MS,
+    retry: 1,
+  });
+}
+
+/** Add, edit, remove and test channels, and save settings, with toasts. */
+export function useNotifyActions() {
+  const client = useQueryClient();
+  const [pending, setPending] = useState<string | null>(null);
+
+  const refresh = useCallback(
+    (nodeId: string) => client.invalidateQueries({ queryKey: ['notify', nodeId] }),
+    [client],
+  );
+
+  const save = useCallback(
+    async (nodeId: string, input: NotifyChannelInput, id?: string) => {
+      const conn = getConnection(nodeId);
+      if (!conn) throw new Error('node is not connected');
+      if (id) await conn.client.updateNotifyChannel(id, input);
+      else await conn.client.createNotifyChannel(input);
+      await refresh(nodeId);
+      toast.success(id ? `Saved ${input.name}` : `Added ${input.name}`);
+    },
+    [refresh],
+  );
+
+  const remove = useCallback(
+    async (nodeId: string, id: string, name: string) => {
+      const conn = getConnection(nodeId);
+      if (!conn) return false;
+      try {
+        await conn.client.deleteNotifyChannel(id);
+        await refresh(nodeId);
+        toast.success(`Removed ${name}`);
+        return true;
+      } catch (e) {
+        toast.error(`Could not remove ${name}`, { description: e instanceof Error ? e.message : undefined });
+        return false;
+      }
+    },
+    [refresh],
+  );
+
+  const test = useCallback(
+    async (nodeId: string, id: string, name: string) => {
+      const conn = getConnection(nodeId);
+      if (!conn) return;
+      setPending(`test:${nodeId}:${id}`);
+      try {
+        await conn.client.testNotifyChannel(id);
+        toast.success(`Sent a test to ${name}`);
+      } catch (e) {
+        toast.error(`${name} did not get it`, { description: e instanceof Error ? e.message : undefined });
+      } finally {
+        setPending(null);
+        await refresh(nodeId);
+      }
+    },
+    [refresh],
+  );
+
+  const saveSettings = useCallback(
+    async (nodeId: string, settings: NotifySettings) => {
+      const conn = getConnection(nodeId);
+      if (!conn) return;
+      try {
+        await conn.client.saveNotifySettings(settings);
+        await refresh(nodeId);
+        toast.success('Saved');
+      } catch (e) {
+        toast.error('Could not save', { description: e instanceof Error ? e.message : undefined });
+      }
+    },
+    [refresh],
+  );
+
+  return { save, remove, test, saveSettings, pending };
 }

@@ -14,16 +14,18 @@ struct MenuPayload<'a> {
     id: &'a str,
 }
 
-const PAGES: [(&str, &str); 9] = [
-    ("overview", "Overview"),
-    ("nodes", "Nodes"),
-    ("services", "Services"),
-    ("containers", "Containers"),
-    ("volumes", "Volumes"),
-    ("network", "Network"),
-    ("monitoring", "Monitoring"),
-    ("logs", "Logs"),
-    ("backups", "Backups"),
+/// Id, label and accelerator; must match `SHORTCUTS` in `lib/shortcuts.ts`.
+const PAGES: [(&str, &str, &str); 10] = [
+    ("overview", "Overview", "CmdOrCtrl+1"),
+    ("nodes", "Nodes", "CmdOrCtrl+2"),
+    ("services", "Services", "CmdOrCtrl+3"),
+    ("containers", "Containers", "CmdOrCtrl+4"),
+    ("volumes", "Volumes", "CmdOrCtrl+5"),
+    ("network", "Network", "CmdOrCtrl+6"),
+    ("monitoring", "Monitoring", "CmdOrCtrl+7"),
+    ("logs", "Logs", "CmdOrCtrl+8"),
+    ("backups", "Backups", "CmdOrCtrl+9"),
+    ("events", "Events", "CmdOrCtrl+Shift+E"),
 ];
 
 fn item<R: Runtime>(
@@ -77,9 +79,8 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         .build()?;
 
     let mut go = SubmenuBuilder::new(app, "Go");
-    for (i, (id, label)) in PAGES.iter().enumerate() {
-        let accel = format!("CmdOrCtrl+{}", i + 1);
-        go = go.item(&item(app, &format!("go.{id}"), label, Some(&accel))?);
+    for (id, label, accel) in PAGES {
+        go = go.item(&item(app, &format!("go.{id}"), label, Some(accel))?);
     }
     let go = go.build()?;
 

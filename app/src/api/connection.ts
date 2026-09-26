@@ -1,6 +1,8 @@
 import { AgentClient, AgentRequestError, effectiveCapabilities, LEGACY_CAPABILITIES } from './client';
 import { Capabilities } from '@/generated/Capabilities';
 import { ContainerInfo } from '@/generated/ContainerInfo';
+import { Event } from '@/generated/Event';
+import { Problem } from '@/generated/Problem';
 import { HostInfo } from '@/generated/HostInfo';
 import { PrincipalInfo } from '@/generated/PrincipalInfo';
 import { AuthInfo } from '@/generated/AuthInfo';
@@ -36,6 +38,21 @@ export interface NodeMeta {
   error: string | null;
 }
 
+/** What an events poll found. */
+export interface EventsUpdate {
+  /** New events, oldest first. */
+  events: Event[];
+  /** Every problem open now. */
+  problems: Problem[];
+  /**
+   * The first load, or a reload after the log was reset: history, not news,
+   * so nothing should notify for it.
+   */
+  initial: boolean;
+  /** With `initial`: whether there are older events than these. */
+  more: boolean;
+}
+
 type Listener<T> = (value: T) => void;
 
 const BACKOFF_MS = [1_000, 2_000, 4_000, 8_000, 15_000, 30_000];
@@ -44,6 +61,20 @@ const LEGACY_CONTAINER_POLL_MS = 5_000;
 const VOLUME_POLL_MS = 30_000;
 /** Access tokens last ~10 minutes; keep the one we send fresh. */
 const TOKEN_CHECK_MS = 60_000;
+/**
+ * Polled, not streamed: each node already holds three of the browser's ~6
+ * connections per origin, and ten seconds is soon enough for an alert.
+ */
+const EVENTS_POLL_MS = 10_000;
+const EVENTS_FIRST_PAGE = 100;
+const EVENTS_PAGE = 500;
+/**
+ * A host stream that goes this quiet is hung, even if it never closed.
+ * Frames come every second by default; slower agents get five of their own
+ * gaps before this trips.
+ */
+const HOST_SILENCE_MS = 20_000;
+const WATCHDOG_MS = 5_000;
 
 /**
  * One agent's streams, polling, reconnect and status, for the node's whole
@@ -62,6 +93,8 @@ export class NodeConnection {
   private volumeTimer: ReturnType<typeof setInterval> | null = null;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private tokenTimer: ReturnType<typeof setInterval> | null = null;
+  private eventsTimer: ReturnType<typeof setInterval> | null = null;
+  private watchdogTimer: ReturnType<typeof setInterval> | null = null;
   private attempt = 0;
   private stopped = true;
 
@@ -78,11 +111,17 @@ export class NodeConnection {
   private lastHost: HostInfo | null = null;
   private lastVolumes: VolumeInfo[] | null = null;
   private lastSeq = -1;
+  private lastHostAt = 0;
+  private hostGap = 1_000;
+  /** Where the next events poll starts. Null until the first load. */
+  private lastEventId: number | null = null;
+  private eventsInFlight = false;
 
   private hostListeners = new Set<Listener<HostInfo>>();
   private containerListeners = new Set<Listener<ContainerInfo[]>>();
   private volumeListeners = new Set<Listener<VolumeInfo[]>>();
   private metaListeners = new Set<Listener<NodeMeta>>();
+  private eventListeners = new Set<Listener<EventsUpdate>>();
   /** Fires when the agent restarts, so stale history can be dropped. */
   private resetListeners = new Set<Listener<void>>();
 
@@ -117,6 +156,12 @@ export class NodeConnection {
     // interval. A stream sends its current value on open.
     if (wasEmpty && !this.stopped && !this.volumeSource) void this.pollVolumes();
     return () => this.volumeListeners.delete(fn);
+  }
+
+  /** No replay: subscribe before start(), as the node store does. */
+  onEvents(fn: Listener<EventsUpdate>): () => void {
+    this.eventListeners.add(fn);
+    return () => this.eventListeners.delete(fn);
   }
 
   onMeta(fn: Listener<NodeMeta>): () => void {
@@ -189,12 +234,24 @@ export class NodeConnection {
     this.containerSource = null;
     this.volumeSource = null;
 
-    for (const t of [this.pollTimer, this.volumeTimer, this.tokenTimer]) if (t) clearInterval(t);
+    for (const t of [
+      this.pollTimer,
+      this.volumeTimer,
+      this.tokenTimer,
+      this.eventsTimer,
+      this.watchdogTimer,
+    ]) {
+      if (t) clearInterval(t);
+    }
     if (this.retryTimer) clearTimeout(this.retryTimer);
     this.pollTimer = null;
     this.volumeTimer = null;
     this.tokenTimer = null;
+    this.eventsTimer = null;
+    this.watchdogTimer = null;
     this.retryTimer = null;
+    // lastEventId survives: after a reconnect, the next poll picks up what
+    // happened while we were away.
   }
 
   private scheduleRetry(reason: string) {
@@ -260,6 +317,7 @@ export class NodeConnection {
     this.openHostStream();
     this.openContainerStream();
     this.openVolumeStream();
+    this.startEvents();
   }
 
   /** A 401 may just be an expired token: refresh once before giving up. */
@@ -296,6 +354,16 @@ export class NodeConnection {
   private openHostStream() {
     const source = new EventSource(this.client.hostStreamUrl());
     this.hostSource = source;
+    this.lastHostAt = Date.now();
+
+    this.watchdogTimer = setInterval(() => {
+      if (this.meta.status !== 'online') return;
+      const quiet = Date.now() - this.lastHostAt;
+      if (quiet > Math.max(HOST_SILENCE_MS, this.hostGap * 5)) {
+        this.teardown();
+        this.scheduleRetry(`no data for ${Math.round(quiet / 1000)}s`);
+      }
+    }, WATCHDOG_MS);
 
     source.onmessage = (e) => {
       let info: HostInfo;
@@ -312,6 +380,9 @@ export class NodeConnection {
       }
       this.lastSeq = info.seq;
       this.lastHost = info;
+      const now = Date.now();
+      this.hostGap = now - this.lastHostAt;
+      this.lastHostAt = now;
 
       this.attempt = 0;
       this.setMeta({ status: 'online', error: null });
@@ -396,6 +467,43 @@ export class NodeConnection {
         if (!this.volumeTimer) this.startVolumePolling();
       }
     };
+  }
+
+  private startEvents() {
+    if (!this.meta.capabilities.events) return;
+    void this.pollEvents();
+    this.eventsTimer = setInterval(() => void this.pollEvents(), EVENTS_POLL_MS);
+  }
+
+  private async pollEvents(): Promise<void> {
+    if (this.eventsInFlight) return;
+    this.eventsInFlight = true;
+    try {
+      if (this.lastEventId === null) {
+        const r = await this.client.getEvents({ limit: EVENTS_FIRST_PAGE });
+        this.lastEventId = r.latest_id;
+        this.publishEvents({ events: [...r.events].reverse(), problems: r.problems, initial: true, more: r.more });
+        return;
+      }
+      const r = await this.client.getEvents({ after: this.lastEventId, limit: EVENTS_PAGE });
+      if (r.latest_id < this.lastEventId) {
+        // A new log (the state database was replaced): start over.
+        this.lastEventId = null;
+        this.eventsInFlight = false;
+        return this.pollEvents();
+      }
+      const newest = r.events.at(-1);
+      if (newest) this.lastEventId = newest.id;
+      this.publishEvents({ events: r.events, problems: r.problems, initial: false, more: false });
+    } catch {
+      /* events aren't worth changing node status over */
+    } finally {
+      this.eventsInFlight = false;
+    }
+  }
+
+  private publishEvents(update: EventsUpdate) {
+    for (const fn of this.eventListeners) fn(update);
   }
 
   private startVolumePolling() {
