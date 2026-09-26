@@ -245,17 +245,24 @@ fn poke_for_event(docker: &DockerHandle, event: &bollard::models::EventMessage) 
 }
 
 /// Backups. A file poll, so it's cheap enough to run on the async runtime.
-pub fn spawn_backups(cfg: &Config) -> watch::Receiver<Arc<BackupSnapshot>> {
+/// Polls every 30 s, or every 2 s while a requested backup or restore test
+/// is queued or running, so the page follows it. `poke` rereads at once, as
+/// after writing a request.
+pub fn spawn_backups(cfg: &Config) -> (watch::Receiver<Arc<BackupSnapshot>>, Arc<tokio::sync::Notify>) {
     let mut provider = BackupsProvider::new(cfg.backups.clone());
     let initial = provider.poll(false).expect("first backups poll always yields a snapshot");
     let (tx, rx) = watch::channel(Arc::new(initial));
+    let poke = Arc::new(tokio::sync::Notify::new());
+    let woken = poke.clone();
 
     tokio::spawn(async move {
-        let mut ticker = tokio::time::interval(Duration::from_secs(30));
-        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-
         loop {
-            ticker.tick().await;
+            let busy = crate::backups::in_flight(&tx.borrow().status);
+            let wait = Duration::from_secs(if busy { 2 } else { 30 });
+            tokio::select! {
+                _ = tokio::time::sleep(wait) => {}
+                _ = woken.notified() => {}
+            }
             if let Some(snapshot) = provider.poll(true) {
                 if tx.send(Arc::new(snapshot)).is_err() {
                     return;
@@ -264,7 +271,7 @@ pub fn spawn_backups(cfg: &Config) -> watch::Receiver<Arc<BackupSnapshot>> {
         }
     });
 
-    rx
+    (rx, poke)
 }
 
 /// Identifies the agent's own container so actions against it can be refused.

@@ -1,5 +1,5 @@
 import { spawn, execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, Server } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -59,9 +59,28 @@ export default async function globalSetup() {
   const config = path.join(dir, 'agent.toml');
   const socket = path.join(dir, 'tailscaled.sock');
   const tailscaled = fakeTailscaled(socket, path.join(root, 'app/e2e/fixtures/tailscale-status.json'));
+  // Backups read a status the host would write, and take requests in an
+  // inbox the specs look in.
+  const now = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
+  writeFileSync(
+    path.join(dir, 'restic-status.json'),
+    JSON.stringify({
+      generated_at: now,
+      last_exit_code: 0,
+      duration_secs: 840,
+      snapshots: [
+        { id: '1a2b3c4d5e6f', short_id: '1a2b3c4d', time: now, hostname: 'jupiter', tags: ['nightly'], paths: ['/srv/storage'] },
+      ],
+      databases: [{ name: 'immich', service: 'immich-postgres', used_by: ['immich-server', 'immich-machine-learning'] }],
+    }),
+  );
+  mkdirSync(path.join(dir, 'inbox'));
+  mkdirSync(path.join(dir, 'results'));
   writeFileSync(
     config,
-    `[cors]\nextra_origins = ["http://localhost:${WEB_PORT}"]\n` +
+    `[backups]\nenabled = true\nstatus_file = "${path.join(dir, 'restic-status.json')}"\n` +
+      `requests_dir = "${path.join(dir, 'inbox')}"\nrequest_results_dir = "${path.join(dir, 'results')}"\n` +
+      `[cors]\nextra_origins = ["http://localhost:${WEB_PORT}"]\n` +
       `[tailscale]\nenabled = true\nsocket = "${socket}"\ninterval_ms = 2000\n` +
       `[wol]\nenabled = true\n[state]\npath = "${path.join(dir, 'state.db')}"\n`,
   );
@@ -86,6 +105,7 @@ export default async function globalSetup() {
   await waitFor(`${url}/v1/info`);
   process.env.E2E_AGENT_URL = url;
   process.env.E2E_OIDC_ISSUER = oidc.issuer;
+  process.env.E2E_BACKUP_INBOX = path.join(dir, 'inbox');
 
   return async () => {
     agent.kill();

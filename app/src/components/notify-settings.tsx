@@ -29,7 +29,7 @@ import { Section } from './section';
 import { SegmentedControl } from './segmented-control';
 import { ConfirmDialog } from './confirm-dialog';
 import { EmptyState } from './empty-state';
-import { SkeletonRows } from './skeletons';
+import { TableSkeleton } from './skeletons';
 
 const CATEGORIES = Object.keys(CATEGORY) as EventCategory[];
 
@@ -136,7 +136,7 @@ export function NodeChannels({ nodeId }: { nodeId: string }) {
       contentClassName='divide-y'
     >
       {isLoading ? (
-        <SkeletonRows columns={2} rows={2} />
+        <TableSkeleton columns={2} rows={2} />
       ) : error ? (
         <p className='p-4 text-sm text-error'>{error.message}</p>
       ) : (

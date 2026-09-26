@@ -68,6 +68,7 @@ export function agentInfo(partial: Partial<AgentInfo> = {}): AgentInfo {
       notify_actions: true,
       uptime: true,
       uptime_actions: true,
+      backup_actions: true,
     },
     ...partial,
   };

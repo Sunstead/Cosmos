@@ -99,7 +99,7 @@ or filesystem path.
   infrastructure).
 - **Each agent is independent; there is no central Cosmos server.** The app
   connects to every agent directly. Anything "server-side" runs per node.
-- Jupiter runs agent 0.5.1 with `allow_actions = true`. The agent, web UI and
+- Jupiter runs agent 0.6.0 (once Jupiter#23 merges) with `allow_actions = true`. The agent, web UI and
   desktop app share one version (`npm run release`, see `RELEASING.md`). The web UI is served by
   the agent at `cosmos.jupiter.sunstead.net`; on my iPhone I use that.
 
@@ -203,9 +203,10 @@ iPhone, desktop notifications and "node unreachable" alerts.*
   agents on other nodes watch each other.
 
 ### B. Cosmos: health checks (replaces Uptime Kuma)
-*In progress for 0.6: an HTTP check per labelled service, custom HTTP and TCP
-checks edited in the UI, certificate expiry, an Uptime page. No ICMP: the agent
-runs with no capabilities, and TCP covers what ping would.*
+*Shipped in 0.6 (Cosmos#15, Jupiter#23): an HTTP check per labelled service,
+custom HTTP and TCP checks edited in the UI, certificate expiry, an Uptime
+page. No ICMP: the agent runs with no capabilities, and TCP covers what ping
+would. Kuma is retired once the checks have run for a while.*
 - HTTP, TCP and ping probes per service with uptime history; targets default
   from the `cosmos.service` labels.
 - Failures and recoveries become events, so they notify and show on the timeline.
@@ -234,6 +235,9 @@ No GitHub PRs to merge. Updates happen from a Cosmos screen or automatically.
 - Renovate stays until this ships, then is removed.
 
 ### D. Cosmos: backup controls
+*In progress for 0.7 (Jupiter#22 for the host side): back up now, the weekly
+restore test with its result in Cosmos, and a restore guide that generates
+`scripts/restore.sh` commands.*
 - **Trigger backups from the UI** without the agent holding the restic password:
   the agent writes a request file into a directory the host watches (a systemd
   `.path` unit), which starts `jupiter-backup.service`. The status file reports
