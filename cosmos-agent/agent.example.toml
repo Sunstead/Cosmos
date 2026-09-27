@@ -162,6 +162,8 @@ disk_critical_pct = 95
 [uptime]
 # The Uptime page: an HTTP check for every service with a cosmos.service.url
 # label, plus the HTTP and TCP checks added in the app (kept in [state] path).
+# A cosmos.service.check label gives the path to request, e.g. /v1/health for
+# an app with no page at /; the app can override it.
 # Three failures in a row open a problem; two passes close it.
 enabled = true
 interval_secs = 60

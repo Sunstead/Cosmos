@@ -1,5 +1,6 @@
 //! Uptime checks: an HTTP check for every service with a
-//! `cosmos.service.url` label, plus the HTTP and TCP checks added in the UI.
+//! `cosmos.service.url` label (at the `cosmos.service.check` path, if any),
+//! plus the HTTP and TCP checks added in the UI.
 //!
 //! One task owns the checks, like Wake-on-LAN's: handlers read the published
 //! snapshot, or send a reload and wait for it to republish. Probes run in
@@ -141,15 +142,20 @@ pub fn validate(input: UptimeCheckInput, id: i64, default_interval: u32) -> Resu
     })
 }
 
-/// Checks a service check's settings.
+/// Checks a service check's settings. No path means the label's, else `/`;
+/// `/` is kept, since it overrides a label.
 pub fn validate_service(mut input: UptimeServiceInput) -> Result<UptimeServiceInput, AgentError> {
-    input.path = input.path.map(|p| p.trim().to_string()).filter(|p| !p.is_empty() && p != "/");
+    input.path = input.path.map(|p| p.trim().to_string()).filter(|p| !p.is_empty());
     if let Some(p) = &input.path {
-        if !p.starts_with('/') || p.len() > 200 || p.contains(char::is_whitespace) {
+        if !valid_path(p) {
             return Err(AgentError::BadRequest("the path starts with / and has no spaces".into()));
         }
     }
     Ok(input)
+}
+
+fn valid_path(p: &str) -> bool {
+    p.starts_with('/') && p.len() <= 200 && !p.contains(char::is_whitespace)
 }
 
 /// `https://` when the label has no scheme, as the app's `serviceHref` does.
@@ -176,8 +182,15 @@ fn define(
     custom: &[CustomCheck],
     default_interval: u32
 ) -> Vec<Defined> {
-    // (service, url, running, newest start of a running container)
-    let mut services: Vec<(&str, Option<&str>, bool, Option<i64>)> = Vec::new();
+    struct Service<'a> {
+        name: &'a str,
+        url: Option<&'a str>,
+        path: Option<&'a str>,
+        running: bool,
+        /// The newest start of a running container.
+        started: Option<i64>,
+    }
+    let mut services: Vec<Service> = Vec::new();
     let mut sorted: Vec<&ContainerInfo> = containers.iter().collect();
     sorted.sort_by(|a, b| a.name.cmp(&b.name));
     for c in sorted {
@@ -185,25 +198,27 @@ fn define(
             continue;
         };
         let url = c.cosmos_service_url.as_deref().filter(|u| !u.trim().is_empty());
+        let path = c.cosmos_service_check.as_deref().map(str::trim).filter(|p| valid_path(p));
         let running = c.state == "running";
         let started = c.started_at
             .as_deref()
             .filter(|_| running)
             .and_then(parse_rfc3339);
-        match services.iter_mut().find(|(s, ..)| *s == service) {
+        match services.iter_mut().find(|s| s.name == service) {
             Some(entry) => {
-                entry.1 = entry.1.or(url);
-                entry.2 |= running;
-                entry.3 = entry.3.max(started);
+                entry.url = entry.url.or(url);
+                entry.path = entry.path.or(path);
+                entry.running |= running;
+                entry.started = entry.started.max(started);
             }
-            None => services.push((service, url, running, started)),
+            None => services.push(Service { name: service, url, path, running, started }),
         }
     }
-    services.sort_by(|a, b| a.0.cmp(b.0));
+    services.sort_by(|a, b| a.name.cmp(b.name));
 
     let mut out: Vec<Defined> = services
         .into_iter()
-        .filter_map(|(service, url, running, started)| {
+        .filter_map(|Service { name: service, url, path, running, started }| {
             let s = settings.get(service);
             Some(Defined {
                 check: UptimeCheck {
@@ -211,7 +226,7 @@ fn define(
                     source: CheckSource::Service,
                     name: service.to_string(),
                     kind: CheckKind::Http,
-                    target: service_url(url?, s.and_then(|s| s.path.as_deref())),
+                    target: service_url(url?, s.and_then(|s| s.path.as_deref()).or(path)),
                     interval_secs: default_interval,
                     enabled: s.is_none_or(|s| s.enabled),
                     any_status: s.is_some_and(|s| s.any_status),
@@ -657,6 +672,7 @@ mod tests {
             cosmos_service: service.map(Into::into),
             cosmos_service_description: None,
             cosmos_service_url: url.map(Into::into),
+            cosmos_service_check: None,
             cpu_pct: 0.0,
             mem_used_bytes: 0,
             mem_limit_bytes: 0,
@@ -675,9 +691,18 @@ mod tests {
             container("caddy", Some("system"), Some("x.example.net"), "running"),
             container("redis", None, None, "running"),
             container("nextcloud-cron", Some("nextcloud"), None, "running"),
+            ContainerInfo {
+                cosmos_service_check: Some("/v1/health".into()),
+                ..container("ntfy", Some("ntfy"), Some("ntfy.example.net"), "running")
+            },
+            ContainerInfo {
+                cosmos_service_check: Some("/app/".into()),
+                ..container("gitea", Some("gitea"), Some("git.example.net"), "running")
+            },
         ];
         let settings = HashMap::from([
             ("immich".to_string(), UptimeServiceInput { enabled: true, path: Some("/api/ping".into()), any_status: true }),
+            ("gitea".to_string(), UptimeServiceInput { enabled: true, path: Some("/".into()), any_status: false }),
         ]);
         let custom = [CustomCheck {
             id: 7,
@@ -690,15 +715,17 @@ mod tests {
         }];
         let checks = define(&containers, &settings, &custom, 60);
         let ids: Vec<&str> = checks.iter().map(|c| c.check.id.as_str()).collect();
-        assert_eq!(ids, ["svc:immich", "svc:portainer", "7"]);
+        assert_eq!(ids, ["svc:gitea", "svc:immich", "svc:ntfy", "svc:portainer", "7"]);
 
-        let immich = &checks[0];
+        assert_eq!(checks[0].check.target, "https://git.example.net/", "the UI's path wins over the label's");
+        assert_eq!(checks[2].check.target, "https://ntfy.example.net/v1/health", "the label's path");
+        let immich = &checks[1];
         assert_eq!(immich.check.target, "https://immich.example.net/api/ping");
         assert!(immich.active && immich.check.any_status);
-        let portainer = &checks[1];
+        let portainer = &checks[3];
         assert_eq!(portainer.check.target, "https://portainer.example.net/");
         assert!(!portainer.active, "nothing running, so nothing to check");
-        assert_eq!(checks[2].check.interval_secs, 60);
+        assert_eq!(checks[4].check.interval_secs, 60);
         assert_eq!(immich.grace_until, Some(1_000 + STARTUP_GRACE));
         assert_eq!(portainer.grace_until, None);
     }
@@ -722,7 +749,8 @@ mod tests {
         assert!(validate(UptimeCheckInput { interval_secs: Some(5), ..input(CheckKind::Tcp, "a:1") }, 0, 60).is_err());
 
         let path = |p: &str| validate_service(UptimeServiceInput { enabled: true, path: Some(p.into()), any_status: false });
-        assert_eq!(path(" / ").unwrap().path, None);
+        assert_eq!(path(" ").unwrap().path, None);
+        assert_eq!(path(" / ").unwrap().path.as_deref(), Some("/"), "kept, to override a label");
         assert_eq!(path("/api/ping").unwrap().path.as_deref(), Some("/api/ping"));
         assert!(path("api").is_err());
     }

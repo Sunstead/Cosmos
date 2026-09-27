@@ -226,6 +226,7 @@ impl DockerProbe {
             cosmos_service: labels.get("cosmos.service").cloned(),
             cosmos_service_description: labels.get("cosmos.service.description").cloned(),
             cosmos_service_url: labels.get("cosmos.service.url").cloned(),
+            cosmos_service_check: labels.get("cosmos.service.check").cloned(),
             cpu_pct,
             mem_used_bytes,
             mem_limit_bytes,
