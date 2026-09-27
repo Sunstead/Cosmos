@@ -95,9 +95,11 @@ export const TitleBar = memo(function TitleBar() {
       // Descendants drag too; buttons and links are excluded automatically.
       data-tauri-drag-region='deep'
       data-fullscreen={fullscreen || undefined}
-      className='titlebar chrome grid h-(--titlebar-height) shrink-0 grid-cols-[1fr_minmax(0,28rem)_1fr] items-center gap-3 bg-sidebar'
+      // The sides never shrink below their controls: on a phone the search
+      // takes what's left, rather than sliding over the sidebar toggle.
+      className='titlebar chrome grid h-(--titlebar-height) shrink-0 grid-cols-[minmax(max-content,1fr)_minmax(0,28rem)_minmax(max-content,1fr)] items-center gap-3 bg-sidebar'
     >
-      <div className='flex min-w-0 items-center gap-2 pl-2'>
+      <div className='flex items-center gap-2 pl-2'>
         <span className='titlebar-inset shrink-0' aria-hidden='true' />
         <Hint label='Toggle sidebar' shortcut='sidebar'>
           <Button

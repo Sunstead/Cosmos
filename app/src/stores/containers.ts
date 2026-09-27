@@ -8,8 +8,15 @@ interface ContainersStore {
   nodeServices: Record<string, ServiceInfo[]>;
   /** Flattened across nodes, recomputed only when a node's slice changes. */
   services: ServiceInfo[];
-  setNodeContainers: (nodeId: string, containers: ContainerInfo[]) => void;
+  /** Nodes whose Docker isn't answering; their lists are the last known. */
+  dockerDown: Record<string, true>;
+  setNodeContainers: (nodeId: string, containers: ContainerInfo[], dockerUnavailable?: boolean) => void;
   removeNode: (nodeId: string) => void;
+}
+
+function withFlag(flags: Record<string, true>, nodeId: string, on: boolean): Record<string, true> {
+  const { [nodeId]: _was, ...rest } = flags;
+  return on ? { ...rest, [nodeId]: true } : rest;
 }
 
 const flatten = (byNode: Record<string, ServiceInfo[]>): ServiceInfo[] =>
@@ -21,8 +28,9 @@ export const useContainersStore = create<ContainersStore>((set) => ({
   nodeContainers: {},
   nodeServices: {},
   services: [],
+  dockerDown: {},
 
-  setNodeContainers: (nodeId, containers) =>
+  setNodeContainers: (nodeId, containers, dockerUnavailable = false) =>
     set((s) => {
       const nodeServices = {
         ...s.nodeServices,
@@ -32,6 +40,8 @@ export const useContainersStore = create<ContainersStore>((set) => ({
         nodeContainers: { ...s.nodeContainers, [nodeId]: containers },
         nodeServices,
         services: flatten(nodeServices),
+        // Replaced only on a change, so pages reading it don't re-render per sample.
+        dockerDown: !!s.dockerDown[nodeId] === dockerUnavailable ? s.dockerDown : withFlag(s.dockerDown, nodeId, dockerUnavailable),
       };
     }),
 
@@ -39,6 +49,11 @@ export const useContainersStore = create<ContainersStore>((set) => ({
     set((s) => {
       const { [nodeId]: _containers, ...nodeContainers } = s.nodeContainers;
       const { [nodeId]: _services, ...nodeServices } = s.nodeServices;
-      return { nodeContainers, nodeServices, services: flatten(nodeServices) };
+      return {
+        nodeContainers,
+        nodeServices,
+        services: flatten(nodeServices),
+        dockerDown: withFlag(s.dockerDown, nodeId, false),
+      };
     }),
 }));

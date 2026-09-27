@@ -49,6 +49,19 @@ test.describe('empty app', () => {
     await expect(html).toHaveClass(/light/);
   });
 
+  test('the sidebar opens on a phone', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto('/overview');
+    // The search box once slid over the toggle at this width, taking its clicks.
+    await page.getByRole('button', { name: 'Toggle sidebar' }).click({ timeout: 5_000 });
+    const sheet = page.locator('[data-mobile=true]');
+    await expect(sheet.getByRole('button', { name: 'Account' })).toBeVisible();
+    // Following a link closes the sheet, so the page isn't left covered.
+    await sheet.getByRole('link', { name: 'Logs' }).click();
+    await expect(page).toHaveURL(/\/logs$/);
+    await expect(sheet).toHaveCount(0);
+  });
+
   test('body never scrolls and nothing overflows horizontally', async ({ page }) => {
     for (const width of [900, 1440]) {
       await page.setViewportSize({ width, height: 800 });

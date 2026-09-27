@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { Download, Eraser, Logs, Pause, Play, RefreshCw, ScrollText, SearchX } from 'lucide-react';
-import { useNodeStore } from '@/stores/nodes';
+import { useNodeName, useNodeStore } from '@/stores/nodes';
 import { useContainersStore } from '@/stores/containers';
 import { useNodeMeta } from '@/api/queries';
 import { ALL_CONTAINERS, useContainerLogs } from '@/hooks/use-container-logs';
@@ -69,6 +69,8 @@ export function LogsPage() {
     [nodeContainers, nodeId],
   );
   const meta = useNodeMeta(nodeId);
+  const nodeName = useNodeName(nodeId);
+  const dockerDown = useContainersStore((s) => (nodeId ? !!s.dockerDown[nodeId] : false));
   const canAll = meta?.capabilities.all_logs ?? false;
 
   const containerId =
@@ -138,7 +140,16 @@ export function LogsPage() {
       );
     }
     if (containers.length === 0) {
-      return <EmptyState size='page' icon={ScrollText} title='No containers on this node' />;
+      return dockerDown ? (
+        <EmptyState
+          size='page'
+          icon={ScrollText}
+          title={`Docker isn't answering on ${nodeName ?? 'this node'}`}
+          description='Logs come back when it does.'
+        />
+      ) : (
+        <EmptyState size='page' icon={ScrollText} title='No containers on this node' />
+      );
     }
     return (
       <Card className='min-h-0 flex-1 gap-0 py-0'>

@@ -95,6 +95,11 @@ pub struct ContainersResponse {
     /// Unix seconds of the sample these came from.
     #[ts(type = "number")]
     pub sampled_at: i64,
+    /// Docker isn't answering: `containers` is the last list it gave, or
+    /// empty if it never has. Absent from 0.8.0 and older agents.
+    #[serde(default)]
+    #[ts(as = "Option<bool>", optional)]
+    pub docker_unavailable: bool,
 }
 
 #[derive(Serialize, Deserialize, TS, Debug, Clone)]

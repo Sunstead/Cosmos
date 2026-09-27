@@ -144,7 +144,7 @@ export function AccountMenu() {
   const accounts = useAccounts();
   const open = useNodeStore((s) => openPrincipal(s.meta));
   const nodeCount = useNodeStore((s) => s.nodes.length);
-  const { state, isMobile } = useSidebar();
+  const { state, isMobile, setOpenMobile } = useSidebar();
   const { theme, setTheme } = useTheme();
   const { pathname } = useLocation();
   const { start, busy } = useSignIn();
@@ -154,6 +154,7 @@ export function AccountMenu() {
   const signedIn = accounts.filter((a) => a.session);
   const signInTo = !signedIn.length && accounts.length === 1 ? accounts[0] : null;
   const onSettings = pathname === '/settings';
+  const followed = () => isMobile && setOpenMobile(false);
 
   return (
     <SidebarMenu>
@@ -191,7 +192,7 @@ export function AccountMenu() {
             )}
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              <Link to='/settings'>
+              <Link to='/settings' onClick={followed}>
                 <Settings /> Settings
                 <DropdownMenuShortcut>
                   <ShortcutKeys id='settings' />
@@ -234,7 +235,12 @@ export function AccountMenu() {
                 size='icon'
                 className={cn('text-muted-foreground', onSettings && 'bg-sidebar-accent text-sidebar-accent-foreground')}
               >
-                <Link to='/settings' aria-label='Settings' aria-current={onSettings ? 'page' : undefined}>
+                <Link
+                  to='/settings'
+                  onClick={followed}
+                  aria-label='Settings'
+                  aria-current={onSettings ? 'page' : undefined}
+                >
                   <Settings />
                 </Link>
               </Button>

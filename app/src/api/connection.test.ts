@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventsUpdate, NodeConnection, NodeMeta, TokenProvider } from './connection';
 import { EventsResponse } from '@/generated/EventsResponse';
 import { FakeEventSource, mockFetch, settle } from '@/test/fakes';
-import { agentInfo, event, eventsResponse, hostInfo, problem } from '@/test/fixtures';
+import { agentInfo, containerInfo, event, eventsResponse, hostInfo, problem } from '@/test/fixtures';
 
 const URL_BASE = 'http://agent.test:7700';
 
@@ -38,6 +38,23 @@ describe('NodeConnection', () => {
 
     expect(FakeEventSource.instances.filter((s) => s.url.includes('/v1/host/stream'))).toHaveLength(1);
     expect(FakeEventSource.instances.filter((s) => s.url.includes('/v1/containers/stream'))).toHaveLength(1);
+    conn.stop();
+  });
+
+  it('says when Docker stops answering, keeping the last list', async () => {
+    const { conn } = connect(healthy);
+    const updates: { names: string[]; down: boolean }[] = [];
+    conn.onContainers((u) => updates.push({ names: u.containers.map((c) => c.name), down: u.dockerUnavailable }));
+    conn.start();
+    await settle();
+
+    const stream = FakeEventSource.latest('/v1/containers/stream')!;
+    stream.emit({ containers: [containerInfo()], sampled_at: 1 });
+    stream.emit({ containers: [containerInfo()], sampled_at: 1, docker_unavailable: true });
+    expect(updates).toEqual([
+      { names: ['gitea'], down: false },
+      { names: ['gitea'], down: true },
+    ]);
     conn.stop();
   });
 
