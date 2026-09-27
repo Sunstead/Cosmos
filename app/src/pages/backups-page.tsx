@@ -17,7 +17,7 @@ import { BackupsStatus } from '@/generated/BackupsStatus';
 import { StepStatus } from '@/generated/StepStatus';
 import { formatBytes } from '@/lib/node-metrics';
 import { relativeTime, secondsToDuration } from '@/lib/time';
-import { NO_VALUE } from '@/lib/format';
+import { NO_VALUE, sentence } from '@/lib/format';
 import { backupHealth } from '@/lib/backups';
 import { PageHeader } from '@/components/page-header';
 import { NodeSelect } from '@/components/node-select';
@@ -58,9 +58,7 @@ function HealthAlert({ status }: { status: BackupsStatus }) {
         <LoaderCircle className='animate-spin text-muted-foreground' />
         <AlertTitle>Backup running</AlertTitle>
         <AlertDescription>
-          {[`Started ${relativeTime(status.timer_last_fired)}`, lastRun && `last finished ${lastRun}`]
-            .filter(Boolean)
-            .join(', ')}
+          {sentence([`started ${relativeTime(status.timer_last_fired)}`, lastRun && `last finished ${lastRun}`])}
         </AlertDescription>
       </Alert>
     );
@@ -72,14 +70,11 @@ function HealthAlert({ status }: { status: BackupsStatus }) {
         <CircleCheck className='text-success' />
         <AlertTitle>Backups healthy</AlertTitle>
         <AlertDescription>
-          {[
-            lastRun && `Last run ${lastRun}`,
-            status.duration_secs != null &&
-              `took ${secondsToDuration(status.duration_secs)}`,
+          {sentence([
+            lastRun && `last run ${lastRun}`,
+            status.duration_secs != null && `took ${secondsToDuration(status.duration_secs)}`,
             next && `next ${next}`,
-          ]
-            .filter(Boolean)
-            .join(', ')}
+          ])}
         </AlertDescription>
       </Alert>
     );
