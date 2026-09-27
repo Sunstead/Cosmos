@@ -794,6 +794,7 @@ mod tests {
             cosmos_service: Some("ntfy".into()),
             cosmos_service_description: None,
             cosmos_service_url: None,
+            cosmos_service_check: None,
             cpu_pct: 0.0,
             mem_used_bytes: 0,
             mem_limit_bytes: 0,

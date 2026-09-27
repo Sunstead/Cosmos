@@ -336,6 +336,7 @@ function ServiceForm({
             />
             <FieldDescription>
               A health endpoint if the app has one, such as /api/server/ping for Immich.
+              A cosmos.service.check label sets one in compose.
             </FieldDescription>
             <label className='flex items-center gap-2 text-sm'>
               <Checkbox

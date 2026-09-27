@@ -78,6 +78,11 @@ pub struct ContainerInfo {
     #[serde(skip)]
     #[ts(skip)]
     pub update_labels: std::collections::BTreeMap<String, String>,
+    /// The `cosmos.service.check` label: the path the service's uptime check
+    /// requests when the UI hasn't set one, for the agent only.
+    #[serde(skip)]
+    #[ts(skip)]
+    pub cosmos_service_check: Option<String>,
     /// Percent of one core x online cores, differenced across agent ticks.
     /// 0.0 on a container's first sighting; correct from the next tick.
     pub cpu_pct: f32,
