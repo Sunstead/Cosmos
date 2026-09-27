@@ -5,7 +5,16 @@ import { useTheme } from '@/components/theme-provider';
 import { useUiStore } from '@/stores/ui';
 import { PAGES } from '@/lib/navigation';
 import { getPlatform } from '@/lib/platform';
-import { isTypingTarget, matchesChord, SHORTCUTS, ShortcutId } from '@/lib/shortcuts';
+import {
+  isOverlayTarget,
+  isSequence,
+  isTypingTarget,
+  matchesChord,
+  SequenceTracker,
+  sequenceShortcuts,
+  SHORTCUTS,
+  ShortcutId,
+} from '@/lib/shortcuts';
 
 /** Focuses the current page's search field, if it has one. */
 export function focusPageSearch(): boolean {
@@ -19,7 +28,9 @@ export function focusPageSearch(): boolean {
 /**
  * Routes shortcuts and native menu events to actions. Mounted once inside
  * the shell. On macOS the native menu owns modifier shortcuts, so they are
- * not also handled here (they would fire twice).
+ * not also handled here (they would fire twice). Bare keys (`/` and the
+ * "G then a letter" sequences) are handled here everywhere: a menu can't show
+ * a sequence.
  */
 export function CommandHost() {
   const navigate = useNavigate();
@@ -55,16 +66,28 @@ export function CommandHost() {
 
   useEffect(() => {
     const macApp = getPlatform() === 'macos';
+    const sequences = new SequenceTracker(sequenceShortcuts());
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === '/' && !e.metaKey && !e.ctrlKey && !isTypingTarget(e.target)) {
-        e.preventDefault();
-        if (!focusPageSearch()) setPaletteOpen(true);
-        return;
+      if (e.defaultPrevented || e.repeat) return;
+      const bare = !e.metaKey && !e.ctrlKey && !e.altKey;
+      if (bare && !isTypingTarget(e.target) && !isOverlayTarget(e.target)) {
+        if (e.key === '/') {
+          e.preventDefault();
+          sequences.reset();
+          if (!focusPageSearch()) setPaletteOpen(true);
+          return;
+        }
+        if (!e.shiftKey && e.key.length === 1) {
+          const { id, consumed } = sequences.press(e.key);
+          if (consumed) e.preventDefault();
+          if (id) run.current(id);
+          if (consumed) return;
+        }
       }
       if (macApp) return;
       for (const [id, chord] of Object.entries(SHORTCUTS) as [ShortcutId, string][]) {
-        if (id === 'search') continue;
+        if (id === 'search' || isSequence(chord)) continue;
         if (matchesChord(e, chord)) {
           e.preventDefault();
           run.current(id);
