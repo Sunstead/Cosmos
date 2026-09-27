@@ -199,29 +199,31 @@ export function NodeChannels({ nodeId }: { nodeId: string }) {
             </div>
           ))}
           <form
-            className='flex flex-wrap items-end gap-2 p-4'
+            className='p-4'
             onSubmit={(e) => {
               e.preventDefault();
               void saveSettings(nodeId, { link_url: (link ?? savedLink).trim() || null });
               setLink(null);
             }}
           >
-            <Field className='min-w-0 flex-1'>
+            <Field>
               <FieldLabel htmlFor={`link-${nodeId}`}>Link</FieldLabel>
-              <Input
-                id={`link-${nodeId}`}
-                value={link ?? savedLink}
-                placeholder='https://cosmos.example.com/events'
-                disabled={!canEdit}
-                onChange={(e) => setLink(e.target.value)}
-              />
+              <div className='flex gap-2'>
+                <Input
+                  id={`link-${nodeId}`}
+                  value={link ?? savedLink}
+                  placeholder='https://cosmos.example.com/events'
+                  disabled={!canEdit}
+                  onChange={(e) => setLink(e.target.value)}
+                />
+                {canEdit && (
+                  <Button type='submit' variant='outline' disabled={link === null || link === savedLink}>
+                    Save
+                  </Button>
+                )}
+              </div>
               <FieldDescription>Opened when you tap a notification.</FieldDescription>
             </Field>
-            {canEdit && (
-              <Button type='submit' variant='outline' disabled={link === null || link === savedLink}>
-                Save
-              </Button>
-            )}
           </form>
         </>
       )}

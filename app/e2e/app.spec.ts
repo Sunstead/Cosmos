@@ -529,6 +529,9 @@ test.describe('with a node', () => {
   });
 
   test('screenshots of every page in both themes', async ({ page }, info) => {
+    // Every page twice: well past the default 30 s once earlier specs have
+    // given the agent something to show.
+    test.setTimeout(120_000);
     await addNodeOnline(page);
     const detail = new URL(page.url()).pathname;
     for (const theme of ['dark', 'light']) {
