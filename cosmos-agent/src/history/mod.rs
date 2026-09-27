@@ -268,6 +268,8 @@ fn read_series(
 /// touches a minute rather than sixty.
 fn writer_loop(conn: &mut Connection, rx: mpsc::Receiver<Msg>, cfg: HistoryConfig) {
     const MAX_BATCH: usize = 60;
+    /// Rows reach the writer within a second or so of their timestamp.
+    const ROLLUP_LAG_SECS: i64 = 5;
     let flush_every = Duration::from_secs(cfg.flush_interval_secs.max(1));
 
     let mut batch: Vec<Row> = Vec::with_capacity(MAX_BATCH);
@@ -302,10 +304,16 @@ fn writer_loop(conn: &mut Connection, rx: mpsc::Receiver<Msg>, cfg: HistoryConfi
 
         if last_rollup.elapsed() >= Duration::from_secs(60) {
             last_rollup = Instant::now();
-            if let Err(e) = rollup::rollup_1m(conn, now) {
+            // A rollup never revisits a bucket, so everything for it must be
+            // on disk first: the batch still holding the minute's last
+            // seconds, and rows still on their way in (hence the lag).
+            flush(conn, &mut batch);
+            last_flush = Instant::now();
+            let closed_by = now - ROLLUP_LAG_SECS;
+            if let Err(e) = rollup::rollup_1m(conn, closed_by) {
                 tracing::warn!(error = %e, "1m rollup failed");
             }
-            if let Err(e) = rollup::rollup_5m(conn, now) {
+            if let Err(e) = rollup::rollup_5m(conn, closed_by) {
                 tracing::warn!(error = %e, "5m rollup failed");
             }
         }

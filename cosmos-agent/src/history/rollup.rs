@@ -44,9 +44,9 @@ pub fn rollup_1m(conn: &mut Connection, now: i64) -> rusqlite::Result<usize> {
 
 /// Aggregates 1-minute buckets into closed 5-minute buckets.
 ///
-/// Note the averages are of averages. With a uniform sample rate every 1m
-/// bucket carries the same weight, so this is correct; maxima propagate
-/// exactly.
+/// Averages are weighted by each minute's sample count: a minute cut short
+/// (the agent restarted, a sample was dropped) counts for what it holds.
+/// Maxima propagate exactly.
 pub fn rollup_5m(conn: &mut Connection, now: i64) -> rusqlite::Result<usize> {
     let closed = (now / 300) * 300;
     let cursor = get_cursor(conn, CURSOR_5M);
@@ -62,11 +62,13 @@ pub fn rollup_5m(conn: &mut Connection, now: i64) -> rusqlite::Result<usize> {
              disk_read_avg, disk_read_max, disk_write_avg, disk_write_max,
              load1_avg, n)
          SELECT (ts / 300) * 300,
-                avg(cpu_avg), max(cpu_max), avg(mem_avg), avg(swap_avg),
-                avg(net_rx_avg), max(net_rx_max), avg(net_tx_avg), max(net_tx_max),
-                avg(disk_read_avg), max(disk_read_max),
-                avg(disk_write_avg), max(disk_write_max),
-                avg(load1_avg), sum(n)
+                sum(cpu_avg * n) / sum(n), max(cpu_max),
+                sum(mem_avg * n) / sum(n), sum(swap_avg * n) / sum(n),
+                sum(net_rx_avg * n) / sum(n), max(net_rx_max),
+                sum(net_tx_avg * n) / sum(n), max(net_tx_max),
+                sum(disk_read_avg * n) / sum(n), max(disk_read_max),
+                sum(disk_write_avg * n) / sum(n), max(disk_write_max),
+                sum(load1_avg * n) / sum(n), sum(n)
          FROM metrics_1m
          WHERE ts >= ?1 AND ts < ?2
          GROUP BY (ts / 300) * 300",
@@ -186,6 +188,27 @@ mod tests {
             .unwrap();
         assert_eq!(max, 99.0);
         assert_eq!(n, 300, "sample counts sum through the tiers");
+    }
+
+    #[test]
+    fn a_short_minute_counts_for_what_it_holds() {
+        let mut conn = db();
+        // A full minute at 10%, then one cut short by a restart: 6 samples at 70%.
+        for i in 0..60 {
+            insert_raw(&conn, i, 10.0);
+        }
+        for i in 60..66 {
+            insert_raw(&conn, i, 70.0);
+        }
+        rollup_1m(&mut conn, 300).unwrap();
+        rollup_5m(&mut conn, 300).unwrap();
+
+        let (avg, n): (f64, i64) = conn
+            .query_row("SELECT cpu_avg, n FROM metrics_5m WHERE ts = 0", [], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap();
+        assert_eq!(n, 66);
+        // (60 x 10 + 6 x 70) / 66, not the average of the two minutes (40).
+        assert!((avg - 15.4545).abs() < 0.01, "avg was {avg}");
     }
 
     #[test]
