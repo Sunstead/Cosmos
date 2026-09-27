@@ -185,12 +185,14 @@ pub struct LogsResponse {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum LogFrame {
     Line(LogLine),
-    /// The outbound buffer overflowed and we dropped the oldest lines rather
-    /// than let a firehose container grow the agent's memory without bound.
+    /// Lines were dropped. No current agent sends this: its sends are
+    /// awaited, so a slow client slows the Docker read instead. Kept so the
+    /// wire format stays stable.
     Truncated {
         dropped: u32,
     },
-    /// The container exited or the stream ended; no more lines are coming.
+    /// The container exited, the stream ended or the agent is stopping; no
+    /// more lines are coming.
     Closed {
         reason: String,
     },
