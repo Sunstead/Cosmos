@@ -26,6 +26,7 @@ import { LiveValue } from '@/components/live-value';
 import { EmptyState } from '@/components/empty-state';
 import { NodeRecoveryButton } from '@/components/sign-in';
 import { DataTable } from '@/components/data-table';
+import { DockerDownNote } from '@/components/docker-down-note';
 import { containerColumns, ContainerRow } from '@/components/container-columns';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/hint';
@@ -203,6 +204,7 @@ export function NodeDetailPage({ nodeId }: { nodeId: string }) {
         </>
       )}
 
+      <DockerDownNote nodeId={nodeId} />
       <DataTable
         columns={columns}
         data={containers}

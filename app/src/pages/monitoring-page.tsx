@@ -85,7 +85,7 @@ export function MonitoringPage() {
           size='page'
           icon={ChartLine}
           title='No history yet'
-          description='Samples appear within a minute of the agent starting.'
+          description='Samples appear within two minutes of the agent starting.'
         />
       );
     }

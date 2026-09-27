@@ -121,8 +121,8 @@ function attach(nodeId: string, url: string): NodeConnection {
     }
   });
 
-  conn.onContainers((containers) => {
-    useContainersStore.getState().setNodeContainers(nodeId, containers);
+  conn.onContainers(({ containers, dockerUnavailable }) => {
+    useContainersStore.getState().setNodeContainers(nodeId, containers, dockerUnavailable);
   });
 
   conn.onVolumes((volumes) => {

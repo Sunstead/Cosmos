@@ -105,6 +105,14 @@ pub fn spawn_containers(
             }
 
             let Some(client) = docker.try_reconnect() else {
+                if !failing {
+                    tracing::warn!("docker is unreachable; containers are the last known list");
+                    failing = true;
+                    let marked = tx.borrow().unavailable();
+                    if tx.send(Arc::new(marked)).is_err() {
+                        return;
+                    }
+                }
                 continue;
             };
 
@@ -124,6 +132,10 @@ pub fn spawn_containers(
                     if !failing {
                         tracing::warn!(error = %e, "docker container sampling failed");
                         failing = true;
+                        let marked = tx.borrow().unavailable();
+                        if tx.send(Arc::new(marked)).is_err() {
+                            return;
+                        }
                     }
                     docker.mark_disconnected();
                 }

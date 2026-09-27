@@ -1,6 +1,7 @@
 import { AgentClient, AgentRequestError, effectiveCapabilities, LEGACY_CAPABILITIES } from './client';
 import { Capabilities } from '@/generated/Capabilities';
 import { ContainerInfo } from '@/generated/ContainerInfo';
+import { ContainersResponse } from '@/generated/ContainersResponse';
 import { Event } from '@/generated/Event';
 import { Problem } from '@/generated/Problem';
 import { HostInfo } from '@/generated/HostInfo';
@@ -55,6 +56,13 @@ export interface EventsUpdate {
 }
 
 type Listener<T> = (value: T) => void;
+
+/** A node's containers, and whether Docker is answering there. */
+export interface ContainersUpdate {
+  /** When Docker isn't answering, the last list it gave. */
+  containers: ContainerInfo[];
+  dockerUnavailable: boolean;
+}
 
 const BACKOFF_MS = [1_000, 2_000, 4_000, 8_000, 15_000, 30_000];
 const LEGACY_CONTAINER_POLL_MS = 5_000;
@@ -119,7 +127,8 @@ export class NodeConnection {
   private eventsInFlight = false;
 
   private hostListeners = new Set<Listener<HostInfo>>();
-  private containerListeners = new Set<Listener<ContainerInfo[]>>();
+  private containerListeners = new Set<Listener<ContainersUpdate>>();
+  private lastContainers: ContainerInfo[] | null = null;
   private volumeListeners = new Set<Listener<VolumeInfo[]>>();
   private metaListeners = new Set<Listener<NodeMeta>>();
   private eventListeners = new Set<Listener<EventsUpdate>>();
@@ -144,7 +153,7 @@ export class NodeConnection {
     return () => this.hostListeners.delete(fn);
   }
 
-  onContainers(fn: Listener<ContainerInfo[]>): () => void {
+  onContainers(fn: Listener<ContainersUpdate>): () => void {
     this.containerListeners.add(fn);
     return () => this.containerListeners.delete(fn);
   }
@@ -416,12 +425,13 @@ export class NodeConnection {
     this.containerSource = source;
 
     source.onmessage = (e) => {
+      let parsed: ContainersResponse;
       try {
-        const parsed = JSON.parse(e.data) as { containers: ContainerInfo[] };
-        for (const fn of this.containerListeners) fn(parsed.containers);
+        parsed = JSON.parse(e.data) as ContainersResponse;
       } catch {
-        /* malformed frame; the next one will do */
+        return; // malformed frame; the next one will do
       }
+      this.publishContainers(parsed.containers, parsed.docker_unavailable ?? false);
     };
 
     // Container stream failures don't mark the node offline.
@@ -441,10 +451,19 @@ export class NodeConnection {
   private async pollContainers() {
     try {
       const result = await this.client.getContainers();
-      for (const fn of this.containerListeners) fn(result.containers);
-    } catch {
-      /* the host stream owns the online/offline decision */
+      this.publishContainers(result.containers, result.docker_unavailable ?? false);
+    } catch (e) {
+      // The host stream owns the online/offline decision; Docker being
+      // down is worth saying, with whatever list we last had.
+      if (e instanceof AgentRequestError && e.code === 'docker_unavailable') {
+        this.publishContainers(this.lastContainers ?? [], true);
+      }
     }
+  }
+
+  private publishContainers(containers: ContainerInfo[], dockerUnavailable: boolean) {
+    this.lastContainers = containers;
+    for (const fn of this.containerListeners) fn({ containers, dockerUnavailable });
   }
 
   /**
