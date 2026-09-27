@@ -12,6 +12,7 @@ use crate::{
     events::EventsHandle,
     notify::NotifyHandle,
     history::HistoryHandle,
+    shutdown::Shutdown,
     sample::{
         docker::{ ContainerSnapshot, VolumeSnapshot },
         facts::HostFacts,
@@ -48,6 +49,8 @@ pub struct Inner {
     pub notify: Option<NotifyHandle>,
     pub uptime: Option<UptimeHandle>,
     pub updates: Option<UpdatesHandle>,
+    /// Ends streams and log sockets when the agent stops.
+    pub shutdown: Shutdown,
 }
 
 impl AppState {

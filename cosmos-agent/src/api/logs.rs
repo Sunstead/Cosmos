@@ -49,11 +49,6 @@ fn default_tail() -> u32 {
     500
 }
 
-/// Cap on lines buffered toward a websocket client before we start dropping.
-/// A container writing faster than the socket drains must never grow the
-/// agent's memory without bound.
-const WS_BUFFER: usize = 1024;
-
 /// Hard cap on a single REST tail so a pathological `tail` can't be used to
 /// pull a gigabyte through the agent.
 const MAX_TAIL: u32 = 10_000;
@@ -69,6 +64,9 @@ const ALL_CONCURRENCY: usize = 8;
 /// container list updates within an event's latency, so a few seconds covers
 /// its first lines without replaying an earlier run's output.
 const NEWCOMER_LOOKBACK_SECS: i64 = 3;
+
+/// Why a socket closes when the agent stops.
+const RESTARTING: &str = "the agent is restarting";
 
 pub async fn tail(
     State(state): State<AppState>,
@@ -128,12 +126,18 @@ async fn pump(mut socket: WebSocket, state: AppState, id: String, q: LogQuery) {
         &id,
         Some(DockerHandle::logs_options(q.tail.min(MAX_TAIL).to_string(), q.since, true))
     );
+    let stopping = state.shutdown.clone().wait();
+    tokio::pin!(stopping);
 
-    let mut dropped: u32 = 0;
-    let mut pending: usize = 0;
-
+    // Each send is awaited, so a client that reads slowly slows the Docker
+    // read too; nothing piles up in the agent.
     loop {
         tokio::select! {
+            () = &mut stopping => {
+                let _ = send_frame(&mut socket, &(LogFrame::Closed { reason: RESTARTING.into() })).await;
+                break;
+            }
+
             // Client-initiated close, or a ping we answer implicitly.
             incoming = socket.recv() => {
                 match incoming {
@@ -160,23 +164,9 @@ async fn pump(mut socket: WebSocket, state: AppState, id: String, q: LogQuery) {
                 };
 
                 for line in parse_output(&output) {
-                    // Crude backpressure: the socket send is awaited, so a
-                    // slow client naturally slows the read side. What we
-                    // guard against here is an unbounded burst.
-                    if pending >= WS_BUFFER {
-                        dropped = dropped.saturating_add(1);
-                        continue;
-                    }
-                    pending += 1;
                     if send_frame(&mut socket, &LogFrame::Line(line)).await.is_err() {
                         return;
                     }
-                    pending -= 1;
-                }
-
-                if dropped > 0 {
-                    let _ = send_frame(&mut socket, &LogFrame::Truncated { dropped }).await;
-                    dropped = 0;
                 }
             }
         }
@@ -267,9 +257,16 @@ async fn pump_all(mut socket: WebSocket, state: AppState, q: LogQuery) {
     for id in containers.borrow_and_update().running.iter() {
         streams.insert(id.clone(), open_logs(&docker, id, per.clone(), q.since));
     }
+    let stopping = state.shutdown.clone().wait();
+    tokio::pin!(stopping);
 
     loop {
         tokio::select! {
+            () = &mut stopping => {
+                let _ = send_frame(&mut socket, &(LogFrame::Closed { reason: RESTARTING.into() })).await;
+                break;
+            }
+
             incoming = socket.recv() => {
                 match incoming {
                     None | Some(Err(_)) | Some(Ok(Message::Close(_))) => break,

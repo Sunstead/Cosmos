@@ -13,14 +13,14 @@
 //! ones a restart of the agent left open.
 
 use super::{ EventsHandle, NewEvent, ProblemSpec, Report, Resolution };
-use crate::{ backups::parse_rfc3339, sample::{ docker::ContainerSnapshot, host::unix_now } };
+use crate::{ backups::parse_rfc3339, sample::{ docker::ContainerSnapshot, host::unix_now, Forwarded } };
 use bollard::models::{ EventMessage, EventMessageTypeEnum };
 use cosmos_common::types::{ ContainerHealth, ContainerInfo, EventCategory, Problem, Severity };
 use std::{ collections::HashMap, sync::Arc, time::Duration };
 use tokio::sync::{ mpsc, watch };
 
 /// A `kill` this recent makes the `die` that follows one somebody asked for.
-const KILL_WINDOW: i64 = 30;
+pub const KILL_WINDOW: i64 = 30;
 /// A container that died unasked and is still not running after this long is
 /// down. Shorter would flag every container a restart policy brings back.
 const DOWN_AFTER: i64 = 60;
@@ -104,6 +104,25 @@ fn exit_detail(code: i64) -> String {
 }
 
 impl ContainerTracker {
+    /// An event from before the stream was (re)opened, at its own time. Only
+    /// what explains a later `die` is kept: whoever was listening then
+    /// already reported the rest, and reporting it again would repeat it.
+    pub fn replay(&mut self, e: &DockerEvent, at: i64) {
+        match e.action.as_str() {
+            "kill" => {
+                self.killed.insert(e.id.clone(), at);
+            }
+            "oom" => {
+                self.oom.insert(e.id.clone(), at);
+            }
+            "destroy" => {
+                self.killed.remove(&e.id);
+                self.oom.remove(&e.id);
+            }
+            _ => {}
+        }
+    }
+
     pub fn on_event(&mut self, e: &DockerEvent, now: i64) -> Vec<Report> {
         let mut out = Vec::new();
         match e.action.as_str() {
@@ -295,7 +314,7 @@ impl ContainerTracker {
 /// container list.
 pub fn spawn(
     events: EventsHandle,
-    mut docker_events: mpsc::Receiver<EventMessage>,
+    mut docker_events: mpsc::Receiver<Forwarded>,
     containers: watch::Receiver<Arc<ContainerSnapshot>>
 ) {
     tokio::spawn(async move {
@@ -306,7 +325,10 @@ pub fn spawn(
             tokio::select! {
                 msg = docker_events.recv() => {
                     let Some(msg) = msg else { return; };
-                    if let Some(e) = DockerEvent::from_message(&msg) {
+                    let Some(e) = DockerEvent::from_message(&msg.event) else { continue; };
+                    if msg.replayed {
+                        tracker.replay(&e, msg.event.time.unwrap_or_else(unix_now));
+                    } else {
                         events.report_all(tracker.on_event(&e, unix_now()));
                     }
                 }
@@ -436,6 +458,20 @@ mod tests {
             (202, start("a", "gitea", "gitea:1")),
         ]);
         assert!(out.is_empty(), "{:?}", kinds(&out));
+    }
+
+    /// A deploy recreates the agent too: the new one subscribes between
+    /// another container's `kill` and its `die`, and the replay supplies the
+    /// `kill` it missed.
+    #[test]
+    fn a_kill_from_before_the_agent_restarted_still_counts() {
+        let mut t = ContainerTracker::default();
+        t.replay(&ev("kill", "a", "immich"), 100);
+        t.replay(&die("b", "gitea", 1), 101);
+        t.replay(&start("b", "gitea", "gitea:1"), 102);
+        let out = play(&mut t, &[(106, die("a", "immich", 143))]);
+        assert!(out.is_empty(), "{:?}", kinds(&out));
+        assert!(t.died.is_empty(), "a replayed die was already reported");
     }
 
     #[test]
