@@ -27,7 +27,7 @@ vi.mock('@tanstack/react-router', () => ({
   ),
 }));
 vi.mock('@/components/ui/resizable-sidebar', () => ({ useSidebar: () => ({ toggleSidebar }) }));
-vi.mock('@/components/theme-provider', () => ({
+vi.mock('@/hooks/use-theme', () => ({
   useTheme: () => ({ toggleTheme, resolvedTheme: 'dark', theme: 'dark', setTheme: vi.fn() }),
 }));
 vi.mock('@/api/queries', () => ({

@@ -69,6 +69,32 @@ describe('useContainerLogs', () => {
     expect(result.current.state).toBe('closed');
   });
 
+  it('says why the agent closed it, and reconnects on request', () => {
+    const { result } = renderHook(() =>
+      useContainerLogs({ nodeId: 'n1', containerId: 'c1', follow: true }),
+    );
+    const first = FakeWebSocket.instances[0];
+    act(() => {
+      first.open();
+      first.send(line('before'));
+      first.send({ type: 'closed', reason: 'the agent is restarting' });
+    });
+    act(() => vi.advanceTimersByTime(200));
+    expect(result.current.reason).toBe('the agent is restarting');
+
+    act(() => result.current.reconnect());
+    expect(FakeWebSocket.instances).toHaveLength(2);
+    expect(result.current.state).toBe('connecting');
+    expect(result.current.lines, 'the new stream brings its own backlog').toHaveLength(0);
+    act(() => {
+      FakeWebSocket.instances[1].open();
+      FakeWebSocket.instances[1].send(line('after'));
+    });
+    act(() => vi.advanceTimersByTime(200));
+    expect(result.current.lines.map((l) => l.text)).toEqual(['after']);
+    expect(result.current.reason).toBeNull();
+  });
+
   it('switching container clears the view and closes the old socket', () => {
     const { result, rerender } = renderHook(
       ({ id }) => useContainerLogs({ nodeId: 'n1', containerId: id, follow: true }),

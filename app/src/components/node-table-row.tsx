@@ -11,15 +11,29 @@ import {
   getNetTxMbps,
 } from '@/lib/node-metrics';
 import { secondsToDuration } from '@/lib/time';
-import { TableCell, TableRow } from './ui/table';
+import { TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { LiveValue } from './live-value';
 import NodeOptionsDropdown from './node-options-dropdown';
 import { NodeAvatar } from './node-planet';
 import { NodeStatusBadge } from './node-status-badge';
 import { Sparkline } from './sparkline';
 
-/** Columns, for the header in nodes-page. */
-export const NODE_TABLE_COLUMNS = ['Node', 'CPU', 'Memory', 'Network', 'Disk', 'Uptime', ''] as const;
+const COLUMNS = ['Node', 'CPU', 'Memory', 'Network', 'Disk', 'Uptime', ''] as const;
+
+/** The header row for a table of `NodeTableRow`s. */
+export function NodeTableHeader() {
+  return (
+    <TableHeader>
+      <TableRow className='hover:bg-transparent'>
+        {COLUMNS.map((c, i) => (
+          <TableHead key={i} className='h-9 text-xs'>
+            {c}
+          </TableHead>
+        ))}
+      </TableRow>
+    </TableHeader>
+  );
+}
 
 export const NodeTableRow = memo(function NodeTableRow({ nodeId }: { nodeId: string }) {
   const meta = useNodeMeta(nodeId);

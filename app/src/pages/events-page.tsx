@@ -14,7 +14,7 @@ import { SegmentedControl } from '@/components/segmented-control';
 import { Section } from '@/components/section';
 import { EmptyState, NoNodesState } from '@/components/empty-state';
 import { TableSkeleton } from '@/components/skeletons';
-import { SETUP } from '@/components/setup-hint';
+import { SETUP } from '@/lib/setup';
 import { EventItem, ProblemItem } from '@/components/event-item';
 import { Button } from '@/components/ui/button';
 

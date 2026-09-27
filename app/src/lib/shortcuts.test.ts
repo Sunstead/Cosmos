@@ -9,7 +9,7 @@ import {
   sequenceShortcuts,
   SHORTCUTS,
 } from './shortcuts';
-import { menuToCommand } from '@/components/command-host';
+import { menuToCommand } from './commands';
 
 const key = (k: string, mods: Partial<KeyboardEventInit> = {}) =>
   new KeyboardEvent('keydown', { key: k, ...mods });

@@ -41,6 +41,9 @@ export function DataTable<TData, TValue>({
 }) {
   const [sorting, setSorting] = useState<SortingState>([]);
 
+  // TanStack Table hands back functions that change every render, so the
+  // compiler leaves this component unmemoized. That's expected here.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data,
     columns,

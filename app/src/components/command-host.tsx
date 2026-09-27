@@ -1,10 +1,11 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useSidebar } from '@/components/ui/resizable-sidebar';
-import { useTheme } from '@/components/theme-provider';
+import { useTheme } from '@/hooks/use-theme';
 import { useUiStore } from '@/stores/ui';
 import { PAGES } from '@/lib/navigation';
 import { getPlatform } from '@/lib/platform';
+import { menuToCommand } from '@/lib/commands';
 import {
   isOverlayTarget,
   isSequence,
@@ -17,7 +18,7 @@ import {
 } from '@/lib/shortcuts';
 
 /** Focuses the current page's search field, if it has one. */
-export function focusPageSearch(): boolean {
+function focusPageSearch(): boolean {
   const el = document.querySelector<HTMLInputElement>('[data-page-search]');
   if (!el) return false;
   el.focus();
@@ -120,22 +121,4 @@ export function CommandHost() {
   }, []);
 
   return null;
-}
-
-/** Native menu ids (src-tauri/src/menu.rs) to command ids. */
-export function menuToCommand(menuId: string): string {
-  switch (menuId) {
-    case 'app.settings':
-      return 'settings';
-    case 'view.command-palette':
-      return 'palette';
-    case 'view.toggle-sidebar':
-      return 'sidebar';
-    case 'view.toggle-theme':
-      return 'theme';
-    case 'view.reload':
-      return 'reload';
-    default:
-      return menuId; // go.* ids match shortcut ids
-  }
 }

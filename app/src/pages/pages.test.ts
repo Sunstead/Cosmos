@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { backupHealth, INTERRUPTED_AFTER_MS } from '@/lib/backups';
-import { bodyRadius, orbitFraction } from '@/components/constellation';
+import { bodyRadius, orbitFraction } from '@/lib/orbits';
 import { BackupsStatus } from '@/generated/BackupsStatus';
 
 function status(partial: Partial<BackupsStatus> = {}): BackupsStatus {

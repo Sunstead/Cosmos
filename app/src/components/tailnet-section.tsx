@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import { Section } from '@/components/section';
 import { EmptyState } from '@/components/empty-state';
 import { TableSkeleton } from '@/components/skeletons';
-import { SETUP } from '@/components/setup-hint';
+import { SETUP } from '@/lib/setup';
 import { WakeButton } from '@/components/wol-section';
 import { Dot } from '@/components/dot';
 import { Badge } from '@/components/ui/badge';

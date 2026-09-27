@@ -5,12 +5,14 @@ import { useMetricHistory, useNodeMeta } from '@/api/queries';
 import { formatBytes } from '@/lib/node-metrics';
 import { usePersistentState } from '@/hooks/use-persistent-state';
 import { PageHeader } from '@/components/page-header';
-import { NodeSelect, useSelectedNode } from '@/components/node-select';
+import { NodeSelect } from '@/components/node-select';
+import { useSelectedNode } from '@/hooks/use-selected-node';
 import { SegmentedControl } from '@/components/segmented-control';
 import { EmptyState, NoNodesState } from '@/components/empty-state';
 import { NodeUnavailable } from '@/components/sign-in';
-import { SETUP } from '@/components/setup-hint';
-import { MetricChart, toRows } from '@/components/metric-chart';
+import { SETUP } from '@/lib/setup';
+import { MetricChart } from '@/components/metric-chart';
+import { toRows } from '@/lib/metric-series';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const RANGES = {

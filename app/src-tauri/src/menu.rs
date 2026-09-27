@@ -1,6 +1,5 @@
 //! Native macOS menu. Items emit a `menu` event carrying their id; the
-//! frontend maps ids to actions (`menuToCommand` in
-//! src/components/command-host.tsx).
+//! frontend maps ids to actions (`menuToCommand` in src/lib/commands.ts).
 
 use serde::Serialize;
 use tauri::{

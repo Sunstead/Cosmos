@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { HostInfo } from '@/generated/HostInfo';
@@ -274,6 +274,17 @@ export function useWol(): WolView {
       };
     },
   });
+}
+
+/** Online nodes where you may add, edit and wake machines. */
+export function useWolActionNodes(): string[] {
+  const key = useNodeStore((s) =>
+    s.nodes
+      .filter((n) => s.meta[n.id]?.status === 'online' && s.meta[n.id]?.capabilities.wol_actions)
+      .map((n) => n.id)
+      .join('|'),
+  );
+  return useMemo(() => (key ? key.split('|') : []), [key]);
 }
 
 /** Wake, add, edit and remove, with toasts. Refreshes the node's list after. */
