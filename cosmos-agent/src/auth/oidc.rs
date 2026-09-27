@@ -138,6 +138,23 @@ impl OidcVerifier {
 
     async fn fetch_keys(&self) -> Result<usize, String> {
         let _guard = self.fetching.lock().await;
+        self.fetch_locked().await
+    }
+
+    /// For an unknown `kid`: fetches unless a fetch was tried within the
+    /// last minute. Requests that queued behind one find it done and use its
+    /// keys, so a burst of them costs the provider one fetch, not one each.
+    async fn refetch_if_due(&self) -> Result<(), String> {
+        let _guard = self.fetching.lock().await;
+        let due = self.keys
+            .read()
+            .unwrap_or_else(|p| p.into_inner())
+            .last_attempt.is_none_or(|t| t.elapsed() >= REFETCH_AFTER);
+        if due { self.fetch_locked().await.map(|_| ()) } else { Ok(()) }
+    }
+
+    /// Call with `fetching` held.
+    async fn fetch_locked(&self) -> Result<usize, String> {
         self.keys.write().unwrap_or_else(|p| p.into_inner()).last_attempt = Some(Instant::now());
 
         let discovery: Discovery = self.get_json(&self.discovery_url).await?;
@@ -204,7 +221,7 @@ impl OidcVerifier {
             return Ok(found);
         }
         if may_refetch {
-            if let Err(e) = self.fetch_keys().await {
+            if let Err(e) = self.refetch_if_due().await {
                 if !loaded {
                     return Err(VerifyError::Unavailable(format!("cannot reach the identity provider: {e}")));
                 }
@@ -406,6 +423,33 @@ pub(crate) mod tests {
         v.keys.write().unwrap().last_attempt = Some(Instant::now() - REFETCH_AFTER);
         let _ = v.verify(&token("k2", claims(&p.issuer, &[]))).await;
         assert_eq!(p.jwks_hits.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    async fn a_burst_of_unknown_kids_costs_one_fetch() {
+        let p = provider("k1").await;
+        let v = Arc::new(OidcVerifier::new(&cfg(&p.issuer)));
+        v.verify(&token("k1", claims(&p.issuer, &[]))).await.unwrap();
+        v.keys.write().unwrap().last_attempt = Some(Instant::now() - REFETCH_AFTER);
+
+        // Every request sees a refetch is due and queues behind a fetch
+        // already under way.
+        let busy = v.fetching.lock().await;
+        let burst: Vec<_> = (0..8)
+            .map(|_| {
+                let v = v.clone();
+                let t = token("k2", claims(&p.issuer, &[]));
+                tokio::spawn(async move { v.verify(&t).await })
+            })
+            .collect();
+        for _ in 0..8 {
+            tokio::task::yield_now().await;
+        }
+        drop(busy);
+        for b in burst {
+            assert!(matches!(b.await.unwrap(), Err(VerifyError::Invalid(_))));
+        }
+        assert_eq!(p.jwks_hits.load(Ordering::SeqCst), 2, "the first load, then one refetch for all eight");
     }
 
     #[tokio::test]
