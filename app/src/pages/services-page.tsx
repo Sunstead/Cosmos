@@ -5,7 +5,7 @@ import { PageHeader } from '@/components/page-header';
 import { SearchInput } from '@/components/search-input';
 import { SegmentedControl } from '@/components/segmented-control';
 import { EmptyState, NoNodesState } from '@/components/empty-state';
-import { SETUP } from '@/components/setup-hint';
+import { SETUP } from '@/lib/setup';
 import { useContainersStore } from '@/stores/containers';
 import { useAwaiting } from '@/hooks/use-awaiting';
 import { CardGridSkeleton } from '@/components/skeletons';

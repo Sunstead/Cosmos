@@ -1,6 +1,6 @@
 import { Link, useLocation } from '@tanstack/react-router';
 import { LogIn, LogOut, Monitor, Moon, Settings, Sun, SunMoon, UserRound } from 'lucide-react';
-import { Theme, useTheme } from '@/components/theme-provider';
+import { Theme, useTheme } from '@/hooks/use-theme';
 import { Avatar, AvatarBadge, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {

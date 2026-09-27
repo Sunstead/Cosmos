@@ -27,7 +27,7 @@ import {
   CommandShortcut,
 } from '@/components/ui/command';
 import { useSidebar } from '@/components/ui/resizable-sidebar';
-import { useTheme } from '@/components/theme-provider';
+import { useTheme } from '@/hooks/use-theme';
 import { useUiStore } from '@/stores/ui';
 import { nodeDisplayName, useNodeStore } from '@/stores/nodes';
 import { useContainersStore } from '@/stores/containers';

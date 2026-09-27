@@ -27,9 +27,11 @@ interface Session {
   lines: LogLine[];
   status: LogConnectionState;
   dropped: number;
+  /** Why the agent closed the stream, when it said. */
+  reason: string | null;
 }
 
-const EMPTY: Session = { target: '', lines: [], status: 'idle', dropped: 0 };
+const EMPTY: Session = { target: '', lines: [], status: 'idle', dropped: 0, reason: null };
 
 /**
  * Streams a container's logs over the agent's WebSocket.
@@ -46,10 +48,12 @@ const EMPTY: Session = { target: '', lines: [], status: 'idle', dropped: 0 };
  */
 export function useContainerLogs({ nodeId, containerId, follow, tail = 500 }: Options) {
   const [session, setSession] = useState<Session>(EMPTY);
+  const [attempt, setAttempt] = useState(0);
   const buffer = useRef<LogLine[]>([]);
 
   const active = !!nodeId && !!containerId;
-  const target = active ? `${nodeId}|${containerId}|${follow}|${tail}` : '';
+  // A reconnect is a new stream: its backlog replaces the old lines.
+  const target = active ? `${nodeId}|${containerId}|${follow}|${tail}|${attempt}` : '';
   const current = session.target === target ? session : EMPTY;
 
   const clear = useCallback(() => {
@@ -122,7 +126,7 @@ export function useContainerLogs({ nodeId, containerId, follow, tail = 500 }: Op
           );
           break;
         case 'closed':
-          patch({ status: 'closed' });
+          patch({ status: 'closed', reason: frame.reason });
           break;
       }
     };
@@ -162,11 +166,15 @@ export function useContainerLogs({ nodeId, containerId, follow, tail = 500 }: Op
     };
   }, [nodeId, containerId, follow, tail, target]);
 
+  const reconnect = useCallback(() => setAttempt((n) => n + 1), []);
+
   return {
     lines: current.lines,
     // `connecting` until the socket reports otherwise; `idle` with no selection.
     state: active ? (current.target === target ? current.status : 'connecting') : 'idle',
     dropped: current.dropped,
+    reason: current.reason,
     clear,
+    reconnect,
   };
 }

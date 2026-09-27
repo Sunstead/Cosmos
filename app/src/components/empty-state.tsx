@@ -11,7 +11,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { useUiStore } from '@/stores/ui';
 import { cn } from '@/lib/utils';
-import { SetupHint, SetupInfo } from './setup-hint';
+import { SetupHint } from './setup-hint';
+import { SetupInfo } from '@/lib/setup';
 
 type Size = 'page' | 'card' | 'inline';
 
