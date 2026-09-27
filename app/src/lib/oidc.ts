@@ -146,6 +146,9 @@ export interface TokenClaims {
   sub?: string;
   preferred_username?: string;
   name?: string;
+  email?: string;
+  /** Not in Authentik's default mappings; shown when a mapping adds it. */
+  picture?: string;
   groups?: string[];
 }
 

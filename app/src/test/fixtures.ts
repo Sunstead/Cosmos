@@ -156,7 +156,10 @@ export function signedIn(token = 'tok') {
       issuer: ISSUER,
       accessToken: token,
       expiresAt: Date.now() + 3_600_000,
-      name: 'pwb',
+      name: 'Pat Doe',
+      username: 'pwb',
+      email: 'pat@example.com',
+      picture: null,
       groups: ['homelab-admins'],
     },
   };

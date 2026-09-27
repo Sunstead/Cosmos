@@ -7,6 +7,7 @@ import { useNodeStore } from '@/stores/nodes';
 import { useNotificationPrefs } from '@/stores/notifications';
 import { mergeEvents, mergeProblems } from '@/lib/events';
 import { cn } from '@/lib/utils';
+import { Button } from './ui/button';
 import { EventItem, ProblemItem } from './event-item';
 import { Hint } from './hint';
 
@@ -43,15 +44,20 @@ export function EventsBell() {
     <Popover open={open} onOpenChange={setOpen}>
       <Hint label={label}>
         <PopoverTrigger asChild>
-          <button
-            type='button'
+          <Button
+            variant='ghost'
+            size={problems.length > 0 ? 'default' : 'icon'}
             aria-label={label}
             className={cn(
-              'relative flex h-8 items-center gap-1.5 rounded-md px-2 text-xs tabular-nums transition-colors hover:bg-muted hover:text-foreground',
-              worst === 'error' ? 'text-error' : worst === 'warning' ? 'text-warning' : 'text-muted-foreground',
+              'relative text-xs tabular-nums',
+              worst === 'error'
+                ? 'text-error hover:text-error'
+                : worst === 'warning'
+                  ? 'text-warning hover:text-warning'
+                  : 'text-muted-foreground',
             )}
           >
-            <Bell className='size-4' />
+            <Bell />
             {problems.length > 0 && problems.length}
             {unseen && (
               <span
@@ -60,7 +66,7 @@ export function EventsBell() {
                 aria-hidden='true'
               />
             )}
-          </button>
+          </Button>
         </PopoverTrigger>
       </Hint>
       <PopoverContent align='end' className='w-96 gap-0 p-0'>

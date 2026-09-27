@@ -54,11 +54,11 @@ export const PAGES: PageDef[] = [
   { path: '/settings', label: 'Settings', icon: Settings, shortcut: 'settings' },
 ];
 
+/** Settings isn't listed: it lives in the account menu at the foot of the sidebar. */
 export const NAV_GROUPS: { label: string | null; paths: PagePath[] }[] = [
   { label: null, paths: ['/overview', '/nodes', '/services'] },
   { label: 'Infrastructure', paths: ['/containers', '/volumes', '/network'] },
   { label: 'Operations', paths: ['/monitoring', '/uptime', '/logs', '/events', '/updates', '/backups'] },
-  { label: null, paths: ['/settings'] },
 ];
 
 export function pageFor(pathname: string): PageDef | undefined {

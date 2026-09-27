@@ -1,8 +1,8 @@
 import { memo } from 'react';
 import { Link } from '@tanstack/react-router';
-import { ArrowDown, ArrowUp, BookOpen, ChevronRight, PencilLine, RefreshCw } from 'lucide-react';
+import { ArrowDown, ArrowUp, BookOpen, ChevronRight, PencilLine } from 'lucide-react';
 import { useHostInfo, useNodeMeta } from '@/api/queries';
-import { useNodeName, useNodeStore } from '@/stores/nodes';
+import { useNodeName } from '@/stores/nodes';
 import {
   formatBytes,
   getCpuPct,
@@ -16,7 +16,6 @@ import {
 } from '@/lib/node-metrics';
 import { secondsToDuration } from '@/lib/time';
 import { Card } from '@/components/ui/card';
-import { Button } from './ui/button';
 import { Skeleton } from './ui/skeleton';
 import DualStatDisplay from './dual-stat-display';
 import HardwareStatDisplay from './hardware-stat-display';
@@ -24,6 +23,7 @@ import { LiveValue } from './live-value';
 import NodeOptionsDropdown from './node-options-dropdown';
 import { NodeAvatar } from './node-planet';
 import { NodeStatusBadge } from './node-status-badge';
+import { NodeRecoveryButton } from './sign-in';
 
 function Spec({ label, value }: { label: string; value: string }) {
   return (
@@ -66,7 +66,6 @@ function Header({ nodeId, subtitle }: { nodeId: string; subtitle?: string }) {
 export const NodeCard = memo(function NodeCard({ nodeId }: { nodeId: string }) {
   const meta = useNodeMeta(nodeId);
   const { data: host } = useHostInfo(nodeId);
-  const reconnect = useNodeStore((s) => s.reconnect);
 
   if (!host) {
     const connecting = !meta || meta.status === 'connecting';
@@ -80,10 +79,7 @@ export const NodeCard = memo(function NodeCard({ nodeId }: { nodeId: string }) {
           </div>
         ) : (
           <div className='flex justify-end'>
-            <Button variant='outline' onClick={() => reconnect(nodeId)}>
-              <RefreshCw />
-              Retry
-            </Button>
+            <NodeRecoveryButton nodeId={nodeId} />
           </div>
         )}
       </Card>

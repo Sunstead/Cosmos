@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Box, ChevronLeft, RefreshCw, ServerOff } from 'lucide-react';
+import { Box, ChevronLeft, ServerOff } from 'lucide-react';
 import { useHostInfo, useNodeMeta } from '@/api/queries';
 import { useNodeName, useNodeStore } from '@/stores/nodes';
 import { useContainersStore } from '@/stores/containers';
@@ -24,6 +24,7 @@ import NodeOptionsDropdown from '@/components/node-options-dropdown';
 import HardwareStatDisplay from '@/components/hardware-stat-display';
 import { LiveValue } from '@/components/live-value';
 import { EmptyState } from '@/components/empty-state';
+import { NodeRecoveryButton } from '@/components/sign-in';
 import { DataTable } from '@/components/data-table';
 import { containerColumns, ContainerRow } from '@/components/container-columns';
 import { Button } from '@/components/ui/button';
@@ -63,7 +64,6 @@ const usageTone = (pct: number) => (pct > 90 ? 'bg-error' : pct > 75 ? 'bg-warni
 export function NodeDetailPage({ nodeId }: { nodeId: string }) {
   const exists = useNodeStore((s) => s.nodes.some((n) => n.id === nodeId));
   const name = useNodeName(nodeId);
-  const reconnect = useNodeStore((s) => s.reconnect);
   const meta = useNodeMeta(nodeId);
   const { data: host } = useHostInfo(nodeId);
   const raw = useContainersStore((s) => s.nodeContainers[nodeId]);
@@ -145,9 +145,7 @@ export function NodeDetailPage({ nodeId }: { nodeId: string }) {
               <NodeStatusBadge nodeId={nodeId} />
               {meta?.error && <p className='pt-1 text-xs text-muted-foreground'>{meta.error}</p>}
             </div>
-            <Button variant='outline' onClick={() => reconnect(nodeId)}>
-              <RefreshCw /> Retry
-            </Button>
+            <NodeRecoveryButton nodeId={nodeId} />
           </div>
         )}
       </Section>
