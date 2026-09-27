@@ -247,6 +247,20 @@ describe('NodeConnection', () => {
     conn.stop();
   });
 
+  it('retries, rather than asking for a sign-in, when the provider is down', async () => {
+    const { conn, metas } = connect(healthy, async () => {
+      throw new Error("Can't reach the sign-in provider");
+    });
+    conn.start();
+    await settle();
+
+    const meta = metas.at(-1)!;
+    expect(meta.status).toBe('offline');
+    expect(meta.error).toBe("Can't reach the sign-in provider");
+    expect(FakeEventSource.instances).toHaveLength(0);
+    conn.stop();
+  });
+
   it('refreshes once on a 401 before asking for a sign-in', async () => {
     const tokens = vi.fn(async (_auth: unknown, opts?: { force?: boolean }) => (opts?.force ? 'fresh' : 'stale'));
     let hostCalls = 0;

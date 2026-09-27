@@ -18,6 +18,7 @@ import { useNodeStore } from '@/stores/nodes';
 import { useUiStore } from '@/stores/ui';
 import { signIn } from '@/stores/auth';
 import { OidcAuthInfo } from '@/api/connection';
+import { providerHost } from '@/lib/accounts';
 
 /** Mounted once in the shell; opened through the UI store. */
 export function AddNodeDialog() {
@@ -91,7 +92,12 @@ function AddNodeForm({ initialUrl, onDone }: { initialUrl: string; onDone: () =>
             id='node-url'
             placeholder='jupiter.local:7700'
             value={url}
-            onChange={(e) => setUrl(e.target.value)}
+            onChange={(e) => {
+              setUrl(e.target.value);
+              // A different address may not sign in, or not with this provider.
+              setNeedsSignIn(null);
+              setError(null);
+            }}
             autoComplete='off'
             spellCheck={false}
             autoFocus
@@ -101,7 +107,7 @@ function AddNodeForm({ initialUrl, onDone }: { initialUrl: string; onDone: () =>
         {needsSignIn && (
           <div className='flex items-center justify-between gap-3 rounded-md border p-3 text-sm'>
             <span>
-              This node signs in with <span className='font-medium'>{new URL(needsSignIn.issuer).host}</span>.
+              This node signs in with <span className='font-medium'>{providerHost(needsSignIn.issuer)}</span>.
             </span>
             <Button type='button' size='sm' disabled={busy} onClick={() => void startSignIn(needsSignIn)}>
               <LogIn /> Sign in

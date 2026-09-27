@@ -83,8 +83,12 @@ test.describe('with a node', () => {
     await nextSignIn(request);
 
     await page.goto('/settings');
-    await expect(page.getByText('guest')).toBeVisible();
-    await expect(page.getByText('Viewer')).toBeVisible();
+    const main = page.locator('main').last();
+    await expect(main.getByText('guest')).toBeVisible();
+    await expect(main.getByText('Viewer')).toBeVisible();
+    // And at the foot of the sidebar.
+    await expect(page.getByRole('button', { name: 'Account' })).toContainText('guest');
+    await expect(page.getByRole('button', { name: 'Account' })).toContainText('Viewer');
 
     await page.goto('/network');
     const wol = section(page, 'Wake-on-LAN');
@@ -97,6 +101,37 @@ test.describe('with a node', () => {
     await page.goto('/settings');
     await page.getByRole('button', { name: 'Sign out' }).click();
     await expect(page.getByText('Sign in needed').first()).toBeVisible({ timeout: 15_000 });
+  });
+
+  test('the account menu shows who you are and signs you out', async ({ page }, info) => {
+    await addNodeOnline(page);
+    const account = page.getByRole('button', { name: 'Account' });
+    await expect(account).toContainText('pwb');
+    await expect(account).toContainText('Admin');
+
+    await account.click();
+    const menu = page.getByRole('menu');
+    await expect(menu).toContainText('pwb');
+    await expect(menu.getByRole('menuitem', { name: /Settings/ })).toBeVisible();
+    await page.screenshot({ path: info.outputPath('account-menu.png') });
+    await menu.getByRole('menuitem', { name: 'Sign out' }).click();
+
+    // Signed out on purpose: straight to the sign-in state, no "expired" toast.
+    await expect(account).toContainText('Not signed in', { timeout: 15_000 });
+    await expect(page.getByText('Your sign-in expired')).toHaveCount(0);
+    await page.locator('[data-sidebar=footer]').getByRole('button', { name: 'Sign in' }).click();
+    await expect(account).toContainText('pwb', { timeout: 15_000 });
+  });
+
+  test('G then a letter goes to a page', async ({ page }) => {
+    await page.goto('/overview');
+    await expect(page.locator('[data-page-header]')).toBeVisible();
+    await page.keyboard.press('g');
+    await page.keyboard.press('l');
+    await expect(page).toHaveURL(/\/logs$/);
+    await page.keyboard.press('g');
+    await page.keyboard.press('p');
+    await expect(page).toHaveURL(/\/updates$/);
   });
 
   test('adds a node and it comes online', async ({ page }) => {

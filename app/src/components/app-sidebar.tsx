@@ -2,6 +2,7 @@ import { Link, useLocation } from '@tanstack/react-router';
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -12,6 +13,7 @@ import {
 } from '@/components/ui/resizable-sidebar';
 import { NAV_GROUPS, PAGES, pageFor } from '@/lib/navigation';
 import { ShortcutKeys } from './hint';
+import { AccountMenu } from './account-menu';
 
 export function AppSidebar() {
   const { pathname } = useLocation();
@@ -61,6 +63,9 @@ export function AppSidebar() {
           </SidebarGroup>
         ))}
       </SidebarContent>
+      <SidebarFooter className='border-t border-sidebar-border p-2'>
+        <AccountMenu />
+      </SidebarFooter>
       <SidebarRail className='mt-3' />
     </Sidebar>
   );

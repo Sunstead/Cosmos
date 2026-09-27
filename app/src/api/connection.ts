@@ -18,7 +18,8 @@ export type NodeStatus =
 export type OidcAuthInfo = Extract<AuthInfo, { kind: 'oidc' }>;
 
 /**
- * Where a connection gets its bearer token. `null` means "sign in first".
+ * Where a connection gets its bearer token. `null` means "sign in first"; a
+ * rejection means the provider is unreachable, so the connection retries.
  * Injected so the connection stays testable and knows nothing of the
  * browser/desktop split.
  */
@@ -308,6 +309,8 @@ export class NodeConnection {
       await this.probeHost(auth);
     } catch (e) {
       if (e instanceof AgentRequestError && e.isUnauthorized) return this.needSignIn(auth);
+      // A provider that's down (say, restarting in the same deploy) is
+      // retried like a dead agent, never mistaken for a sign-out.
       this.scheduleRetry(e instanceof Error ? e.message : 'unreachable');
       return;
     }
@@ -345,9 +348,12 @@ export class NodeConnection {
    */
   private keepTokenFresh(auth: OidcAuthInfo) {
     this.tokenTimer = setInterval(() => {
-      void this.tokens(auth).then((token) => {
-        if (token) this.client.setToken(token);
-      });
+      this.tokens(auth).then(
+        (token) => token && this.client.setToken(token),
+        () => {
+          /* the provider is down; the next tick tries again */
+        },
+      );
     }, TOKEN_CHECK_MS);
   }
 

@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/page-header';
 import { NodeSelect, useSelectedNode } from '@/components/node-select';
 import { SegmentedControl } from '@/components/segmented-control';
 import { EmptyState, NoNodesState } from '@/components/empty-state';
+import { NodeUnavailable } from '@/components/sign-in';
 import { SETUP } from '@/components/setup-hint';
 import { MetricChart, toRows } from '@/components/metric-chart';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -62,6 +63,9 @@ export function MonitoringPage() {
           setup={SETUP.history}
         />
       );
+    }
+    if (nodeId && (meta?.status === 'offline' || meta?.status === 'unauthorized')) {
+      return <NodeUnavailable nodeId={nodeId} />;
     }
     if (error) return <EmptyState size='page' icon={TriangleAlert} title='Could not load history' />;
     if (isLoading || !data) {
