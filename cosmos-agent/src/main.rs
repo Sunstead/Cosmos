@@ -15,6 +15,7 @@ mod events;
 mod history;
 mod notify;
 mod sample;
+mod shutdown;
 mod sse;
 mod state;
 mod store;
@@ -26,7 +27,11 @@ use config::Config;
 use docker::DockerHandle;
 use sample::facts::HostFacts;
 use state::{ AppState, Inner };
-use std::{ process::ExitCode, sync::Arc };
+use std::{ process::ExitCode, sync::Arc, time::Duration };
+
+/// How long open connections get to finish once the agent is asked to stop.
+/// Docker waits 10 s before SIGKILL; this leaves room to flush history.
+const DRAIN: Duration = Duration::from_secs(5);
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -237,6 +242,7 @@ async fn serve(cfg: Config, mode: config::AuthMode) -> Result<(), Box<dyn std::e
         tracing::warn!("COSMOS_AGENT_GITHUB_TOKEN is set but [updates] repo isn't; updates are only listed");
     }
 
+    let (stop, shutdown) = shutdown::channel();
     let state = AppState::new(Inner {
         auth: match (mode, &cfg.auth.oidc) {
             (config::AuthMode::Oidc { .. }, Some(oidc)) => auth::Auth::oidc(oidc, cfg.auth.allow_query_token),
@@ -244,7 +250,7 @@ async fn serve(cfg: Config, mode: config::AuthMode) -> Result<(), Box<dyn std::e
         },
         facts,
         docker,
-        history,
+        history: history.clone(),
         host_rx,
         containers_rx,
         volumes_rx,
@@ -256,6 +262,7 @@ async fn serve(cfg: Config, mode: config::AuthMode) -> Result<(), Box<dyn std::e
         notify,
         uptime,
         updates,
+        shutdown: shutdown.clone(),
         cfg: cfg.clone(),
     });
 
@@ -270,16 +277,32 @@ async fn serve(cfg: Config, mode: config::AuthMode) -> Result<(), Box<dyn std::e
         "listening"
     );
 
-    axum
-        ::serve(listener, app)
-        // Under Compose, `docker compose down` sends SIGTERM. Without this the
-        // history writer's in-flight batch is lost.
-        .with_graceful_shutdown(shutdown_signal()).await?;
+    // Under Compose, a deploy or `docker compose down` sends SIGTERM.
+    let store_for_stop = events.as_ref().map(|e| e.store.clone());
+    tokio::spawn(async move {
+        shutdown_signal().await;
+        // Asked to stop, so the next start knows this wasn't a crash or a
+        // power cut. Recorded first: if the drain below overruns Docker's
+        // grace period, SIGKILL doesn't turn a deploy into a crash.
+        if let Some(store) = &store_for_stop {
+            events::lifecycle::stopped_cleanly(store).await;
+        }
+        // Ends the streams and log sockets, which would otherwise hold the
+        // graceful shutdown open for as long as any app stays connected.
+        stop.fire();
+    });
 
-    // Only reached after a signal, so the next start knows this wasn't a
-    // crash or a power cut.
-    if let Some(events) = &events {
-        events::lifecycle::stopped_cleanly(&events.store).await;
+    let server = axum::serve(listener, app).with_graceful_shutdown(shutdown.clone().wait());
+    tokio::select! {
+        result = server => result?,
+        () = async {
+            shutdown.wait().await;
+            tokio::time::sleep(DRAIN).await;
+        } => tracing::warn!("connections still open after {}s; stopping anyway", DRAIN.as_secs()),
+    }
+
+    if let Some(history) = history {
+        let _ = tokio::task::spawn_blocking(move || history.flush(Duration::from_secs(2))).await;
     }
 
     tracing::info!("shutdown complete");

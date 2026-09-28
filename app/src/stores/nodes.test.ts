@@ -103,6 +103,33 @@ describe('node store', () => {
     expect(useNodeStore.getState().meta[id].status).not.toBe('unauthorized');
   });
 
+  it('drops a node to sign-in as soon as its session is gone', async () => {
+    await useNodeStore.getState().addNode('agent.test');
+    await settle();
+    const id = useNodeStore.getState().nodes[0].id;
+    FakeEventSource.latest('/v1/host/stream')!.emit(hostInfo());
+    expect(useNodeStore.getState().meta[id].status).toBe('online');
+
+    useAuthStore.setState({ sessions: {} });
+    await settle();
+    expect(useNodeStore.getState().meta[id].status).toBe('unauthorized');
+  });
+
+  it('says so when the sign-in provider, not the agent, is down', async () => {
+    useAuthStore.setState({ sessions: {} });
+    localStorage.setItem(`cosmos-oidc:${ISSUER}`, 'rt');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input).startsWith('https://auth.test')) throw new TypeError('Failed to fetch');
+        return mockFetch({ '/v1/info': { body: agentInfo() } })(input);
+      }),
+    );
+    const result = await useNodeStore.getState().addNode('agent.test');
+    expect(result).toEqual({ ok: false, error: expect.stringMatching(/sign-in provider/) });
+    localStorage.clear();
+  });
+
   it('counts online nodes from stream events', async () => {
     await useNodeStore.getState().addNode('agent.test');
     await settle();

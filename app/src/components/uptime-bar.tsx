@@ -38,9 +38,9 @@ export const UptimeBar = memo(function UptimeBar({
       {Array.from({ length: empty }, (_, i) => (
         <span key={`e${i}`} className='min-w-0 flex-1 rounded-[1px] bg-muted' />
       ))}
-      {shown.map((b) => (
+      {shown.map((b, i) => (
         <span
-          key={b.at}
+          key={i}
           title={beatTitle(b)}
           className={cn(
             'min-w-0 flex-1 rounded-[1px]',

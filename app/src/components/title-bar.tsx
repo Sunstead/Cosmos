@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Copy, Minus, PanelLeft, Search, Square, X } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { useSidebar } from '@/components/ui/resizable-sidebar';
 import { useNodeStore } from '@/stores/nodes';
 import { useUiStore } from '@/stores/ui';
@@ -20,7 +20,7 @@ function SearchTrigger() {
       type='button'
       onClick={() => setPaletteOpen(true)}
       aria-label='Search'
-      className='flex h-8 w-full items-center gap-2 rounded-md border border-input bg-muted/40 px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'
+      className='flex h-8 w-full items-center gap-2 rounded-lg border border-input bg-muted/40 px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground dark:bg-input/30 dark:hover:bg-input/50'
     >
       <Search className='size-4 shrink-0' />
       <span className='flex-1 truncate text-left'>Search</span>
@@ -39,7 +39,10 @@ function NodesOnline() {
     <Hint label={healthy ? 'All nodes online' : `${total - online} offline`}>
       <Link
         to='/nodes'
-        className='hidden h-8 items-center gap-2 rounded-md px-2 text-xs text-muted-foreground tabular-nums transition-colors hover:bg-muted hover:text-foreground md:flex'
+        className={cn(
+          buttonVariants({ variant: 'ghost' }),
+          'hidden text-xs tabular-nums text-muted-foreground md:inline-flex',
+        )}
       >
         <Dot variant={healthy ? 'success' : 'error'} pulse={healthy} />
         {online}/{total}
@@ -92,12 +95,20 @@ export const TitleBar = memo(function TitleBar() {
       // Descendants drag too; buttons and links are excluded automatically.
       data-tauri-drag-region='deep'
       data-fullscreen={fullscreen || undefined}
-      className='titlebar chrome grid h-(--titlebar-height) shrink-0 grid-cols-[1fr_minmax(0,28rem)_1fr] items-center gap-3 bg-sidebar'
+      // The sides never shrink below their controls: on a phone the search
+      // takes what's left, rather than sliding over the sidebar toggle.
+      className='titlebar chrome grid h-(--titlebar-height) shrink-0 grid-cols-[minmax(max-content,1fr)_minmax(0,28rem)_minmax(max-content,1fr)] items-center gap-3 bg-sidebar'
     >
-      <div className='flex min-w-0 items-center gap-2 pl-2'>
+      <div className='flex items-center gap-2 pl-2'>
         <span className='titlebar-inset shrink-0' aria-hidden='true' />
         <Hint label='Toggle sidebar' shortcut='sidebar'>
-          <Button variant='ghost' size='icon' onClick={toggleSidebar} aria-label='Toggle sidebar'>
+          <Button
+            variant='ghost'
+            size='icon'
+            className='text-muted-foreground'
+            onClick={toggleSidebar}
+            aria-label='Toggle sidebar'
+          >
             <PanelLeft />
           </Button>
         </Hint>

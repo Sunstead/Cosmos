@@ -34,7 +34,7 @@ import { SegmentedControl } from '@/components/segmented-control';
 import { Section } from '@/components/section';
 import { EmptyState, NoNodesState } from '@/components/empty-state';
 import { TableSkeleton } from '@/components/skeletons';
-import { SETUP } from '@/components/setup-hint';
+import { SETUP } from '@/lib/setup';
 import { Dot } from '@/components/dot';
 import { NodeName } from '@/components/node-name';
 import { ConfirmDialog } from '@/components/confirm-dialog';
@@ -366,7 +366,7 @@ export function UptimePage() {
               </>
             )}
             {canAdd && (
-              <Button size='sm' className='h-8' onClick={() => setAdding(true)}>
+              <Button onClick={() => setAdding(true)}>
                 <Plus /> Add check
               </Button>
             )}

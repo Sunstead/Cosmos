@@ -1,6 +1,6 @@
 import { memo, useState } from 'react';
 import { LoaderCircle, MoreHorizontal, Pencil, Plus, Power, Trash } from 'lucide-react';
-import { useNodeMeta, useNow, useTick, useWolActions, WolItem, WolView } from '@/api/queries';
+import { useNodeMeta, useNow, useTick, useWolActionNodes, useWolActions, WolItem, WolView } from '@/api/queries';
 import { WolState } from '@/generated/WolState';
 import { relativeTime } from '@/lib/time';
 import { matchesQuery } from '@/lib/format';
@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { Section } from '@/components/section';
 import { EmptyState } from '@/components/empty-state';
 import { TableSkeleton } from '@/components/skeletons';
-import { SETUP } from '@/components/setup-hint';
+import { SETUP } from '@/lib/setup';
 import { Dot, DotVariant } from '@/components/dot';
 import { NodeName } from '@/components/node-name';
 import { ConfirmDialog } from '@/components/confirm-dialog';
@@ -140,7 +140,7 @@ export const WolSection = memo(function WolSection({
   // The waking counter and "5m ago" both need to move between polls.
   useTick(wol.items.some((i) => i.state === 'waking') ? 1_000 : 60_000);
   const [adding, setAdding] = useState(false);
-  const canAdd = useNodeMeta(wol.nodes[0] ?? null)?.capabilities.wol_actions ?? false;
+  const canAdd = useWolActionNodes().length > 0;
 
   const visible = wol.items.filter((i) => matchesQuery(query, i.target.name, i.target.mac));
 

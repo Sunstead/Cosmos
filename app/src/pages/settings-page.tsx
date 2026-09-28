@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Info, Monitor, Moon, PencilLine, RefreshCw, Sun, Trash } from 'lucide-react';
 import { useNodeStore, nodeDisplayName } from '@/stores/nodes';
 import { useNodeMeta } from '@/api/queries';
-import { useTheme, Theme } from '@/components/theme-provider';
+import { useTheme, Theme } from '@/hooks/use-theme';
 import { PageHeader } from '@/components/page-header';
 import { Section } from '@/components/section';
 import { SegmentedControl } from '@/components/segmented-control';

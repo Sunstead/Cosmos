@@ -9,11 +9,15 @@ const HTTP_TIMEOUT: Duration = Duration::from_secs(10);
 /// Waits before the second and third tries.
 const RETRY_AFTER: [Duration; 2] = [Duration::from_secs(2), Duration::from_secs(10)];
 
+/// Doesn't follow redirects: a redirected POST comes back as a GET, which
+/// for an `http://` address that redirects to `https://` fetches the server's
+/// home page, answers 200, and reads as delivered when nothing was sent.
 pub fn client() -> reqwest::Client {
     reqwest::Client
         ::builder()
         .timeout(HTTP_TIMEOUT)
         .user_agent(concat!("cosmos-agent/", env!("CARGO_PKG_VERSION")))
+        .redirect(reqwest::redirect::Policy::none())
         .build()
         .expect("reqwest client")
 }
@@ -98,6 +102,17 @@ async fn attempt(client: &reqwest::Client, ch: &Channel, msg: &Message, e: &Even
     if status.is_success() {
         return Ok(());
     }
+    if status.is_redirection() {
+        let to = res
+            .headers()
+            .get(reqwest::header::LOCATION)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_string);
+        return Err(match to {
+            Some(to) => format!("HTTP {status}: it moved to {to}; use that address"),
+            None => format!("HTTP {status}: it redirects; check the address"),
+        });
+    }
     let body = res.text().await.unwrap_or_default();
     let body: String = body.trim().chars().take(200).collect();
     Err(if body.is_empty() { format!("HTTP {status}") } else { format!("HTTP {status}: {body}") })
@@ -109,15 +124,15 @@ pub async fn deliver_once(client: &reqwest::Client, ch: &Channel, e: &Event, nod
     attempt(client, ch, &message(e, node, link_url), e, node).await
 }
 
-/// Tries up to three times. A 4xx won't get better on its own, so it isn't
-/// retried.
+/// Tries up to three times. A 3xx or 4xx won't get better on its own, so it
+/// isn't retried.
 pub async fn deliver(client: &reqwest::Client, ch: &Channel, e: &Event, node: &str, link_url: Option<&str>) -> Result<(), String> {
     let msg = message(e, node, link_url);
     let mut result = attempt(client, ch, &msg, e, node).await;
     for wait in RETRY_AFTER {
         match &result {
             Ok(()) => break,
-            Err(err) if err.starts_with("HTTP 4") => break,
+            Err(err) if err.starts_with("HTTP 3") || err.starts_with("HTTP 4") => break,
             Err(_) => {}
         }
         tokio::time::sleep(wait).await;
@@ -243,6 +258,22 @@ mod tests {
         let err = deliver(&client(), &ntfy(&url), &crash(), "jupiter", None).await.unwrap_err();
         assert_eq!(err, "HTTP 403 Forbidden: nope");
         assert_eq!(seen.lock().unwrap().len(), 1);
+    }
+
+    /// An `http://` address that redirects to `https://` must not read as
+    /// delivered: following it would turn the POST into a GET of the home page.
+    #[tokio::test]
+    async fn a_redirect_is_a_failure_that_says_where() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        let app = Router::new().route(
+            "/",
+            post(|| async { (StatusCode::MOVED_PERMANENTLY, [("location", "https://ntfy.example.com/")]) })
+        );
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+
+        let err = deliver(&client(), &ntfy(&url), &crash(), "jupiter", None).await.unwrap_err();
+        assert_eq!(err, "HTTP 301 Moved Permanently: it moved to https://ntfy.example.com/; use that address");
     }
 
     #[tokio::test]

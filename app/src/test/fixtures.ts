@@ -99,10 +99,11 @@ export function containerInfo(partial: Partial<ContainerInfo> = {}): ContainerIn
 }
 
 export function tailnetDevice(partial: Partial<TailnetDevice> = {}): TailnetDevice {
+  const name = partial.name ?? 'desktop';
   return {
     id: 'n1',
-    name: 'desktop',
-    dns_name: 'desktop.tail1234.ts.net',
+    name,
+    dns_name: `${name}.tail1234.ts.net`,
     os: 'windows',
     user: 'pwb@example.com',
     ips: ['100.64.0.2', 'fd7a:115c:a1e0::2'],
@@ -156,7 +157,10 @@ export function signedIn(token = 'tok') {
       issuer: ISSUER,
       accessToken: token,
       expiresAt: Date.now() + 3_600_000,
-      name: 'pwb',
+      name: 'Pat Doe',
+      username: 'pwb',
+      email: 'pat@example.com',
+      picture: null,
       groups: ['homelab-admins'],
     },
   };

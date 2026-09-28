@@ -1,13 +1,31 @@
 import { ReactElement } from 'react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Kbd, KbdGroup } from '@/components/ui/kbd';
-import { chordKeys, SHORTCUTS, ShortcutId } from '@/lib/shortcuts';
+import { chordKeys, isSequence, SHORTCUTS, ShortcutId } from '@/lib/shortcuts';
 
-/** Key caps for a registered shortcut. */
+/** Key caps for a registered shortcut: `⌘ K`, or `G then O` for a sequence. */
 export function ShortcutKeys({ id, className }: { id: ShortcutId; className?: string }) {
+  const chord = SHORTCUTS[id];
+  const keys = chordKeys(chord);
+  if (isSequence(chord)) {
+    return (
+      <KbdGroup className={className} aria-label={keys.join(' then ')}>
+        {keys.map((k, i) => (
+          <span key={i} className='contents'>
+            {i > 0 && (
+              <span aria-hidden='true' className='text-2xs opacity-60'>
+                then
+              </span>
+            )}
+            <Kbd aria-hidden='true'>{k}</Kbd>
+          </span>
+        ))}
+      </KbdGroup>
+    );
+  }
   return (
     <KbdGroup className={className}>
-      {chordKeys(SHORTCUTS[id]).map((k) => (
+      {keys.map((k) => (
         <Kbd key={k}>{k}</Kbd>
       ))}
     </KbdGroup>

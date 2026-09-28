@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { hash, planetExtent, planetStyle } from './planet';
 import { msToDuration, relativeTime, secondsToDuration } from './time';
-import { matchesQuery, NO_VALUE, plural } from './format';
+import { matchesQuery, NO_VALUE, plural, sentence } from './format';
 import { cancelDraw, requestDraw } from './frame-scheduler';
 import { canvasTokens, onThemeChange } from './theme-tokens';
 import { formatBytes, getDiskType, getMemUsagePct } from './node-metrics';
@@ -67,6 +67,12 @@ describe('format', () => {
     expect(plural(1, 'node')).toBe('1 node');
     expect(plural(2, 'node')).toBe('2 nodes');
     expect(plural(0, 'entry', 'entries')).toBe('0 entries');
+  });
+
+  it('joins clauses into a sentence, whichever comes first', () => {
+    expect(sentence(['last run 2h ago', 'took 14m'])).toBe('Last run 2h ago, took 14m');
+    expect(sentence([null, 'took 14m', false])).toBe('Took 14m');
+    expect(sentence([])).toBe('');
   });
 });
 

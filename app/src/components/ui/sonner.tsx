@@ -6,7 +6,7 @@ import {
   OctagonXIcon,
   Loader2Icon,
 } from 'lucide-react';
-import { useTheme } from '@/components/theme-provider';
+import { useTheme } from '@/hooks/use-theme';
 
 const Toaster = ({ ...props }: ToasterProps) => {
   const { resolvedTheme } = useTheme();

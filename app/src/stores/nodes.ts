@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware';
 import { NodeConnection, NodeMeta, NodeStatus, OidcAuthInfo } from '@/api/connection';
 import { AgentRequestError, LEGACY_CAPABILITIES } from '@/api/client';
 import { normalizeAgentUrl } from '@/lib/agent-url';
-import { getAccessToken, useAuthStore } from './auth';
+import { getAccessToken, ProviderUnreachable, useAuthStore } from './auth';
 import { sumDisk, getMemUsagePct } from '@/lib/node-metrics';
 import { clearNodeSeries, pushSample, resetNodeSeries } from './metrics-history';
 import { useContainersStore } from './containers';
@@ -121,8 +121,8 @@ function attach(nodeId: string, url: string): NodeConnection {
     }
   });
 
-  conn.onContainers((containers) => {
-    useContainersStore.getState().setNodeContainers(nodeId, containers);
+  conn.onContainers(({ containers, dockerUnavailable }) => {
+    useContainersStore.getState().setNodeContainers(nodeId, containers, dockerUnavailable);
   });
 
   conn.onVolumes((volumes) => {
@@ -205,6 +205,9 @@ export const useNodeStore = create<NodeStore>()(
           if (e instanceof AgentRequestError && e.isUnauthorized) {
             return { ok: false, error: 'Signed in, but this agent did not accept it.' };
           }
+          if (e instanceof ProviderUnreachable) {
+            return { ok: false, error: `${e.message}. Try again in a moment.` };
+          }
           return { ok: false, error: `No agent reachable at ${url}.` };
         }
 
@@ -277,15 +280,20 @@ export function useNodeName(nodeId: string | null): string | null {
 }
 
 /**
- * A new sign-in may unlock nodes that were waiting on it: every node that
- * trusts that provider shares the session.
+ * Every node that trusts a provider shares its session. A new sign-in may
+ * unlock the nodes waiting on it; a sign-out (or a revoked refresh token)
+ * drops the streams still open on the old token, so those nodes ask for a
+ * sign-in at once instead of carrying on until they next reconnect.
  */
 useAuthStore.subscribe((state, prev) => {
   const added = Object.keys(state.sessions).filter((issuer) => !prev.sessions[issuer]);
-  if (added.length === 0) return;
+  const removed = Object.keys(prev.sessions).filter((issuer) => !state.sessions[issuer]);
+  if (added.length === 0 && removed.length === 0) return;
   for (const conn of connections.values()) {
     const meta = conn.getMeta();
-    if (meta.status === 'unauthorized' && meta.auth?.kind === 'oidc' && added.includes(meta.auth.issuer)) {
+    if (meta.auth?.kind !== 'oidc') continue;
+    const issuer = meta.auth.issuer;
+    if ((meta.status === 'unauthorized' && added.includes(issuer)) || (meta.status !== 'unauthorized' && removed.includes(issuer))) {
       conn.retryNow();
     }
   }

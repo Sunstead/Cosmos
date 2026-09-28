@@ -95,6 +95,11 @@ pub struct ContainersResponse {
     /// Unix seconds of the sample these came from.
     #[ts(type = "number")]
     pub sampled_at: i64,
+    /// Docker isn't answering: `containers` is the last list it gave, or
+    /// empty if it never has. Absent from 0.8.0 and older agents.
+    #[serde(default)]
+    #[ts(as = "Option<bool>", optional)]
+    pub docker_unavailable: bool,
 }
 
 #[derive(Serialize, Deserialize, TS, Debug, Clone)]
@@ -185,12 +190,14 @@ pub struct LogsResponse {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum LogFrame {
     Line(LogLine),
-    /// The outbound buffer overflowed and we dropped the oldest lines rather
-    /// than let a firehose container grow the agent's memory without bound.
+    /// Lines were dropped. No current agent sends this: its sends are
+    /// awaited, so a slow client slows the Docker read instead. Kept so the
+    /// wire format stays stable.
     Truncated {
         dropped: u32,
     },
-    /// The container exited or the stream ended; no more lines are coming.
+    /// The container exited, the stream ended or the agent is stopping; no
+    /// more lines are coming.
     Closed {
         reason: String,
     },

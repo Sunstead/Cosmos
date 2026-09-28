@@ -59,6 +59,9 @@ pub const MAX_INTERVAL: u32 = 3_600;
 /// Failures this soon after a service's container starts don't count: apps
 /// answer 502 through the proxy while they boot, and a deploy restarts them.
 const STARTUP_GRACE: i64 = 120;
+/// A service whose containers vanish keeps its check, paused, this long:
+/// a deploy that removes and recreates them isn't the service going away.
+const VANISH_GRACE: i64 = 60;
 
 pub struct UptimeSnapshot {
     pub json: Arc<str>,
@@ -242,6 +245,23 @@ fn define(
     out
 }
 
+/// Keeps service checks whose containers just vanished, paused, for
+/// [`VANISH_GRACE`]. Their state, heartbeat and open problem survive a
+/// deploy that recreates the containers; one that stays gone is dropped
+/// after that. `vanished` tracks since when, and forgets checks that came
+/// back or were dropped.
+fn carry_vanished(old: &[Defined], mut fresh: Vec<Defined>, vanished: &mut HashMap<String, i64>, now: i64) -> Vec<Defined> {
+    let back: Vec<String> = fresh.iter().map(|c| c.check.id.clone()).collect();
+    for o in old.iter().filter(|o| o.check.source == CheckSource::Service && !back.contains(&o.check.id)) {
+        let since = *vanished.entry(o.check.id.clone()).or_insert(now);
+        if now - since < VANISH_GRACE {
+            fresh.push(Defined { active: false, grace_until: None, ..o.clone() });
+        }
+    }
+    vanished.retain(|id, _| !back.contains(id) && fresh.iter().any(|c| &c.check.id == id));
+    fresh
+}
+
 /// What the task keeps per check between results.
 struct Live {
     streak: Streak,
@@ -351,6 +371,7 @@ pub fn spawn(
         custom: Vec::new(),
         settings: HashMap::new(),
         checks: Vec::new(),
+        vanished: HashMap::new(),
         live: HashMap::new(),
         certs: HashMap::new(),
         stats: Stats::default(),
@@ -371,6 +392,8 @@ struct Task {
     custom: Vec<CustomCheck>,
     settings: HashMap<String, UptimeServiceInput>,
     checks: Vec<Defined>,
+    /// Service checks kept through a recreate, and since when.
+    vanished: HashMap<String, i64>,
     live: HashMap<String, Live>,
     /// The certificate each HTTPS host last served.
     certs: HashMap<String, CertValidity>,
@@ -451,11 +474,12 @@ impl Task {
     /// changed.
     fn redefine(&mut self) -> bool {
         let snapshot = self.containers.borrow().clone();
-        let checks = define(&snapshot.containers, &self.settings, &self.custom, self.default_interval);
+        let now = unix_now();
+        let fresh = define(&snapshot.containers, &self.settings, &self.custom, self.default_interval);
+        let checks = carry_vanished(&self.checks, fresh, &mut self.vanished, now);
         if checks == self.checks {
             return false;
         }
-        let now = unix_now();
         let open = self.events.as_ref().map(|e| e.open_problems()).unwrap_or_default();
 
         for old in &self.checks {
@@ -701,6 +725,32 @@ mod tests {
         assert_eq!(checks[2].check.interval_secs, 60);
         assert_eq!(immich.grace_until, Some(1_000 + STARTUP_GRACE));
         assert_eq!(portainer.grace_until, None);
+    }
+
+    #[test]
+    fn a_service_recreated_keeps_its_check_and_one_removed_loses_it() {
+        let running = [container("immich-server", Some("immich"), Some("immich.example.net"), "running")];
+        let mut vanished = HashMap::new();
+        let before = carry_vanished(&[], define(&running, &HashMap::new(), &[], 60), &mut vanished, 0);
+        assert_eq!(before.len(), 1);
+
+        // Mid-recreate: no container at all. The check stays, paused.
+        let during = carry_vanished(&before, define(&[], &HashMap::new(), &[], 60), &mut vanished, 10);
+        assert_eq!(during.len(), 1);
+        assert!(!during[0].active);
+        let during = carry_vanished(&during, define(&[], &HashMap::new(), &[], 60), &mut vanished, 30);
+        assert_eq!(during.len(), 1);
+
+        // Back: the new container's check, and the clock is forgotten.
+        let after = carry_vanished(&during, define(&running, &HashMap::new(), &[], 60), &mut vanished, 40);
+        assert!(after[0].active);
+        assert!(vanished.is_empty());
+
+        // Gone for good: dropped once the grace is over.
+        let gone = carry_vanished(&after, define(&[], &HashMap::new(), &[], 60), &mut vanished, 100);
+        let gone = carry_vanished(&gone, define(&[], &HashMap::new(), &[], 60), &mut vanished, 100 + VANISH_GRACE);
+        assert!(gone.is_empty());
+        assert!(vanished.is_empty());
     }
 
     #[test]

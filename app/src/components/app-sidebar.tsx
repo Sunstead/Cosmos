@@ -2,6 +2,7 @@ import { Link, useLocation } from '@tanstack/react-router';
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -9,13 +10,18 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
+  useSidebar,
 } from '@/components/ui/resizable-sidebar';
 import { NAV_GROUPS, PAGES, pageFor } from '@/lib/navigation';
 import { ShortcutKeys } from './hint';
+import { AccountMenu } from './account-menu';
 
 export function AppSidebar() {
   const { pathname } = useLocation();
   const active = pageFor(pathname)?.path;
+  const { isMobile, setOpenMobile } = useSidebar();
+  // On a phone the sidebar is a sheet over the page; following a link closes it.
+  const followed = () => isMobile && setOpenMobile(false);
 
   return (
     <Sidebar collapsible='icon' className='chrome'>
@@ -48,7 +54,7 @@ export function AppSidebar() {
                         }}
                         className='space-x-3 rounded-l-none pl-5 data-[active=true]:shadow-[inset_2px_0_0_0_var(--color-primary)]'
                       >
-                        <Link to={path}>
+                        <Link to={path} onClick={followed}>
                           <Icon className='size-5!' />
                           <span>{page.label}</span>
                         </Link>
@@ -61,6 +67,9 @@ export function AppSidebar() {
           </SidebarGroup>
         ))}
       </SidebarContent>
+      <SidebarFooter className='border-t border-sidebar-border p-2'>
+        <AccountMenu />
+      </SidebarFooter>
       <SidebarRail className='mt-3' />
     </Sidebar>
   );

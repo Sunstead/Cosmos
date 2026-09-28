@@ -49,6 +49,19 @@ test.describe('empty app', () => {
     await expect(html).toHaveClass(/light/);
   });
 
+  test('the sidebar opens on a phone', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto('/overview');
+    // The search box once slid over the toggle at this width, taking its clicks.
+    await page.getByRole('button', { name: 'Toggle sidebar' }).click({ timeout: 5_000 });
+    const sheet = page.locator('[data-mobile=true]');
+    await expect(sheet.getByRole('button', { name: 'Account' })).toBeVisible();
+    // Following a link closes the sheet, so the page isn't left covered.
+    await sheet.getByRole('link', { name: 'Logs' }).click();
+    await expect(page).toHaveURL(/\/logs$/);
+    await expect(sheet).toHaveCount(0);
+  });
+
   test('body never scrolls and nothing overflows horizontally', async ({ page }) => {
     for (const width of [900, 1440]) {
       await page.setViewportSize({ width, height: 800 });
@@ -83,8 +96,12 @@ test.describe('with a node', () => {
     await nextSignIn(request);
 
     await page.goto('/settings');
-    await expect(page.getByText('guest')).toBeVisible();
-    await expect(page.getByText('Viewer')).toBeVisible();
+    const main = page.locator('main').last();
+    await expect(main.getByText('guest')).toBeVisible();
+    await expect(main.getByText('Viewer')).toBeVisible();
+    // And at the foot of the sidebar.
+    await expect(page.getByRole('button', { name: 'Account' })).toContainText('guest');
+    await expect(page.getByRole('button', { name: 'Account' })).toContainText('Viewer');
 
     await page.goto('/network');
     const wol = section(page, 'Wake-on-LAN');
@@ -97,6 +114,37 @@ test.describe('with a node', () => {
     await page.goto('/settings');
     await page.getByRole('button', { name: 'Sign out' }).click();
     await expect(page.getByText('Sign in needed').first()).toBeVisible({ timeout: 15_000 });
+  });
+
+  test('the account menu shows who you are and signs you out', async ({ page }, info) => {
+    await addNodeOnline(page);
+    const account = page.getByRole('button', { name: 'Account' });
+    await expect(account).toContainText('pwb');
+    await expect(account).toContainText('Admin');
+
+    await account.click();
+    const menu = page.getByRole('menu');
+    await expect(menu).toContainText('pwb');
+    await expect(menu.getByRole('menuitem', { name: /Settings/ })).toBeVisible();
+    await page.screenshot({ path: info.outputPath('account-menu.png') });
+    await menu.getByRole('menuitem', { name: 'Sign out' }).click();
+
+    // Signed out on purpose: straight to the sign-in state, no "expired" toast.
+    await expect(account).toContainText('Not signed in', { timeout: 15_000 });
+    await expect(page.getByText('Your sign-in expired')).toHaveCount(0);
+    await page.locator('[data-sidebar=footer]').getByRole('button', { name: 'Sign in' }).click();
+    await expect(account).toContainText('pwb', { timeout: 15_000 });
+  });
+
+  test('G then a letter goes to a page', async ({ page }) => {
+    await page.goto('/overview');
+    await expect(page.locator('[data-page-header]')).toBeVisible();
+    await page.keyboard.press('g');
+    await page.keyboard.press('l');
+    await expect(page).toHaveURL(/\/logs$/);
+    await page.keyboard.press('g');
+    await page.keyboard.press('p');
+    await expect(page).toHaveURL(/\/updates$/);
   });
 
   test('adds a node and it comes online', async ({ page }) => {
@@ -494,6 +542,9 @@ test.describe('with a node', () => {
   });
 
   test('screenshots of every page in both themes', async ({ page }, info) => {
+    // Every page twice: well past the default 30 s once earlier specs have
+    // given the agent something to show.
+    test.setTimeout(120_000);
     await addNodeOnline(page);
     const detail = new URL(page.url()).pathname;
     for (const theme of ['dark', 'light']) {

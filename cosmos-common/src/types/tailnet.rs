@@ -23,7 +23,10 @@ pub struct TailnetStatus {
 pub struct TailnetDevice {
     /// Stable node ID. Survives renames and re-keying.
     pub id: String,
-    /// The machine's own hostname.
+    /// The machine name, as the admin console and `tailscale status` show
+    /// it: the first label of `dns_name`. Not the OS hostname, which is
+    /// `localhost` on every iPhone and iPad. Agents 0.8.0 and older sent the
+    /// hostname here.
     pub name: String,
     /// MagicDNS name, without the trailing dot.
     pub dns_name: String,

@@ -1,18 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearch } from '@tanstack/react-router';
-import { Download, Eraser, Logs, Pause, Play, ScrollText, SearchX } from 'lucide-react';
-import { useNodeStore } from '@/stores/nodes';
+import { Download, Eraser, Logs, Pause, Play, RefreshCw, ScrollText, SearchX } from 'lucide-react';
+import { useNodeName, useNodeStore } from '@/stores/nodes';
 import { useContainersStore } from '@/stores/containers';
 import { useNodeMeta } from '@/api/queries';
 import { ALL_CONTAINERS, useContainerLogs } from '@/hooks/use-container-logs';
 import { useAwaiting } from '@/hooks/use-awaiting';
 import { LogLine } from '@/generated/LogLine';
 import { PageHeader } from '@/components/page-header';
-import { NodeSelect, useSelectedNode } from '@/components/node-select';
+import { NodeSelect } from '@/components/node-select';
+import { useSelectedNode } from '@/hooks/use-selected-node';
 import { SearchInput } from '@/components/search-input';
 import { SegmentedControl } from '@/components/segmented-control';
 import { EmptyState, NoNodesState } from '@/components/empty-state';
-import { SETUP } from '@/components/setup-hint';
+import { SETUP } from '@/lib/setup';
 import { Hint } from '@/components/hint';
 import { Dot } from '@/components/dot';
 import { containerStateVariant } from '@/components/container-columns';
@@ -68,6 +69,8 @@ export function LogsPage() {
     [nodeContainers, nodeId],
   );
   const meta = useNodeMeta(nodeId);
+  const nodeName = useNodeName(nodeId);
+  const dockerDown = useContainersStore((s) => (nodeId ? !!s.dockerDown[nodeId] : false));
   const canAll = meta?.capabilities.all_logs ?? false;
 
   const containerId =
@@ -83,7 +86,7 @@ export function LogsPage() {
   const [query, setQuery] = useState('');
   const [stream, setStream] = useState<Stream>('all');
 
-  const { lines, state, dropped, clear } = useContainerLogs({ nodeId, containerId, follow });
+  const { lines, state, dropped, reason, clear, reconnect } = useContainerLogs({ nodeId, containerId, follow });
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -137,7 +140,16 @@ export function LogsPage() {
       );
     }
     if (containers.length === 0) {
-      return <EmptyState size='page' icon={ScrollText} title='No containers on this node' />;
+      return dockerDown ? (
+        <EmptyState
+          size='page'
+          icon={ScrollText}
+          title={`Docker isn't answering on ${nodeName ?? 'this node'}`}
+          description='Logs come back when it does.'
+        />
+      ) : (
+        <EmptyState size='page' icon={ScrollText} title='No containers on this node' />
+      );
     }
     return (
       <Card className='min-h-0 flex-1 gap-0 py-0'>
@@ -149,6 +161,14 @@ export function LogsPage() {
             {visible.length !== lines.length && ` of ${lines.length.toLocaleString()}`} lines
           </span>
           {dropped > 0 && <span className='text-warning'>{dropped.toLocaleString()} dropped</span>}
+          {follow && (state === 'closed' || state === 'error') && (
+            <>
+              {reason && <span className='truncate'>{reason}</span>}
+              <Button variant='ghost' size='xs' className='ml-auto' onClick={reconnect}>
+                <RefreshCw /> Reconnect
+              </Button>
+            </>
+          )}
         </div>
         <div
           ref={viewport}

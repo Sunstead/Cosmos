@@ -35,6 +35,26 @@ pub struct ContainerSnapshot {
     pub sampled_at: i64,
 }
 
+impl ContainerSnapshot {
+    /// The same list and sample time, marked as Docker not answering. Every
+    /// consumer inside the agent sees exactly what it saw before, so nothing
+    /// reads the outage as containers stopping or disappearing; only the
+    /// app is told, so it can say so rather than show an empty list.
+    pub fn unavailable(&self) -> Self {
+        let response = ContainersResponse {
+            containers: self.containers.to_vec(),
+            sampled_at: self.sampled_at,
+            docker_unavailable: true,
+        };
+        Self {
+            json: encode(&response, "containers"),
+            running: self.running.clone(),
+            containers: self.containers.clone(),
+            sampled_at: self.sampled_at,
+        }
+    }
+}
+
 pub struct VolumeSnapshot {
     pub json: Arc<str>,
 }
@@ -56,7 +76,7 @@ impl ContainerSnapshot {
             .filter(|c| c.state == "running")
             .map(|c| c.id.clone())
             .collect();
-        let response = ContainersResponse { containers, sampled_at: unix_now() };
+        let response = ContainersResponse { containers, sampled_at: unix_now(), docker_unavailable: false };
         Self {
             json: encode(&response, "containers"),
             running,
@@ -367,6 +387,44 @@ fn build_volume_usage_map(containers: Vec<ContainerSummary>) -> HashMap<String, 
 mod tests {
     use super::*;
     use bollard::secret::MountPoint;
+
+    #[test]
+    fn docker_going_away_keeps_the_list_and_says_so() {
+        let before = ContainerSnapshot {
+            sampled_at: 1_000,
+            ..ContainerSnapshot::new(vec![ContainerInfo {
+                id: "abc".into(),
+                name: "gitea".into(),
+                image: "gitea:1".into(),
+                status: "Up".into(),
+                state: "running".into(),
+                health: None,
+                ports: vec![],
+                started_at: None,
+                created_unix: 0,
+                restart_count: 0,
+                compose_project: None,
+                compose_service: None,
+                update_labels: Default::default(),
+                cosmos_service: None,
+                cosmos_service_description: None,
+                cosmos_service_url: None,
+                cpu_pct: 0.0,
+                mem_used_bytes: 0,
+                mem_limit_bytes: 0,
+            }])
+        };
+        let down = before.unavailable();
+        assert_eq!(down.sampled_at, 1_000, "the detectors see the same sample");
+        assert_eq!(down.containers.len(), 1);
+        assert_eq!(&*down.running, ["abc".to_string()].as_slice());
+        let json: serde_json::Value = serde_json::from_str(&down.json).unwrap();
+        assert_eq!(json["docker_unavailable"], true);
+        assert_eq!(json["containers"][0]["name"], "gitea");
+
+        let never = ContainerSnapshot::empty().unavailable();
+        assert_eq!(never.sampled_at, 0, "never sampled stays never sampled");
+    }
 
     fn summary(name: &str, volumes: &[&str]) -> ContainerSummary {
         ContainerSummary {

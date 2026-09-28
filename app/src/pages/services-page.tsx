@@ -5,7 +5,8 @@ import { PageHeader } from '@/components/page-header';
 import { SearchInput } from '@/components/search-input';
 import { SegmentedControl } from '@/components/segmented-control';
 import { EmptyState, NoNodesState } from '@/components/empty-state';
-import { SETUP } from '@/components/setup-hint';
+import { DockerDownNote } from '@/components/docker-down-note';
+import { SETUP } from '@/lib/setup';
 import { useContainersStore } from '@/stores/containers';
 import { useAwaiting } from '@/hooks/use-awaiting';
 import { CardGridSkeleton } from '@/components/skeletons';
@@ -71,6 +72,7 @@ export function ServicesPage() {
         }
       />
 
+      {nodeCount > 0 && <DockerDownNote />}
       {nodeCount === 0 ? (
         <NoNodesState />
       ) : services.length === 0 && awaiting ? (

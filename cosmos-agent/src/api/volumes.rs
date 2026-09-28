@@ -24,7 +24,7 @@ pub async fn list(State(state): State<AppState>) -> impl IntoResponse {
 pub async fn stream(
     State(state): State<AppState>
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
-    sse::stream_watch(state.volumes_rx.clone(), |snap| snap.json.clone())
+    sse::stream_watch(state.volumes_rx.clone(), |snap| snap.json.clone(), state.shutdown.clone())
 }
 
 #[derive(Deserialize, Default)]

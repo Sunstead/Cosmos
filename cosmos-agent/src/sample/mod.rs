@@ -105,6 +105,14 @@ pub fn spawn_containers(
             }
 
             let Some(client) = docker.try_reconnect() else {
+                if !failing {
+                    tracing::warn!("docker is unreachable; containers are the last known list");
+                    failing = true;
+                    let marked = tx.borrow().unavailable();
+                    if tx.send(Arc::new(marked)).is_err() {
+                        return;
+                    }
+                }
                 continue;
             };
 
@@ -124,6 +132,10 @@ pub fn spawn_containers(
                     if !failing {
                         tracing::warn!(error = %e, "docker container sampling failed");
                         failing = true;
+                        let marked = tx.borrow().unavailable();
+                        if tx.send(Arc::new(marked)).is_err() {
+                            return;
+                        }
                     }
                     docker.mark_disconnected();
                 }
@@ -174,13 +186,26 @@ pub fn spawn_volumes(docker: DockerHandle) -> watch::Receiver<Arc<VolumeSnapshot
     rx
 }
 
+/// A Docker event for the container tracker.
+pub struct Forwarded {
+    pub event: bollard::models::EventMessage,
+    /// From before this subscription: replayed, already handled by whoever
+    /// was listening then (or nobody, if the agent was restarting).
+    pub replayed: bool,
+}
+
 /// Watches the Docker event stream. With `poke`, wakes the samplers an event
 /// affects; with `forward`, hands every event to the event log's container
 /// tracker. A full forward queue drops events rather than stall the pokes.
+///
+/// Each subscription starts [`KILL_WINDOW`](crate::events::containers::KILL_WINDOW)
+/// in the past. A deploy recreates this agent along with everything else, so
+/// the `kill` for a container that takes a few seconds to stop can land while
+/// no agent is listening; replayed, it still explains the `die` that follows.
 pub fn spawn_event_watcher(
     docker: DockerHandle,
     poke: bool,
-    forward: Option<tokio::sync::mpsc::Sender<bollard::models::EventMessage>>
+    forward: Option<tokio::sync::mpsc::Sender<Forwarded>>
 ) {
     tokio::spawn(async move {
         loop {
@@ -195,10 +220,13 @@ pub fn spawn_event_watcher(
                 "volume".to_string()
             ]);
 
+            let subscribed = host::unix_now();
+            let since = subscribed - crate::events::containers::KILL_WINDOW;
             let mut events = client.events(
                 Some(bollard::system::EventsOptions {
+                    since: Some(since.to_string()),
+                    until: None,
                     filters,
-                    ..Default::default()
                 })
             );
 
@@ -206,11 +234,12 @@ pub fn spawn_event_watcher(
             while let Some(event) = events.next().await {
                 match event {
                     Ok(event) => {
-                        if poke {
+                        let replayed = event.time.is_some_and(|t| t < subscribed);
+                        if poke && !replayed {
                             poke_for_event(&docker, &event);
                         }
                         if let Some(tx) = &forward {
-                            let _ = tx.try_send(event);
+                            let _ = tx.try_send(Forwarded { event, replayed });
                         }
                     }
                     Err(e) => {
