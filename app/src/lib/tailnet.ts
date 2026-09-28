@@ -9,6 +9,16 @@ export interface Device extends TailnetDevice {
   reportedBy: string;
 }
 
+/**
+ * The name Tailscale shows for a device: the first label of its MagicDNS
+ * name, which is the machine name from the admin console. The OS hostname
+ * is `localhost` on every iPhone and iPad, and agents 0.8.0 and older send
+ * that as `name`.
+ */
+export function machineName(d: Pick<TailnetDevice, 'name' | 'dns_name'>): string {
+  return d.dns_name.split('.')[0] || d.name;
+}
+
 /** Warn this long before a device's key expires and it drops off. */
 export const KEY_EXPIRY_WARN_MS = 14 * 24 * 60 * 60 * 1000;
 
@@ -27,7 +37,7 @@ export function mergeTailnets(reports: { nodeId: string; status: TailnetStatus }
   for (const { nodeId, status } of reports) {
     for (const d of status.devices) {
       if (d.is_self) selfOf.set(d.id, nodeId);
-      if (!byId.has(d.id)) byId.set(d.id, { ...d, nodeId: null, reportedBy: nodeId });
+      if (!byId.has(d.id)) byId.set(d.id, { ...d, name: machineName(d), nodeId: null, reportedBy: nodeId });
     }
   }
 

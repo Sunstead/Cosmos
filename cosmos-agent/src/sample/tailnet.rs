@@ -262,10 +262,11 @@ impl RawPeer {
             TailnetConnection::Idle
         };
 
+        let dns_name = self.dns_name.trim_end_matches('.').to_string();
         TailnetDevice {
             id: self.id,
-            name: self.host_name,
-            dns_name: self.dns_name.trim_end_matches('.').to_string(),
+            name: machine_name(&dns_name, self.host_name),
+            dns_name,
             os: self.os,
             user,
             ips: self.tailscale_ips.unwrap_or_default(),
@@ -283,6 +284,17 @@ impl RawPeer {
             rx_bytes: self.rx_bytes.max(0) as u64,
             tx_bytes: self.tx_bytes.max(0) as u64,
         }
+    }
+}
+
+/// The name Tailscale shows for a device, as `tailscale status` does: the
+/// first label of its MagicDNS name. That's the machine name from the admin
+/// console, unique in the tailnet and kept across renames there, where the
+/// OS hostname isn't: iOS and iPadOS report every device as `localhost`.
+fn machine_name(dns_name: &str, host_name: String) -> String {
+    match dns_name.split('.').next() {
+        Some(label) if !label.is_empty() => label.to_string(),
+        _ => host_name,
     }
 }
 
@@ -309,7 +321,7 @@ mod tests {
       "CurrentTailnet": { "Name": "example.github", "MagicDNSSuffix": "tail1234.ts.net" },
       "Peer": {
         "nodekey:a": {
-          "ID": "nDESK", "HostName": "Desktop", "DNSName": "desktop.tail1234.ts.net.",
+          "ID": "nDESK", "HostName": "DESKTOP-4F2K", "DNSName": "desktop.tail1234.ts.net.",
           "OS": "windows", "UserID": 1, "TailscaleIPs": ["100.64.0.2"],
           "CurAddr": "192.168.1.20:41641", "Relay": "nyc", "RxBytes": 1200, "TxBytes": 3400,
           "LastSeen": "0001-01-01T00:00:00Z", "Online": true, "Active": true,
@@ -325,6 +337,14 @@ mod tests {
           "OS": "macOS", "UserID": 2, "TailscaleIPs": ["100.64.0.4"],
           "CurAddr": "", "Relay": "nyc", "Online": false, "Active": false,
           "LastSeen": "2026-09-20T18:04:00Z", "Expired": true
+        },
+        "nodekey:d": {
+          "ID": "nIPAD", "HostName": "localhost", "DNSName": "pwb-ipad-pro.tail1234.ts.net.",
+          "OS": "iOS", "UserID": 1, "TailscaleIPs": ["100.64.0.5"], "Online": true
+        },
+        "nodekey:e": {
+          "ID": "nNEW", "HostName": "fresh", "DNSName": "",
+          "OS": "linux", "UserID": 1, "Online": false
         }
       },
       "User": {
@@ -351,11 +371,22 @@ mod tests {
             .iter()
             .map(|d| d.name.as_str())
             .collect();
-        assert_eq!(order, ["jupiter", "air", "Desktop", "pixel"]);
+        assert_eq!(order, ["jupiter", "air", "desktop", "fresh", "pixel", "pwb-ipad-pro"]);
         assert!(s.devices[0].is_self);
         assert_eq!(s.tailnet.as_deref(), Some("example.github"));
         assert_eq!(s.backend_state, "Running");
         assert_eq!(s.sampled_at, 42);
+    }
+
+    #[test]
+    fn names_devices_by_their_machine_name_not_their_hostname() {
+        let s = parsed();
+        // iOS reports its hostname as `localhost`; the machine name is the
+        // one you gave it in the admin console.
+        assert_eq!(device(&s, "nIPAD").name, "pwb-ipad-pro");
+        assert_eq!(device(&s, "nDESK").name, "desktop");
+        // No MagicDNS name yet: the hostname is all there is.
+        assert_eq!(device(&s, "nNEW").name, "fresh");
     }
 
     #[test]
@@ -428,7 +459,7 @@ mod tests {
         });
 
         let status = poll(&path).await.unwrap();
-        assert_eq!(status.devices.len(), 4);
+        assert_eq!(status.devices.len(), 6);
 
         let request = server.await.unwrap();
         assert!(request.starts_with("GET /localapi/v0/status HTTP/1.0\r\n"));
