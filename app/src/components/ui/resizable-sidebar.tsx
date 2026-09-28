@@ -173,6 +173,7 @@ const SidebarProvider = React.forwardRef<
         toggleSidebar,
         //* add width to dependencies
         width,
+        setWidth,
         //* add isDraggingRail to dependencies
         isDraggingRail,
       ],
@@ -847,6 +848,5 @@ export {
   SidebarRail,
   SidebarSeparator,
   SidebarTrigger,
-  // eslint-disable-next-line react-refresh/only-export-components
   useSidebar,
 };

@@ -26,7 +26,12 @@ export interface Session {
   accessToken: string;
   /** ms since epoch. */
   expiresAt: number;
+  /** Full name, falling back to the username. */
   name: string | null;
+  username: string | null;
+  email: string | null;
+  /** An avatar URL, when the provider's mappings include one. */
+  picture: string | null;
   groups: string[];
 }
 
@@ -36,6 +41,13 @@ interface AuthState {
 }
 
 export const useAuthStore = create<AuthState>(() => ({ sessions: {} }));
+
+/** Providers signed out of on purpose since the last sign-in, so nothing says the session expired. */
+const signedOut = new Set<string>();
+
+export function wasSignedOut(issuer: string): boolean {
+  return signedOut.has(issuer);
+}
 
 /** Refresh this long before expiry, so a request never carries a dying token. */
 const REFRESH_MARGIN_MS = 60_000;
@@ -47,6 +59,7 @@ export function clientOf(auth: OidcAuth): OidcClient {
 }
 
 function setSession(issuer: string, tokens: { access_token: string; expires_in?: number | null }) {
+  signedOut.delete(issuer);
   const claims = readClaims(tokens.access_token);
   const expiresAt = claims.exp
     ? claims.exp * 1000
@@ -58,7 +71,10 @@ function setSession(issuer: string, tokens: { access_token: string; expires_in?:
         issuer,
         accessToken: tokens.access_token,
         expiresAt,
-        name: claims.preferred_username ?? claims.name ?? null,
+        name: claims.name || claims.preferred_username || null,
+        username: claims.preferred_username || null,
+        email: claims.email || null,
+        picture: claims.picture?.startsWith('https://') ? claims.picture : null,
         groups: claims.groups ?? [],
       },
     },
@@ -127,10 +143,20 @@ async function refresh(auth: OidcAuth): Promise<{ access_token: string; expires_
 
 const inflight = new Map<string, Promise<string | null>>();
 
+/** The provider couldn't be reached. Retry later; don't ask to sign in. */
+export class ProviderUnreachable extends Error {
+  constructor(cause?: unknown) {
+    super("Can't reach the sign-in provider", { cause });
+    this.name = 'ProviderUnreachable';
+  }
+}
+
 /**
  * A current access token for this provider, refreshing when it's close to
- * expiry. `null` means the user has to sign in. Concurrent callers share
- * one refresh.
+ * expiry. `null` means the user has to sign in. Rejects with
+ * `ProviderUnreachable` when a refresh is needed and the provider is down: a
+ * deploy that restarts it must not look like a sign-out. Concurrent callers
+ * share one refresh.
  */
 export function getAccessToken(auth: OidcAuth, opts: { force?: boolean } = {}): Promise<string | null> {
   const s = useAuthStore.getState().sessions[auth.issuer];
@@ -150,7 +176,10 @@ export function getAccessToken(auth: OidcAuth, opts: { force?: boolean } = {}): 
         return tokens.access_token;
       })
       // A provider that's briefly down keeps the refresh token for later.
-      .catch(() => (s && s.expiresAt > Date.now() ? s.accessToken : null))
+      .catch((e: unknown) => {
+        if (s && s.expiresAt > Date.now()) return s.accessToken;
+        throw new ProviderUnreachable(e);
+      })
       .finally(() => inflight.delete(auth.issuer));
     inflight.set(auth.issuer, pending);
   }
@@ -245,6 +274,7 @@ export async function completeSignIn(href: string): Promise<AfterSignIn> {
 }
 
 export async function signOut(auth: OidcAuth): Promise<void> {
+  signedOut.add(auth.issuer);
   clearSession(auth.issuer);
   if (isDesktop()) {
     await invoke('oidc_sign_out', { issuer: auth.issuer, clientId: auth.client_id }).catch(() => {});

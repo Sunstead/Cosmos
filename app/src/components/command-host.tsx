@@ -1,14 +1,24 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useSidebar } from '@/components/ui/resizable-sidebar';
-import { useTheme } from '@/components/theme-provider';
+import { useTheme } from '@/hooks/use-theme';
 import { useUiStore } from '@/stores/ui';
 import { PAGES } from '@/lib/navigation';
 import { getPlatform } from '@/lib/platform';
-import { isTypingTarget, matchesChord, SHORTCUTS, ShortcutId } from '@/lib/shortcuts';
+import { menuToCommand } from '@/lib/commands';
+import {
+  isOverlayTarget,
+  isSequence,
+  isTypingTarget,
+  matchesChord,
+  SequenceTracker,
+  sequenceShortcuts,
+  SHORTCUTS,
+  ShortcutId,
+} from '@/lib/shortcuts';
 
 /** Focuses the current page's search field, if it has one. */
-export function focusPageSearch(): boolean {
+function focusPageSearch(): boolean {
   const el = document.querySelector<HTMLInputElement>('[data-page-search]');
   if (!el) return false;
   el.focus();
@@ -19,7 +29,9 @@ export function focusPageSearch(): boolean {
 /**
  * Routes shortcuts and native menu events to actions. Mounted once inside
  * the shell. On macOS the native menu owns modifier shortcuts, so they are
- * not also handled here (they would fire twice).
+ * not also handled here (they would fire twice). Bare keys (`/` and the
+ * "G then a letter" sequences) are handled here everywhere: a menu can't show
+ * a sequence.
  */
 export function CommandHost() {
   const navigate = useNavigate();
@@ -55,16 +67,28 @@ export function CommandHost() {
 
   useEffect(() => {
     const macApp = getPlatform() === 'macos';
+    const sequences = new SequenceTracker(sequenceShortcuts());
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === '/' && !e.metaKey && !e.ctrlKey && !isTypingTarget(e.target)) {
-        e.preventDefault();
-        if (!focusPageSearch()) setPaletteOpen(true);
-        return;
+      if (e.defaultPrevented || e.repeat) return;
+      const bare = !e.metaKey && !e.ctrlKey && !e.altKey;
+      if (bare && !isTypingTarget(e.target) && !isOverlayTarget(e.target)) {
+        if (e.key === '/') {
+          e.preventDefault();
+          sequences.reset();
+          if (!focusPageSearch()) setPaletteOpen(true);
+          return;
+        }
+        if (!e.shiftKey && e.key.length === 1) {
+          const { id, consumed } = sequences.press(e.key);
+          if (consumed) e.preventDefault();
+          if (id) run.current(id);
+          if (consumed) return;
+        }
       }
       if (macApp) return;
       for (const [id, chord] of Object.entries(SHORTCUTS) as [ShortcutId, string][]) {
-        if (id === 'search') continue;
+        if (id === 'search' || isSequence(chord)) continue;
         if (matchesChord(e, chord)) {
           e.preventDefault();
           run.current(id);
@@ -97,22 +121,4 @@ export function CommandHost() {
   }, []);
 
   return null;
-}
-
-/** Native menu ids (src-tauri/src/menu.rs) to command ids. */
-export function menuToCommand(menuId: string): string {
-  switch (menuId) {
-    case 'app.settings':
-      return 'settings';
-    case 'view.command-palette':
-      return 'palette';
-    case 'view.toggle-sidebar':
-      return 'sidebar';
-    case 'view.toggle-theme':
-      return 'theme';
-    case 'view.reload':
-      return 'reload';
-    default:
-      return menuId; // go.* ids match shortcut ids
-  }
 }

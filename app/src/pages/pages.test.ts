@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { backupHealth } from './backups-page';
-import { bodyRadius, orbitFraction } from '@/components/constellation';
+import { backupHealth, INTERRUPTED_AFTER_MS } from '@/lib/backups';
+import { bodyRadius, orbitFraction } from '@/lib/orbits';
 import { BackupsStatus } from '@/generated/BackupsStatus';
 
 function status(partial: Partial<BackupsStatus> = {}): BackupsStatus {
@@ -28,8 +28,11 @@ describe('backupHealth', () => {
     expect(backupHealth(status())).toBe('healthy');
   });
 
-  it('flags a timer that fired after the last status', () => {
-    expect(backupHealth(status({ timer_last_fired: '2026-01-02T02:00:00Z' }))).toBe('interrupted');
+  it('reads a timer that fired after the last status as running, then interrupted', () => {
+    const fired = Date.parse('2026-01-02T02:00:00Z');
+    const s = status({ timer_last_fired: '2026-01-02T02:00:00Z' });
+    expect(backupHealth(s, fired + 60_000)).toBe('running');
+    expect(backupHealth(s, fired + INTERRUPTED_AFTER_MS)).toBe('interrupted');
   });
 
   it('flags a non-zero exit', () => {
@@ -42,7 +45,10 @@ describe('backupHealth', () => {
 
   it('ranks interrupted above failed and stale', () => {
     expect(
-      backupHealth(status({ timer_last_fired: '2026-01-02T00:00:00Z', last_exit_code: 1, stale: true })),
+      backupHealth(
+        status({ timer_last_fired: '2026-01-02T00:00:00Z', last_exit_code: 1, stale: true }),
+        Date.parse('2026-01-03T00:00:00Z'),
+      ),
     ).toBe('interrupted');
   });
 });

@@ -25,7 +25,7 @@ pub async fn list(State(state): State<AppState>) -> Result<CachedJson, AgentErro
 pub async fn stream(
     State(state): State<AppState>
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
-    sse::stream_watch(state.containers_rx.clone(), |snap| snap.json.clone())
+    sse::stream_watch(state.containers_rx.clone(), |snap| snap.json.clone(), state.shutdown.clone())
 }
 
 /// The container's name and service, for the event log. Looked up before

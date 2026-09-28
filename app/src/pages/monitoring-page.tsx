@@ -5,11 +5,14 @@ import { useMetricHistory, useNodeMeta } from '@/api/queries';
 import { formatBytes } from '@/lib/node-metrics';
 import { usePersistentState } from '@/hooks/use-persistent-state';
 import { PageHeader } from '@/components/page-header';
-import { NodeSelect, useSelectedNode } from '@/components/node-select';
+import { NodeSelect } from '@/components/node-select';
+import { useSelectedNode } from '@/hooks/use-selected-node';
 import { SegmentedControl } from '@/components/segmented-control';
 import { EmptyState, NoNodesState } from '@/components/empty-state';
-import { SETUP } from '@/components/setup-hint';
-import { MetricChart, toRows } from '@/components/metric-chart';
+import { NodeUnavailable } from '@/components/sign-in';
+import { SETUP } from '@/lib/setup';
+import { MetricChart } from '@/components/metric-chart';
+import { toRows } from '@/lib/metric-series';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const RANGES = {
@@ -63,6 +66,9 @@ export function MonitoringPage() {
         />
       );
     }
+    if (nodeId && (meta?.status === 'offline' || meta?.status === 'unauthorized')) {
+      return <NodeUnavailable nodeId={nodeId} />;
+    }
     if (error) return <EmptyState size='page' icon={TriangleAlert} title='Could not load history' />;
     if (isLoading || !data) {
       return (
@@ -79,7 +85,7 @@ export function MonitoringPage() {
           size='page'
           icon={ChartLine}
           title='No history yet'
-          description='Samples appear within a minute of the agent starting.'
+          description='Samples appear within two minutes of the agent starting.'
         />
       );
     }

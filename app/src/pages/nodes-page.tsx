@@ -1,13 +1,13 @@
 import { LayoutGrid, List, SearchX } from 'lucide-react';
 import { useState } from 'react';
 import { NodeCard } from '@/components/node-card';
-import { NodeTableRow, NODE_TABLE_COLUMNS } from '@/components/node-table-row';
+import { NodeTableHeader, NodeTableRow } from '@/components/node-table-row';
 import { PageHeader } from '@/components/page-header';
 import { SegmentedControl } from '@/components/segmented-control';
 import { SearchInput } from '@/components/search-input';
 import { AddNodeButton, EmptyState, NoNodesState } from '@/components/empty-state';
 import { Card } from '@/components/ui/card';
-import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody } from '@/components/ui/table';
 import { nodeDisplayName, useNodeStore } from '@/stores/nodes';
 import { usePersistentState } from '@/hooks/use-persistent-state';
 import { matchesQuery } from '@/lib/format';
@@ -59,15 +59,7 @@ export function NodesPage() {
       ) : (
         <Card className='p-0'>
           <Table>
-            <TableHeader>
-              <TableRow className='hover:bg-transparent'>
-                {NODE_TABLE_COLUMNS.map((c, i) => (
-                  <TableHead key={i} className='h-9 text-xs'>
-                    {c}
-                  </TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
+            <NodeTableHeader />
             <TableBody>
               {visible.map((n) => (
                 <NodeTableRow key={n.id} nodeId={n.id} />

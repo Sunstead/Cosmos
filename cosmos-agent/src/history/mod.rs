@@ -55,9 +55,16 @@ impl From<&HostSample> for Row {
     }
 }
 
+/// What the writer thread is sent.
+enum Msg {
+    Row(Row),
+    /// Write the batch now, then answer.
+    Flush(mpsc::Sender<()>),
+}
+
 #[derive(Clone)]
 pub struct HistoryHandle {
-    tx: mpsc::SyncSender<Row>,
+    tx: mpsc::SyncSender<Msg>,
     read: Arc<Mutex<Connection>>,
     warned: Arc<AtomicBool>,
 }
@@ -102,7 +109,7 @@ impl HistoryHandle {
 
         // Bounded: if the writer ever wedges we drop samples rather than let
         // the queue grow without limit behind the live stream.
-        let (tx, rx) = mpsc::sync_channel::<Row>(512);
+        let (tx, rx) = mpsc::sync_channel::<Msg>(512);
         let cfg = cfg.clone();
 
         std::thread::Builder
@@ -121,13 +128,24 @@ impl HistoryHandle {
     /// Called from the sampler thread. Never blocks: a backlogged writer costs
     /// us a metrics point, which is much better than stalling the live stream.
     pub fn push(&self, sample: &HostSample) {
-        if self.tx.try_send(Row::from(sample)).is_err() {
+        if self.tx.try_send(Msg::Row(Row::from(sample))).is_err() {
             // Warn once rather than every second for as long as it lasts.
             if !self.warned.swap(true, Ordering::Relaxed) {
                 tracing::warn!("history writer backlogged; dropping metric samples");
             }
         } else {
             self.warned.store(false, Ordering::Relaxed);
+        }
+    }
+
+    /// Writes the pending batch, waiting up to `timeout`. For shutdown: the
+    /// sampler thread holds a handle for the life of the process, so the
+    /// writer never sees its channel close.
+    pub fn flush(&self, timeout: Duration) {
+        let (done, wait) = mpsc::channel();
+        // A full queue means the writer is already stuck.
+        if self.tx.try_send(Msg::Flush(done)).is_err() || wait.recv_timeout(timeout).is_err() {
+            tracing::warn!("history writer didn't flush in time");
         }
     }
 
@@ -248,8 +266,10 @@ fn read_series(
 /// Flushes on whichever comes first: a full batch, the flush interval, or
 /// shutdown. With WAL + `synchronous = NORMAL` this is roughly six disk
 /// touches a minute rather than sixty.
-fn writer_loop(conn: &mut Connection, rx: mpsc::Receiver<Row>, cfg: HistoryConfig) {
+fn writer_loop(conn: &mut Connection, rx: mpsc::Receiver<Msg>, cfg: HistoryConfig) {
     const MAX_BATCH: usize = 60;
+    /// Rows reach the writer within a second or so of their timestamp.
+    const ROLLUP_LAG_SECS: i64 = 5;
     let flush_every = Duration::from_secs(cfg.flush_interval_secs.max(1));
 
     let mut batch: Vec<Row> = Vec::with_capacity(MAX_BATCH);
@@ -259,7 +279,12 @@ fn writer_loop(conn: &mut Connection, rx: mpsc::Receiver<Row>, cfg: HistoryConfi
 
     loop {
         match rx.recv_timeout(Duration::from_millis(500)) {
-            Ok(row) => batch.push(row),
+            Ok(Msg::Row(row)) => batch.push(row),
+            Ok(Msg::Flush(done)) => {
+                flush(conn, &mut batch);
+                last_flush = Instant::now();
+                let _ = done.send(());
+            }
             Err(mpsc::RecvTimeoutError::Timeout) => {}
             // Every sender dropped: the agent is shutting down. Flush what we
             // have so `docker compose down` doesn't lose the batch.
@@ -279,10 +304,16 @@ fn writer_loop(conn: &mut Connection, rx: mpsc::Receiver<Row>, cfg: HistoryConfi
 
         if last_rollup.elapsed() >= Duration::from_secs(60) {
             last_rollup = Instant::now();
-            if let Err(e) = rollup::rollup_1m(conn, now) {
+            // A rollup never revisits a bucket, so everything for it must be
+            // on disk first: the batch still holding the minute's last
+            // seconds, and rows still on their way in (hence the lag).
+            flush(conn, &mut batch);
+            last_flush = Instant::now();
+            let closed_by = now - ROLLUP_LAG_SECS;
+            if let Err(e) = rollup::rollup_1m(conn, closed_by) {
                 tracing::warn!(error = %e, "1m rollup failed");
             }
-            if let Err(e) = rollup::rollup_5m(conn, now) {
+            if let Err(e) = rollup::rollup_5m(conn, closed_by) {
                 tracing::warn!(error = %e, "5m rollup failed");
             }
         }
@@ -394,6 +425,31 @@ mod tests {
     fn explicit_step_is_honoured_regardless_of_span() {
         assert_eq!(resolve_step(MetricStep::OneSec, 86_400, 10), 1);
         assert_eq!(resolve_step(MetricStep::FiveMin, 60, 10_000), 300);
+    }
+
+    #[test]
+    fn flush_writes_the_pending_batch() {
+        let dir = tempfile::tempdir().unwrap();
+        let cfg = HistoryConfig { path: dir.path().join("history.db"), ..HistoryConfig::default() };
+        let h = HistoryHandle::open(&cfg).unwrap();
+        let now = crate::sample::host::unix_now();
+        for i in 0..3 {
+            let row = Row {
+                ts: now - 3 + i,
+                cpu_pct: 10.0,
+                mem_used: 1,
+                swap_used: 0,
+                net_rx_bps: 0.0,
+                net_tx_bps: 0.0,
+                disk_read_bps: 0.0,
+                disk_write_bps: 0.0,
+                load1: 0.0,
+            };
+            h.tx.try_send(Msg::Row(row)).unwrap();
+        }
+        assert!(h.query(now - 10, now, MetricStep::OneSec, 100).unwrap().ts.is_empty(), "still batched");
+        h.flush(Duration::from_secs(5));
+        assert_eq!(h.query(now - 10, now, MetricStep::OneSec, 100).unwrap().ts.len(), 3);
     }
 
     #[test]

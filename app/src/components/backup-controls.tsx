@@ -53,8 +53,6 @@ export function BackUpNowButton({
   return (
     <>
       <Button
-        size='sm'
-        className='h-8'
         disabled={busy}
         onClick={() => setConfirming(true)}
       >

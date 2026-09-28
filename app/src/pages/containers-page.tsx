@@ -11,6 +11,7 @@ import { SegmentedControl } from '@/components/segmented-control';
 import { StatCard, StatRow } from '@/components/stat-card';
 import { EmptyState, NoNodesState } from '@/components/empty-state';
 import { DataTable } from '@/components/data-table';
+import { DockerDownNote } from '@/components/docker-down-note';
 import { containerColumns, ContainerRow } from '@/components/container-columns';
 
 type Filter = 'all' | 'running' | 'stopped';
@@ -19,6 +20,7 @@ export function ContainersPage() {
   const nodeCount = useNodeStore((s) => s.nodes.length);
   const nodeContainers = useContainersStore((s) => s.nodeContainers);
   const awaiting = useAwaiting(nodeContainers);
+  const dockerDown = useContainersStore((s) => Object.keys(s.dockerDown).length > 0);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
 
@@ -80,6 +82,7 @@ export function ContainersPage() {
         <NoNodesState />
       ) : (
         <>
+          <DockerDownNote />
           {all.length > 0 && (
             <StatRow>
               <StatCard
@@ -105,7 +108,8 @@ export function ContainersPage() {
                 <EmptyState
                   icon={Box}
                   title='No containers'
-                  description='Nothing is running under Docker on your nodes.'
+                  // With Docker not answering, the note above says why.
+                  description={dockerDown ? undefined : 'Nothing is running under Docker on your nodes.'}
                 />
               )
             }

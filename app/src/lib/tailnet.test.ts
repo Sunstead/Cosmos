@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { keyState, mergeTailnets, osLabel, primaryIp } from './tailnet';
+import { keyState, machineName, mergeTailnets, osLabel, primaryIp } from './tailnet';
 import { tailnetDevice, tailnetStatus } from '@/test/fixtures';
 
 describe('mergeTailnets', () => {
@@ -77,6 +77,25 @@ describe('keyState', () => {
     expect(keyState({ key_expiry: '2026-09-30T00:00:00Z', key_expired: false }, now)).toBe('expiring');
     expect(keyState({ key_expiry: '2026-09-01T00:00:00Z', key_expired: false }, now)).toBe('expired');
     expect(keyState({ key_expiry: '2027-01-01T00:00:00Z', key_expired: true }, now)).toBe('expired');
+  });
+});
+
+describe('machineName', () => {
+  it('uses the MagicDNS name, since iOS says every device is localhost', () => {
+    expect(machineName({ name: 'localhost', dns_name: 'pwb-ipad-pro.tail1234.ts.net' })).toBe('pwb-ipad-pro');
+    expect(machineName({ name: 'fresh', dns_name: '' })).toBe('fresh');
+  });
+
+  it('names merged devices that way, whatever the agent sent', () => {
+    const [ipad] = mergeTailnets([
+      {
+        nodeId: 'n-jupiter',
+        status: tailnetStatus({
+          devices: [tailnetDevice({ id: 'i', name: 'localhost', dns_name: 'pwb-ipad-pro.tail1234.ts.net' })],
+        }),
+      },
+    ]);
+    expect(ipad.name).toBe('pwb-ipad-pro');
   });
 });
 

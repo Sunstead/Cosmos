@@ -5,7 +5,7 @@ import { containerInfo } from '@/test/fixtures';
 const store = () => useContainersStore.getState();
 
 describe('containers store', () => {
-  beforeEach(() => useContainersStore.setState({ nodeContainers: {}, nodeServices: {}, services: [] }));
+  beforeEach(() => useContainersStore.setState({ nodeContainers: {}, nodeServices: {}, services: [], dockerDown: {} }));
 
   it('derives services per node and flattens them sorted', () => {
     store().setNodeContainers('b', [containerInfo({ id: '1', cosmos_service: 'zulu' })]);
@@ -18,6 +18,16 @@ describe('containers store', () => {
     const before = store().nodeServices.a;
     store().setNodeContainers('b', [containerInfo({ cosmos_service: 'zulu' })]);
     expect(store().nodeServices.a).toBe(before);
+  });
+
+  it('flags a node whose Docker is down, without churning on every sample', () => {
+    store().setNodeContainers('a', [containerInfo()], true);
+    const flagged = store().dockerDown;
+    expect(flagged).toEqual({ a: true });
+    store().setNodeContainers('a', [containerInfo()], true);
+    expect(store().dockerDown).toBe(flagged);
+    store().setNodeContainers('a', [containerInfo()]);
+    expect(store().dockerDown).toEqual({});
   });
 
   it('drops a removed node', () => {

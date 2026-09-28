@@ -30,8 +30,8 @@ function CopyButton({ text }: { text: string }) {
   return (
     <Button
       variant='ghost'
-      size='icon'
-      className='size-7 shrink-0'
+      size='icon-sm'
+      className='shrink-0'
       aria-label='Copy command'
       onClick={() => {
         void navigator.clipboard.writeText(text).then(() => {

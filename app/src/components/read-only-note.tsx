@@ -1,4 +1,5 @@
-import { SetupHint, SETUP } from './setup-hint';
+import { SetupHint } from './setup-hint';
+import { SETUP } from '@/lib/setup';
 
 /** Footer for action menus on a read-only agent. */
 export function ReadOnlyNote() {

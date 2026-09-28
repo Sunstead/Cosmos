@@ -9,6 +9,7 @@ import { containerInfo, wolEntry } from '@/test/fixtures';
 import type { WolItem } from '@/api/queries';
 import { TitleBar } from './title-bar';
 import { CommandPalette } from './command-palette';
+import { CommandHost } from './command-host';
 
 const navigate = vi.fn();
 const toggleSidebar = vi.fn();
@@ -26,7 +27,7 @@ vi.mock('@tanstack/react-router', () => ({
   ),
 }));
 vi.mock('@/components/ui/resizable-sidebar', () => ({ useSidebar: () => ({ toggleSidebar }) }));
-vi.mock('@/components/theme-provider', () => ({
+vi.mock('@/hooks/use-theme', () => ({
   useTheme: () => ({ toggleTheme, resolvedTheme: 'dark', theme: 'dark', setTheme: vi.fn() }),
 }));
 vi.mock('@/api/queries', () => ({
@@ -196,5 +197,44 @@ describe('CommandPalette', () => {
     await userEvent.click(await screen.findByRole('option', { name: /gitea/ }));
     await userEvent.click(screen.getByRole('option', { name: /View logs/ }));
     expect(navigate).toHaveBeenCalledWith({ to: '/logs', search: { node: 'n1', container: 'c1' } });
+  });
+});
+
+describe('CommandHost', () => {
+  beforeEach(() => {
+    document.documentElement.dataset.platform = 'web';
+  });
+
+  it('goes to a page on "G then a letter"', async () => {
+    render(<CommandHost />);
+    await userEvent.keyboard('gl');
+    expect(navigate).toHaveBeenCalledWith({ to: '/logs' });
+    await userEvent.keyboard('gp');
+    expect(navigate).toHaveBeenLastCalledWith({ to: '/updates' });
+  });
+
+  it('leaves typing alone', async () => {
+    render(
+      <>
+        <CommandHost />
+        <input aria-label='field' />
+      </>,
+    );
+    await userEvent.click(screen.getByRole('textbox', { name: 'field' }));
+    await userEvent.keyboard('gl');
+    expect(navigate).not.toHaveBeenCalled();
+    expect(screen.getByRole('textbox', { name: 'field' })).toHaveValue('gl');
+  });
+
+  it('no longer jumps to pages on number keys', async () => {
+    render(<CommandHost />);
+    await userEvent.keyboard('{Control>}1{/Control}');
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('still toggles the sidebar with its chord', async () => {
+    render(<CommandHost />);
+    await userEvent.keyboard('{Control>}b{/Control}');
+    expect(toggleSidebar).toHaveBeenCalled();
   });
 });

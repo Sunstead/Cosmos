@@ -41,7 +41,8 @@ import { SegmentedControl } from '@/components/segmented-control';
 import { Section } from '@/components/section';
 import { EmptyState, NoNodesState } from '@/components/empty-state';
 import { TableSkeleton } from '@/components/skeletons';
-import { SETUP, SetupHint } from '@/components/setup-hint';
+import { SetupHint } from '@/components/setup-hint';
+import { SETUP } from '@/lib/setup';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { NodeName } from '@/components/node-name';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -366,18 +367,14 @@ export function UpdatesPage() {
 
   async function checkNow() {
     setChecking(true);
-    try {
-      await Promise.all(
-        checkKey
-          .split('|')
-          .filter(Boolean)
-          .map((id) => actions.check(id)),
-      );
-    } catch {
-      // Reported by the action.
-    } finally {
-      setChecking(false);
-    }
+    // Each failure is reported by the action; wait for every node.
+    await Promise.allSettled(
+      checkKey
+        .split('|')
+        .filter(Boolean)
+        .map((id) => actions.check(id)),
+    );
+    setChecking(false);
   }
 
   function body() {
@@ -519,9 +516,7 @@ export function UpdatesPage() {
             )}
             {checkKey && (
               <Button
-                size='sm'
                 variant='outline'
-                className='h-8'
                 disabled={checking}
                 onClick={() => void checkNow()}
               >

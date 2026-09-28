@@ -6,6 +6,7 @@ import {
   HardDrive,
   History,
   Layers,
+  LoaderCircle,
   RotateCcw,
   TriangleAlert,
 } from 'lucide-react';
@@ -16,13 +17,16 @@ import { BackupsStatus } from '@/generated/BackupsStatus';
 import { StepStatus } from '@/generated/StepStatus';
 import { formatBytes } from '@/lib/node-metrics';
 import { relativeTime, secondsToDuration } from '@/lib/time';
-import { NO_VALUE } from '@/lib/format';
+import { NO_VALUE, sentence } from '@/lib/format';
+import { backupHealth } from '@/lib/backups';
 import { PageHeader } from '@/components/page-header';
-import { NodeSelect, useSelectedNode } from '@/components/node-select';
+import { NodeSelect } from '@/components/node-select';
+import { useSelectedNode } from '@/hooks/use-selected-node';
 import { StatCard, StatRow } from '@/components/stat-card';
 import { Section } from '@/components/section';
 import { EmptyState, NoNodesState } from '@/components/empty-state';
-import { SETUP } from '@/components/setup-hint';
+import { NodeUnavailable } from '@/components/sign-in';
+import { SETUP } from '@/lib/setup';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -43,26 +47,22 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
-export type BackupHealth = 'healthy' | 'stale' | 'interrupted' | 'failed';
-
-/**
- * A backup that stopped running looks healthy if you only list snapshots, so
- * staleness and the timer cross-check decide the headline.
- */
-export function backupHealth(s: BackupsStatus): BackupHealth {
-  const fired = s.timer_last_fired ? Date.parse(s.timer_last_fired) : NaN;
-  const wrote = s.generated_at ? Date.parse(s.generated_at) : NaN;
-  if (Number.isFinite(fired) && Number.isFinite(wrote) && fired > wrote)
-    return 'interrupted';
-  if (s.last_exit_code !== null && s.last_exit_code !== 0) return 'failed';
-  if (s.stale) return 'stale';
-  return 'healthy';
-}
-
 function HealthAlert({ status }: { status: BackupsStatus }) {
   const health = backupHealth(status);
   const lastRun = relativeTime(status.last_run);
   const next = relativeTime(status.next_run);
+
+  if (health === 'running') {
+    return (
+      <Alert>
+        <LoaderCircle className='animate-spin text-muted-foreground' />
+        <AlertTitle>Backup running</AlertTitle>
+        <AlertDescription>
+          {sentence([`started ${relativeTime(status.timer_last_fired)}`, lastRun && `last finished ${lastRun}`])}
+        </AlertDescription>
+      </Alert>
+    );
+  }
 
   if (health === 'healthy') {
     return (
@@ -70,14 +70,11 @@ function HealthAlert({ status }: { status: BackupsStatus }) {
         <CircleCheck className='text-success' />
         <AlertTitle>Backups healthy</AlertTitle>
         <AlertDescription>
-          {[
-            lastRun && `Last run ${lastRun}`,
-            status.duration_secs != null &&
-              `took ${secondsToDuration(status.duration_secs)}`,
+          {sentence([
+            lastRun && `last run ${lastRun}`,
+            status.duration_secs != null && `took ${secondsToDuration(status.duration_secs)}`,
             next && `next ${next}`,
-          ]
-            .filter(Boolean)
-            .join(', ')}
+          ])}
         </AlertDescription>
       </Alert>
     );
@@ -144,6 +141,9 @@ export function BackupsPage() {
           setup={SETUP.backups}
         />
       );
+    }
+    if (nodeId && (meta?.status === 'offline' || meta?.status === 'unauthorized')) {
+      return <NodeUnavailable nodeId={nodeId} />;
     }
     if (error) {
       return (

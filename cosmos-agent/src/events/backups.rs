@@ -132,21 +132,21 @@ impl BackupTracker {
         let fired = s.timer_last_fired.as_deref().and_then(parse_rfc3339);
         let wrote = parse_rfc3339(&s.generated_at);
         match (fired, wrote) {
-            (Some(f), Some(w)) if f > w => {
-                if now - f >= INTERRUPTED_AFTER {
-                    out.push(
-                        Report::Open(
-                            spec(
-                                INTERRUPTED,
-                                "interrupted",
-                                s,
-                                "The last backup didn't finish".into(),
-                                format!("The timer fired {} ago, but the job never reported.", human_duration((now - f) as u64))
-                            )
+            // Running, or died: only after this long is it the second.
+            (Some(f), Some(w)) if f > w && now - f >= INTERRUPTED_AFTER => {
+                out.push(
+                    Report::Open(
+                        spec(
+                            INTERRUPTED,
+                            "interrupted",
+                            s,
+                            "The last backup didn't finish".into(),
+                            format!("The timer fired {} ago, but the job never reported.", human_duration((now - f) as u64))
                         )
-                    );
-                }
+                    )
+                );
             }
+            (Some(f), Some(w)) if f > w => {}
             _ if is_open(open, INTERRUPTED) => out.push(resolve(INTERRUPTED, "A backup finished again", None)),
             _ => {}
         }

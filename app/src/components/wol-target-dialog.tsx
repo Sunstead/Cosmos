@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useTailnet, useWol, useWolActions } from '@/api/queries';
+import { useTailnet, useWol, useWolActionNodes, useWolActions } from '@/api/queries';
 import { getConnection, nodeDisplayName, useNodeStore } from '@/stores/nodes';
 import { WolTarget } from '@/generated/WolTarget';
 import { WolTargetInput } from '@/generated/WolTargetInput';
@@ -69,9 +69,10 @@ function TargetForm({
   const wol = useWol();
   const tailnet = useTailnet();
   const nodes = useNodeStore((s) => s.nodes);
+  const actionNodes = useWolActionNodes();
   const { save } = useWolActions();
 
-  const [nodeId, setNodeId] = useState(fixedNode ?? wol.nodes[0] ?? '');
+  const [nodeId, setNodeId] = useState(fixedNode ?? actionNodes[0] ?? '');
   const [name, setName] = useState(target?.name ?? '');
   const [mac, setMac] = useState(target?.mac ?? '');
   const [broadcast, setBroadcast] = useState(target?.broadcast ?? NONE);
@@ -141,7 +142,7 @@ function TargetForm({
 
       <form id='wol-target' onSubmit={(e) => void submit(e)}>
         <FieldGroup>
-          {!fixedNode && wol.nodes.length > 1 && (
+          {!fixedNode && actionNodes.length > 1 && (
             <Field>
               <FieldLabel htmlFor='wol-node'>Node</FieldLabel>
               <Select value={nodeId} onValueChange={setNodeId}>
@@ -149,7 +150,7 @@ function TargetForm({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {wol.nodes.map((id) => {
+                  {actionNodes.map((id) => {
                     const node = nodes.find((n) => n.id === id);
                     return (
                       <SelectItem key={id} value={id}>
