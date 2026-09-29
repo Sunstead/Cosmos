@@ -225,6 +225,9 @@ impl Task {
         // interval.
         let mut next_check = Instant::now() + Duration::from_secs(90);
         let every = Duration::from_secs(u64::from(self.cfg.check_interval_hours) * 3_600);
+        // A deadline, not a sleep made fresh each time round: the container
+        // list changes every 2 s, and a new 15 s sleep would never finish.
+        let mut next_follow = Instant::now() + FOLLOW;
 
         loop {
             let active = self.runs.iter().any(|r| !r.run.state.finished());
@@ -253,9 +256,10 @@ impl Task {
                     next_check = Instant::now() + every;
                     self.publish();
                 }
-                _ = tokio::time::sleep(FOLLOW), if active => {
+                _ = tokio::time::sleep_until(next_follow), if active => {
                     self.drive().await;
                     self.publish();
+                    next_follow = Instant::now() + FOLLOW;
                 }
             }
         }
@@ -886,6 +890,56 @@ mod tests {
             snap_tx,
         };
         (task, rx)
+    }
+
+    /// The loop itself, with the container list changing every 2 s as it
+    /// does in production: a run it resumes still gets followed.
+    #[tokio::test(start_paused = true)]
+    async fn follows_runs_while_the_containers_keep_changing() {
+        let api = fake_github().await;
+        let (containers_tx, containers) = watch::channel(snapshot(ntfy("v2.29.0")));
+        let (task, rx) = task(&api, containers, 10);
+        let running = StoredRun {
+            run: UpdateRun {
+                id: "r1".into(),
+                unit: "binwiederhier/ntfy".into(),
+                kind: UpdateRunKind::Update,
+                from: "v2.28.0".into(),
+                to: "v2.29.0".into(),
+                by: "pwb".into(),
+                state: UpdateRunState::Running,
+                requested_at: unix_now(),
+                finished_at: None,
+                run_url: None,
+                detail: None,
+                step: None,
+                watch_until: None,
+            },
+            services: vec!["ntfy".into()],
+            run_id: Some(42),
+            watch_until: None,
+        };
+        task.store.with(|c| db::save_run(c, &running).unwrap());
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(2)).await;
+                if containers_tx.send(snapshot(ntfy("v2.29.0"))).is_err() {
+                    return;
+                }
+            }
+        });
+        let (_cmd_tx, cmd_rx) = mpsc::channel(1);
+        tokio::spawn(task.run(cmd_rx));
+
+        // Under a minute, so the first update check (at 90 s) doesn't run.
+        for _ in 0..40 {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            let published: serde_json::Value = serde_json::from_str(&rx.borrow().json).unwrap_or_default();
+            if published["history"][0]["state"] == "watching" {
+                return;
+            }
+        }
+        panic!("the run was never followed: {}", rx.borrow().json);
     }
 
     #[tokio::test]
