@@ -435,6 +435,8 @@ test.describe('with a node', () => {
                 finished_at: null,
                 run_url: 'https://github.com/o/r/actions/runs/42',
                 detail: null,
+                step: null,
+                watch_until: now + 480,
               },
             }),
             unit('immich-postgres', { blocked: 'updates are off for it (cosmos.update: off)' }),
@@ -452,14 +454,14 @@ test.describe('with a node', () => {
     await page.goto('/updates');
     const rows = page.locator('[data-update]');
     await expect(rows).toHaveCount(4);
-    await expect(rows.nth(0)).toContainText('Updating to v2.29.0: deployed, checking it stays up');
+    await expect(rows.nth(0)).toContainText('Updated to v2.29.0, checking it stays up for 8 more min');
     await expect(rows.nth(1)).toContainText('36.0.3-apache');
     await expect(rows.nth(1)).toContainText('37.0.0-apache held: one major version at a time');
     await expect(rows.nth(1)).toContainText('35.0.1-apache applies after the next nightly backup');
     await expect(page.getByText('Not updated: updates are off for it')).toBeVisible();
 
     await rows.nth(2).getByRole('button', { name: 'Update' }).click();
-    await expect(page.getByRole('dialog')).toContainText('backs up the databases');
+    await expect(page.getByRole('dialog')).toContainText('backs up its database');
     await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
     await page.screenshot({ path: info.outputPath('updates.png'), fullPage: true });
     await page.setViewportSize({ width: 375, height: 812 });

@@ -22,15 +22,38 @@ export const RUN_STATE: Record<
 > = {
   queued: { label: 'Queued', tone: 'busy' },
   dispatched: { label: 'Starting the workflow', tone: 'busy' },
-  running: { label: 'Backing up and deploying', tone: 'busy' },
-  watching: { label: 'Deployed, checking it stays up', tone: 'busy' },
+  running: { label: 'Deploying', tone: 'busy' },
+  watching: { label: 'Updated', tone: 'ok' },
   done: { label: 'Done', tone: 'ok' },
   failed: { label: 'Failed', tone: 'error' },
   broken: { label: 'Broken after the update', tone: 'error' },
 };
 
+const FINISHED: UpdateRunState[] = ['done', 'failed', 'broken'];
+
+/** Until the watch after the deploy ends, even though that shows as updated. */
 export function isRunning(run: UpdateRun | null | undefined): boolean {
-  return !!run && RUN_STATE[run.state].tone === 'busy';
+  return !!run && !FINISHED.includes(run.state);
+}
+
+/**
+ * What a run is doing, in words. While the workflow runs, the step it's on
+ * (older agents don't say); once deployed, how long the watch has left.
+ */
+export function runText(run: UpdateRun, nowSecs: number): string {
+  const { label, tone } = RUN_STATE[run.state];
+  const rollback = run.kind === 'rollback';
+  if (run.state === 'watching') {
+    const left = run.watch_until == null ? null : Math.ceil((run.watch_until - nowSecs) / 60);
+    const watch =
+      left == null || left < 1 ? 'checking it stays up' : `checking it stays up for ${left} more min`;
+    return `${rollback ? 'Rolled back' : 'Updated'} to ${run.to}, ${watch}`;
+  }
+  if (tone === 'busy') {
+    const step = run.step ?? label;
+    return `${rollback ? 'Rolling back to' : 'Updating to'} ${run.to}: ${step.toLowerCase()}`;
+  }
+  return `${rollback ? 'Rolled back to' : 'Update to'} ${run.to}: ${label.toLowerCase()}`;
 }
 
 /** What the Update button offers: the newest allowed tag. */
