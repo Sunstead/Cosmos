@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { autoNote, compareUnits, isRunning } from './updates';
+import { autoNote, compareUnits, isRunning, runText } from './updates';
+import { UpdateRun } from '@/generated/UpdateRun';
 import { UpdateUnit } from '@/generated/UpdateUnit';
 
 function unit(name: string, partial: Partial<UpdateUnit> = {}): UpdateUnit {
@@ -44,11 +45,52 @@ describe('updates', () => {
           finished_at: null,
           run_url: null,
           detail: null,
+          step: null,
+          watch_until: null,
         },
       }),
     ].sort(compareUnits);
     expect(sorted.map((u) => u.name)).toEqual(['d', 'c', 'b', 'a']);
     expect(isRunning(sorted[0].run)).toBe(true);
+  });
+
+  it('says what a run is doing', () => {
+    const run = (partial: Partial<UpdateRun>): UpdateRun => ({
+      id: 'r',
+      unit: 'u',
+      kind: 'update',
+      from: '1.0.0',
+      to: '1.0.1',
+      by: 'pwb',
+      state: 'running',
+      requested_at: 0,
+      finished_at: null,
+      run_url: null,
+      detail: null,
+      step: null,
+      watch_until: null,
+      ...partial,
+    });
+    expect(runText(run({}), 0)).toBe('Updating to 1.0.1: deploying');
+    expect(runText(run({ step: 'Back up the databases' }), 0)).toBe(
+      'Updating to 1.0.1: back up the databases',
+    );
+    // An older agent sends no step.
+    expect(runText({ ...run({}), step: undefined } as unknown as UpdateRun, 0)).toBe(
+      'Updating to 1.0.1: deploying',
+    );
+
+    const watching = run({ state: 'watching', watch_until: 600 });
+    expect(isRunning(watching)).toBe(true);
+    expect(runText(watching, 30)).toBe('Updated to 1.0.1, checking it stays up for 10 more min');
+    expect(runText(watching, 590)).toBe('Updated to 1.0.1, checking it stays up for 1 more min');
+    expect(runText(watching, 700)).toBe('Updated to 1.0.1, checking it stays up');
+    expect(runText(run({ state: 'watching', kind: 'rollback' }), 0)).toBe(
+      'Rolled back to 1.0.1, checking it stays up',
+    );
+
+    expect(isRunning(run({ state: 'done' }))).toBe(false);
+    expect(runText(run({ state: 'broken' }), 0)).toBe('Update to 1.0.1: broken after the update');
   });
 
   it('says when an automatic update will apply', () => {

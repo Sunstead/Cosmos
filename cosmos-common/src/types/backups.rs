@@ -41,8 +41,11 @@ pub enum BackupRequestKind {
     /// The nightly backup, now.
     Backup,
     /// The dumps, volumes and `.env` only, into the state repository: what an
-    /// update takes first.
+    /// update took first, and still does when no database matches.
     BackupState,
+    /// Only the databases an update's services use, into the state
+    /// repository: what an update takes first now.
+    BackupDump,
     RestoreTest,
 }
 
@@ -52,6 +55,7 @@ impl BackupRequestKind {
         match self {
             Self::Backup => "backup",
             Self::BackupState => "backup-state",
+            Self::BackupDump => "backup-dump",
             Self::RestoreTest => "restore-test",
         }
     }
@@ -60,6 +64,7 @@ impl BackupRequestKind {
         match s {
             "backup" => Some(Self::Backup),
             "backup-state" => Some(Self::BackupState),
+            "backup-dump" => Some(Self::BackupDump),
             "restore-test" => Some(Self::RestoreTest),
             _ => None,
         }
