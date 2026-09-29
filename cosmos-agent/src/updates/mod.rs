@@ -198,6 +198,19 @@ fn run_id() -> String {
     format!("{}-{:06x}", nanos / 1_000_000_000, (nanos / 1_000) % 0x1000000)
 }
 
+/// Waits for the next backup status: `false` once there will be none, and
+/// never without backups. It waits on the receiver itself: a clone made for
+/// each wait starts from the version the original last saw, and marking the
+/// clone seen leaves the original behind, so every later clone reports the
+/// same change at once and the loop spins (0.8 and 0.9.0 held a core that way
+/// from the first status change on).
+async fn backup_changed<T>(rx: &mut Option<watch::Receiver<T>>) -> bool {
+    match rx {
+        Some(rx) => rx.changed().await.is_ok(),
+        None => std::future::pending().await,
+    }
+}
+
 impl Task {
     async fn run(mut self, mut cmd_rx: mpsc::Receiver<Command>) {
         match self.store.call(|c| Ok((db::policies(c)?, db::recent_runs(c, HISTORY)?, db::open_runs(c)?))).await {
@@ -231,7 +244,6 @@ impl Task {
 
         loop {
             let active = self.runs.iter().any(|r| !r.run.state.finished());
-            let backups = self.backups.clone();
             tokio::select! {
                 cmd = cmd_rx.recv() => {
                     let Some(cmd) = cmd else { return; };
@@ -243,12 +255,11 @@ impl Task {
                         self.publish();
                     }
                 }
-                _ = async move {
-                    match backups {
-                        Some(mut rx) => { let _ = rx.changed().await; }
-                        None => std::future::pending::<()>().await,
+                changed = backup_changed(&mut self.backups) => {
+                    if !changed {
+                        self.backups = None;
+                        continue;
                     }
-                } => {
                     self.after_backup().await;
                 }
                 _ = tokio::time::sleep_until(next_check) => {
@@ -940,6 +951,32 @@ mod tests {
             }
         }
         panic!("the run was never followed: {}", rx.borrow().json);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_backup_status_wakes_the_loop_once() {
+        let never = |rx| async move {
+            let mut rx = rx;
+            tokio::time::timeout(Duration::from_secs(60), backup_changed(&mut rx)).await.is_err()
+        };
+        let (tx, rx) = watch::channel(0u32);
+        let mut rx = Some(rx);
+        assert!(never(rx.clone()).await, "nothing sent yet");
+
+        // The old loop waited on a fresh clone each pass: the original never
+        // took the change, so every clone reported it again, at once.
+        tx.send(1).unwrap();
+        let stale = rx.clone().unwrap();
+        for _ in 0..3 {
+            assert!(backup_changed(&mut Some(stale.clone())).await, "the spin");
+        }
+
+        assert!(backup_changed(&mut rx).await);
+        assert!(never(rx.clone()).await, "taken once, on the receiver itself");
+
+        drop(tx);
+        assert!(!backup_changed(&mut rx).await, "no more statuses");
+        assert!(never(None::<watch::Receiver<u32>>).await, "no backups: never");
     }
 
     #[tokio::test]
