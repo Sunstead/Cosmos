@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 const KIND: Record<BackupRequestKind, string> = {
   backup: 'Backup',
   backup_state: 'State backup',
+  backup_dump: 'Database backup',
   restore_test: 'Restore test',
 };
 

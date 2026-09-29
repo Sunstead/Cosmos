@@ -26,7 +26,7 @@ pub async fn run(
     let (subject, done, failed) = match input.kind {
         BackupRequestKind::Backup => ("backup", "Started a backup", "Couldn't start a backup"),
         BackupRequestKind::RestoreTest => ("restore test", "Started a restore test", "Couldn't start a restore test"),
-        BackupRequestKind::BackupState => {
+        BackupRequestKind::BackupState | BackupRequestKind::BackupDump => {
             return Err(AgentError::BadRequest("only a backup or a restore test can be started here".into()));
         }
     };

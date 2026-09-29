@@ -149,6 +149,8 @@ mod tests {
                 finished_at: None,
                 run_url: None,
                 detail: None,
+                step: None,
+                watch_until: None,
             },
             services: vec!["immich-server".into(), "immich-machine-learning".into()],
             run_id: None,

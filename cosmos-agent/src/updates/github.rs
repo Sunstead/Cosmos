@@ -163,6 +163,31 @@ impl GitHub {
         let v: serde_json::Value = res.json().await.map_err(|e| e.to_string())?;
         Self::run_from(&v).ok_or_else(|| "GitHub sent a run without an id".into())
     }
+
+    /// The step the run is on, when one of its own steps is under way.
+    pub async fn step(&self, id: u64) -> Result<Option<String>, String> {
+        let path = format!("/repos/{}/actions/runs/{id}/jobs", self.repo);
+        let res = self.send(self.request(reqwest::Method::GET, &path)).await?;
+        if !res.status().is_success() {
+            return Err(Self::failure(res).await);
+        }
+        let v: serde_json::Value = res.json().await.map_err(|e| e.to_string())?;
+        Ok(current_step(&v))
+    }
+}
+
+/// The step under way in a run's jobs listing: the first job in progress, and
+/// its first step in progress that the workflow names. GitHub's own setup and
+/// cleanup steps, and unnamed `uses:` steps, say nothing useful.
+pub fn current_step(jobs: &serde_json::Value) -> Option<String> {
+    let job = jobs["jobs"].as_array()?.iter().find(|j| j["status"] == "in_progress")?;
+    job["steps"]
+        .as_array()?
+        .iter()
+        .filter(|s| s["status"] == "in_progress")
+        .filter_map(|s| s["name"].as_str())
+        .find(|n| !(*n == "Set up job" || *n == "Complete job" || n.starts_with("Post ") || n.starts_with("Run ")))
+        .map(str::to_string)
 }
 
 #[cfg(test)]
@@ -200,6 +225,8 @@ mod tests {
                     }
                 } else if path.contains("/workflows/update.yml/runs") {
                     ("200 OK", r#"{"workflow_runs":[{"id":7,"display_title":"Update other","status":"completed"},{"id":8,"display_title":"Update ntfy (req-123)","status":"in_progress","conclusion":null,"html_url":"https://github.com/o/r/actions/runs/8"}]}"#)
+                } else if path.ends_with("/jobs") {
+                    ("200 OK", r#"{"jobs":[{"name":"bump","status":"in_progress","steps":[{"name":"Check the request","status":"completed"},{"name":"Back up the databases","status":"in_progress"}]}]}"#)
                 } else {
                     ("200 OK", r#"{"id":8,"status":"completed","conclusion":"success","html_url":"https://github.com/o/r/actions/runs/8"}"#)
                 };
@@ -230,6 +257,32 @@ mod tests {
 
         let done = gh.run(8).await.unwrap();
         assert_eq!(done.conclusion.as_deref(), Some("success"));
+        assert_eq!(gh.step(8).await.unwrap().as_deref(), Some("Back up the databases"));
+    }
+
+    #[test]
+    fn names_the_step_under_way() {
+        let step = |v: serde_json::Value| current_step(&v);
+        let job = |name: &str, status: &str, steps: serde_json::Value| serde_json::json!({ "name": name, "status": status, "steps": steps });
+        let s = |name: &str, status: &str| serde_json::json!({ "name": name, "status": status });
+
+        let bump_done = job("bump", "completed", serde_json::json!([s("Set up job", "completed"), s("Commit the new tag", "completed")]));
+        let deploying = job(
+            "deploy / deploy",
+            "in_progress",
+            serde_json::json!([s("Set up job", "completed"), s("Pull images", "completed"), s("Apply changes", "in_progress"), s("Prune old images", "queued")])
+        );
+        assert_eq!(step(serde_json::json!({ "jobs": [bump_done.clone(), deploying] })).as_deref(), Some("Apply changes"));
+
+        // GitHub's own steps and unnamed actions are skipped.
+        for housekeeping in ["Set up job", "Run actions/checkout@v4", "Post Run actions/checkout@v4", "Complete job"] {
+            let j = job("bump", "in_progress", serde_json::json!([s(housekeeping, "in_progress")]));
+            assert_eq!(step(serde_json::json!({ "jobs": [j] })), None, "{housekeeping}");
+        }
+        // Between jobs, or before the runner picks it up.
+        let queued = job("deploy / deploy", "queued", serde_json::json!([]));
+        assert_eq!(step(serde_json::json!({ "jobs": [bump_done, queued] })), None);
+        assert_eq!(step(serde_json::json!({})), None);
     }
 
     #[tokio::test]
