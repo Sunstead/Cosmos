@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import {
   ArrowRight,
@@ -33,6 +33,7 @@ import {
   isRunning,
   POLICY,
   RUN_STATE,
+  runText,
 } from '@/lib/updates';
 import { cn } from '@/lib/utils';
 import { PageHeader } from '@/components/page-header';
@@ -60,9 +61,16 @@ type Filter = 'all' | 'available' | 'automatic';
 const iso = (secs: number) => new Date(secs * 1000).toISOString();
 
 function RunLine({ run }: { run: UpdateRun }) {
-  const { label, tone } = RUN_STATE[run.state];
-  const verb = run.kind === 'rollback' ? 'Rolling back to' : 'Updating to';
-  const when = relativeTime(iso(run.finished_at ?? run.requested_at));
+  const { tone } = RUN_STATE[run.state];
+  const watching = run.state === 'watching';
+  const [now, setNow] = useState(() => Date.now() / 1000);
+  // The watch's countdown moves on its own; nothing else on the line does.
+  useEffect(() => {
+    if (!watching) return;
+    const timer = setInterval(() => setNow(Date.now() / 1000), 15_000);
+    return () => clearInterval(timer);
+  }, [watching]);
+  const when = watching ? null : relativeTime(iso(run.finished_at ?? run.requested_at));
   return (
     <div
       className={cn(
@@ -83,9 +91,7 @@ function RunLine({ run }: { run: UpdateRun }) {
       )}
       <div className='flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-0.5'>
         <span>
-          {tone === 'busy'
-            ? `${verb} ${run.to}: ${label.toLowerCase()}`
-            : `${run.kind === 'rollback' ? 'Rolled back to' : 'Update to'} ${run.to}: ${label.toLowerCase()}`}
+          {runText(run, now)}
           {tone !== 'busy' && when && `, ${when}`}
           {run.by !== 'auto' ? `, by ${run.by}` : ', automatically'}
         </span>
@@ -121,7 +127,7 @@ function UpdateButton({
   const busy = isRunning(item.run);
 
   const steps = [
-    item.backup && 'backs up the databases',
+    item.backup && 'backs up its database',
     'commits the new tag to the repository',
     'deploys it',
   ].filter(Boolean) as string[];

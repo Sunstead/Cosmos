@@ -444,6 +444,8 @@ impl Task {
                 finished_at: None,
                 run_url: None,
                 detail: None,
+                step: None,
+                watch_until: None,
             },
             services: unit.services(),
             run_id: None,
@@ -468,25 +470,50 @@ impl Task {
         }
     }
 
-    /// Moves the run in flight along, or starts the next queued one. One at a
-    /// time: a second workflow would only wait for the first anyway.
+    /// Moves every run along. Runs being watched are judged each time. One
+    /// workflow runs at a time (a second would only wait in the workflow's
+    /// concurrency group), but the next queued run starts as soon as the one
+    /// before has deployed, without waiting out its watch.
     async fn drive(&mut self) {
         let Some(gh) = self.github.clone() else { return };
-        let now = unix_now();
-        let in_flight = self.runs
+        let watching: Vec<StoredRun> = self.runs
             .iter()
-            .find(|r| matches!(r.run.state, UpdateRunState::Dispatched | UpdateRunState::Running | UpdateRunState::Watching))
-            .cloned();
-        let mut run = match in_flight {
-            Some(r) => r,
-            None => {
-                let Some(next) = self.runs.iter().rev().find(|r| r.run.state == UpdateRunState::Queued).cloned() else {
-                    return;
-                };
-                next
+            .filter(|r| r.run.state == UpdateRunState::Watching)
+            .cloned()
+            .collect();
+        for run in watching {
+            self.watch(run).await;
+        }
+        // Twice at most: a run that has just deployed makes way for the next.
+        for _ in 0..2 {
+            let active = self.runs
+                .iter()
+                .find(|r| matches!(r.run.state, UpdateRunState::Dispatched | UpdateRunState::Running))
+                .cloned();
+            let run = match active {
+                Some(r) => r,
+                None => {
+                    let Some(next) = self.runs.iter().rev().find(|r| r.run.state == UpdateRunState::Queued).cloned() else {
+                        return;
+                    };
+                    next
+                }
+            };
+            let queued = run.run.state == UpdateRunState::Queued;
+            let id = run.run.id.clone();
+            self.advance(&gh, run).await;
+            let still_active = self.runs
+                .iter()
+                .any(|r| r.run.id == id && matches!(r.run.state, UpdateRunState::Dispatched | UpdateRunState::Running));
+            if queued || still_active {
+                return;
             }
-        };
+        }
+    }
 
+    /// One step for the run with the workflow: start it, find it, or follow it.
+    async fn advance(&mut self, gh: &GitHub, mut run: StoredRun) {
+        let now = unix_now();
         match run.run.state {
             UpdateRunState::Queued => {
                 let inputs = serde_json::json!({
@@ -537,6 +564,7 @@ impl Task {
                         match info.conclusion.as_deref() {
                             Some("success") => {
                                 run.run.state = UpdateRunState::Watching;
+                                run.run.step = None;
                                 run.watch_until = Some(now + i64::from(self.cfg.watch_minutes) * 60);
                             }
                             other => {
@@ -550,35 +578,26 @@ impl Task {
                             }
                         }
                     }
-                    Ok(_) => {
-                        return;
+                    Ok(info) => {
+                        // Between steps, the last one named stays up.
+                        let step = if info.status == "in_progress" {
+                            match gh.step(id).await {
+                                Ok(step) => step.or_else(|| run.run.step.clone()),
+                                Err(e) => {
+                                    tracing::warn!(error = %e, "cannot read the update run's steps");
+                                    run.run.step.clone()
+                                }
+                            }
+                        } else {
+                            Some("Waiting for another deploy".to_string())
+                        };
+                        if step == run.run.step {
+                            return;
+                        }
+                        run.run.step = step;
                     }
                     Err(e) => {
                         tracing::warn!(error = %e, "cannot follow the update run");
-                        return;
-                    }
-                }
-            }
-            UpdateRunState::Watching => {
-                let containers = self.containers.borrow().containers.clone();
-                let uptime = self.uptime
-                    .as_ref()
-                    .map(|u| u.rx.borrow().entries.clone())
-                    .unwrap_or_default();
-                match decide::judge(&run, &containers, &uptime, now) {
-                    Verdict::Wait => {
-                        return;
-                    }
-                    Verdict::Done => {
-                        self.finish(run, UpdateRunState::Done, None).await;
-                        return;
-                    }
-                    Verdict::Broken(why) => {
-                        self.finish(run, UpdateRunState::Broken, Some(why)).await;
-                        return;
-                    }
-                    Verdict::Failed(why) => {
-                        self.finish(run, UpdateRunState::Failed, Some(why)).await;
                         return;
                     }
                 }
@@ -588,6 +607,21 @@ impl Task {
             }
         }
         self.save(run).await;
+    }
+
+    /// Judges a deployed run until its watch ends.
+    async fn watch(&mut self, run: StoredRun) {
+        let containers = self.containers.borrow().containers.clone();
+        let uptime = self.uptime
+            .as_ref()
+            .map(|u| u.rx.borrow().entries.clone())
+            .unwrap_or_default();
+        match decide::judge(&run, &containers, &uptime, unix_now()) {
+            Verdict::Wait => {}
+            Verdict::Done => self.finish(run, UpdateRunState::Done, None).await,
+            Verdict::Broken(why) => self.finish(run, UpdateRunState::Broken, Some(why)).await,
+            Verdict::Failed(why) => self.finish(run, UpdateRunState::Failed, Some(why)).await,
+        }
     }
 
     async fn finish(&mut self, mut run: StoredRun, state: UpdateRunState, detail: Option<String>) {
@@ -700,7 +734,10 @@ impl Task {
             .map(|u| {
                 let offer = self.offer(u);
                 let (policy, paused) = self.policies.get(&u.id).cloned().unwrap_or_default();
-                let run = self.runs.iter().find(|r| r.run.unit == u.id).map(|r| r.run.clone());
+                let run = self.runs
+                    .iter()
+                    .find(|r| r.run.unit == u.id)
+                    .map(|r| UpdateRun { watch_until: r.watch_until, ..r.run.clone() });
                 let previous = self.runs
                     .iter()
                     .find(|r| {
@@ -750,10 +787,17 @@ impl Task {
 mod tests {
     use super::*;
     use cosmos_common::types::ContainerInfo;
+    use std::sync::atomic::{ AtomicBool, Ordering };
     use tokio::io::{ AsyncReadExt, AsyncWriteExt };
 
     /// A GitHub whose runs finish at once, successfully.
     async fn fake_github() -> String {
+        fake_github_until(Arc::new(AtomicBool::new(true))).await
+    }
+
+    /// A GitHub whose runs are on "Pull the new images" until `finished`,
+    /// then succeed.
+    async fn fake_github_until(finished: Arc<AtomicBool>) -> String {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
         tokio::spawn(async move {
@@ -761,10 +805,15 @@ mod tests {
                 let mut buf = vec![0u8; 8192];
                 let n = sock.read(&mut buf).await.unwrap_or(0);
                 let req = String::from_utf8_lossy(&buf[..n]).to_string();
+                let path = req.split_whitespace().nth(1).unwrap_or("");
                 let body = if req.starts_with("POST") {
                     r#"{"workflow_run_id":42,"html_url":"https://github.com/o/r/actions/runs/42"}"#
-                } else {
+                } else if path.ends_with("/jobs") {
+                    r#"{"jobs":[{"name":"bump","status":"in_progress","steps":[{"name":"Pull the new images","status":"in_progress"}]}]}"#
+                } else if finished.load(Ordering::Relaxed) {
                     r#"{"id":42,"status":"completed","conclusion":"success","html_url":"https://github.com/o/r/actions/runs/42"}"#
+                } else {
+                    r#"{"id":42,"status":"in_progress","conclusion":null,"html_url":"https://github.com/o/r/actions/runs/42"}"#
                 };
                 let reply = format!(
                     "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
@@ -777,10 +826,14 @@ mod tests {
     }
 
     fn ntfy(tag: &str) -> ContainerInfo {
+        container("ntfy", "binwiederhier/ntfy", tag)
+    }
+
+    fn container(service: &str, repo: &str, tag: &str) -> ContainerInfo {
         ContainerInfo {
-            id: "ntfy".into(),
-            name: "ntfy".into(),
-            image: format!("binwiederhier/ntfy:{tag}"),
+            id: service.into(),
+            name: service.into(),
+            image: format!("{repo}:{tag}"),
             status: String::new(),
             state: "running".into(),
             health: None,
@@ -789,9 +842,9 @@ mod tests {
             created_unix: 0,
             restart_count: 0,
             compose_project: Some("jupiter".into()),
-            compose_service: Some("ntfy".into()),
+            compose_service: Some(service.into()),
             update_labels: Default::default(),
-            cosmos_service: Some("ntfy".into()),
+            cosmos_service: Some(service.into()),
             cosmos_service_description: None,
             cosmos_service_url: None,
             cpu_pct: 0.0,
@@ -801,28 +854,28 @@ mod tests {
     }
 
     fn snapshot(c: ContainerInfo) -> Arc<ContainerSnapshot> {
-        Arc::new(ContainerSnapshot { json: "[]".into(), running: Arc::new([]), containers: Arc::new([c]), sampled_at: 0 })
+        snapshot_of(vec![c])
     }
 
-    #[tokio::test]
-    async fn an_update_goes_from_queued_to_done() {
-        let api = fake_github().await;
-        let (containers_tx, containers) = watch::channel(snapshot(ntfy("v2.28.0")));
+    fn snapshot_of(c: Vec<ContainerInfo>) -> Arc<ContainerSnapshot> {
+        Arc::new(ContainerSnapshot { json: "[]".into(), running: Arc::new([]), containers: c.into(), sampled_at: 0 })
+    }
+
+    fn task(api: &str, containers: watch::Receiver<Arc<ContainerSnapshot>>, watch_minutes: u32) -> (Task, watch::Receiver<Arc<UpdatesSnapshot>>) {
         let (snap_tx, rx) = watch::channel(Arc::new(UpdatesSnapshot { json: "{}".into() }));
-        let store = Store::in_memory();
         let client = reqwest::Client::new();
-        let mut task = Task {
-            cfg: UpdatesConfig { watch_minutes: 0, ..UpdatesConfig::default() },
-            store: store.clone(),
+        let task = Task {
+            cfg: UpdatesConfig { watch_minutes, ..UpdatesConfig::default() },
+            store: Store::in_memory(),
             docker: DockerHandle::new("/nonexistent.sock".into()),
             containers,
             backups: None,
             uptime: None,
             events: None,
-            github: Some(GitHub::with_api(client.clone(), &api, github::Secret("t".into()), "o/r", "update.yml", "main")),
+            github: Some(GitHub::with_api(client.clone(), api, github::Secret("t".into()), "o/r", "update.yml", "main")),
             registry: Registry::new(client),
             units: Vec::new(),
-            tags: HashMap::from([("binwiederhier/ntfy".to_string(), vec!["v2.28.1".to_string(), "v2.29.0".to_string()])]),
+            tags: HashMap::new(),
             seen: HashMap::new(),
             notes: HashMap::new(),
             policies: HashMap::new(),
@@ -832,6 +885,53 @@ mod tests {
             last_backup: None,
             snap_tx,
         };
+        (task, rx)
+    }
+
+    #[tokio::test]
+    async fn the_next_update_starts_while_the_last_is_watched() {
+        let finished = Arc::new(AtomicBool::new(false));
+        let api = fake_github_until(finished.clone()).await;
+        let (_containers_tx, containers) = watch::channel(
+            snapshot_of(vec![ntfy("v2.28.0"), container("uptime-kuma", "louislam/uptime-kuma", "2.5.4")])
+        );
+        let (mut task, rx) = task(&api, containers, 10);
+        task.tags = HashMap::from([
+            ("binwiederhier/ntfy".to_string(), vec!["v2.29.0".to_string()]),
+            ("louislam/uptime-kuma".to_string(), vec!["2.5.5".to_string()]),
+        ]);
+        task.refresh_units();
+
+        let a = task.queue("binwiederhier/ntfy", Some("v2.29.0".into()), UpdateRunKind::Update, "pwb").await.unwrap();
+        task.drive().await;
+        task.drive().await;
+        let run = |task: &Task, id: &str| task.runs.iter().find(|r| r.run.id == id).unwrap().run.clone();
+        assert_eq!(run(&task, &a.id).state, UpdateRunState::Running);
+        assert_eq!(run(&task, &a.id).step.as_deref(), Some("Pull the new images"), "the step under way");
+
+        let b = task.queue("louislam/uptime-kuma", Some("2.5.5".into()), UpdateRunKind::Update, "pwb").await.unwrap();
+        task.drive().await;
+        assert_eq!(run(&task, &b.id).state, UpdateRunState::Queued, "one workflow at a time");
+
+        finished.store(true, Ordering::Relaxed);
+        task.drive().await;
+        assert_eq!(run(&task, &a.id).state, UpdateRunState::Watching);
+        assert_eq!(run(&task, &a.id).step, None);
+        assert_eq!(run(&task, &b.id).state, UpdateRunState::Running, "started without waiting for the watch");
+
+        task.publish();
+        let published: serde_json::Value = serde_json::from_str(&rx.borrow().json).unwrap();
+        let ntfy = published["units"].as_array().unwrap().iter().find(|u| u["id"] == "binwiederhier/ntfy").unwrap();
+        assert!(ntfy["run"]["watch_until"].as_i64().unwrap() > unix_now());
+    }
+
+    #[tokio::test]
+    async fn an_update_goes_from_queued_to_done() {
+        let api = fake_github().await;
+        let (containers_tx, containers) = watch::channel(snapshot(ntfy("v2.28.0")));
+        let (mut task, rx) = task(&api, containers, 0);
+        let store = task.store.clone();
+        task.tags = HashMap::from([("binwiederhier/ntfy".to_string(), vec!["v2.28.1".to_string(), "v2.29.0".to_string()])]);
         task.refresh_units();
 
         let refused = task.queue("binwiederhier/ntfy", Some("v9.0.0".into()), UpdateRunKind::Update, "pwb").await;

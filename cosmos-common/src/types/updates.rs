@@ -157,6 +157,14 @@ pub struct UpdateRun {
     /// The workflow run on GitHub.
     pub run_url: Option<String>,
     pub detail: Option<String>,
+    /// While running: the workflow step under way, as the workflow names it.
+    /// Not stored.
+    #[serde(default)]
+    pub step: Option<String>,
+    /// While watching: when the watch ends.
+    #[serde(default)]
+    #[ts(type = "number | null")]
+    pub watch_until: Option<i64>,
 }
 
 /// What moves together: every service running one image repository, or an
