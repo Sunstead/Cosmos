@@ -35,7 +35,7 @@ them in step.
    It attaches them to a **draft** release. Review it on GitHub and press
    Publish.
 4. Once the agent image run has passed, bump Jupiter: `compose/cosmos.yml` to
-   the new version (Renovate opens this PR on its own, or do it by hand), in
+   the new version (a hand-made PR; Renovate is gone), in
    the same PR as any `cosmos-agent.toml` change the release needs. An agent
    refuses config it doesn't understand, so the image must exist first.
    Merging deploys it.

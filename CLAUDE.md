@@ -111,7 +111,8 @@ Background samplers publish to `tokio::sync::watch` channels; handlers hand out 
 
 Production is the Jupiter repo (`InventorPWB/Jupiter`, usually checked out
 beside this one), where a push to `main` deploys. It pins the agent to a
-semver tag, and Renovate opens the bump PR once a `v*` tag has published.
+semver tag, bumped by hand in a PR (`compose/cosmos.yml`) once a `v*` tag has
+published; Renovate is gone.
 An agent refuses config it doesn't understand, so a release that changes
 `agent.toml` needs its image published before the Jupiter PR that uses it
 merges.
