@@ -22,7 +22,7 @@ or filesystem path.
 
 ## 1. Current state
 
-*Last checked against both repos: 2026-09-26.*
+*Last checked against both repos: 2026-09-30.*
 
 ### Jupiter (primary server)
 - Debian 13. Disks:
@@ -30,12 +30,14 @@ or filesystem path.
     187G free) holding the OS, Docker (`/var/lib/docker`, so every named volume
     and every Postgres) and `/srv/backups`. What's on the rest of the NVMe is
     unconfirmed.
-  - 2TB HDD (1.8T) at `/srv/storage` (`STORAGE_PATH`): 186G used. Gitea,
-    Nextcloud and Immich files.
+  - 2TB HDD (1.8T) at `/srv/storage` (`STORAGE_PATH`): about 190G used, laid
+    out by data class (section 4): `data/` (Immich photos, OpenCloud files),
+    `apps/` (Gitea, Immich's own dumps), `derived/` (Immich thumbnails and
+    transcodes) and the state backup repository.
 - Other nodes (Saturn, Mars, etc.) are planned. Servers are named after planets.
-- Docker Compose stack: Caddy, Authentik (own Postgres), Nextcloud, Immich (own
-  Postgres), Gitea (shared Postgres), Uptime Kuma, Portainer, Tailscale, and the
-  Cosmos agent/UI.
+- Docker Compose stack: Caddy, Authentik (own Postgres), OpenCloud, Immich (own
+  Postgres), Gitea (shared Postgres), ntfy, Tailscale, and the Cosmos agent/UI.
+  Nextcloud, Uptime Kuma and Portainer were retired on 2026-09-29/30.
 - Caddy serves `*.jupiter.sunstead.net` with wildcard TLS via Cloudflare DNS-01.
 - Access is **Tailscale-only**. A Cloudflare Tunnel was tried and rolled back
   (SSL limits on second-level subdomains, 100MB upload cap).
@@ -50,10 +52,9 @@ or filesystem path.
   is newer than the container, prune images.
 - Secrets live in the server's `.env`, not in git.
 - **Every image is pinned to an explicit tag** (no digests), including
-  `ghcr.io/sunstead/cosmos-agent`. Watchtower is gone. **Renovate** (Mend's
-  hosted app) opens grouped update PRs; its rules keep Immich server and ML
-  together, hold back Immich's Postgres and major Postgres/Redis versions, and
-  step Nextcloud one major at a time. This is a stopgap: see 3C.
+  `ghcr.io/sunstead/cosmos-agent`. Watchtower and Renovate are gone: Cosmos
+  proposes and applies updates through Jupiter's `update.yml` (3C), and the
+  agent's own image is bumped by hand.
 
 ### Sign-in (working)
 - Authentik at `auth.jupiter.sunstead.net` is the single login, with MFA
@@ -62,29 +63,29 @@ or filesystem path.
   **Exception:** Immich's OIDC client has no blueprint; it was set up by hand.
 - Groups: `homelab-users` (can use apps) and `homelab-admins` (admin inside apps
   that map it, including Cosmos actions).
-- Cosmos, Gitea, Nextcloud, Immich and Portainer use OIDC/OAuth. Uptime Kuma uses
-  Caddy forward auth, with `/api/push/*`, status pages and badges exempted.
+- Cosmos, Gitea, Immich and OpenCloud use OIDC. No app uses Caddy forward auth
+  any more; the snippet stays in the Caddyfile for the next one.
 - Every service keeps a local-account fallback if Authentik is down (`SSO.md`).
 
-### Backups (working, with a real gap)
-- A systemd timer runs nightly at 03:00: `pg_dumpall` of each Postgres, then an
-  encrypted **restic** snapshot of `STORAGE_PATH`, the dumps, small volumes
-  (Authentik, Nextcloud app dir, Caddy, Uptime Kuma, Portainer) and the server
-  `.env`. Retention 7 daily, 4 weekly, 6 monthly. Repository at
-  `/srv/backups/restic`.
+### Backups (working; no offsite copy yet)
+Details in Jupiter's `docs/BACKUPS.md`.
+- Nightly at 03:00: a dump of each Postgres, then encrypted **restic** snapshots
+  into two repositories on different disks. The primary (`/srv/backups/restic`,
+  NVMe) holds everything: `STORAGE_PATH` minus `derived/`, the dumps, the small
+  volumes and `.env`. The state repository (`/srv/storage/backups/restic-state`,
+  HDD) holds the dumps, volumes and `.env`, so either disk can fail alone.
+  Retention 7 daily, 4 weekly, 6 monthly. The primary is skipped below a
+  free-space floor (`BACKUP_MIN_FREE_GB`) so it can't fill the root disk.
+- A weekly restore test loads every dump into a throwaway Postgres and compares
+  sample files; Cosmos shows it and can run it, a backup, or (before an update)
+  a dump of one database, through a request inbox the agent never holds the
+  password for.
 - Each run writes `restic-status.json`, which the Cosmos agent reads for its
-  Backups page (including staleness detection). A heartbeat pings Uptime Kuma.
-- **The gap:** `/srv/backups` is on the NVMe root, not a separate drive.
-  - HDD failure is covered: the originals are in restic on the NVMe.
-  - **NVMe failure is not.** The live databases, their dumps and the whole
-    restic repository go together. Nextcloud calendars and contacts live in its
-    database, not in files, so they'd be lost with it.
-  - **Growth will fill the root disk.** The repo holds a copy of the HDD on a
-    partition with 187G free. When it fills, Docker and every Postgres fail with
-    it.
-  - Immich thumbnails and transcoded video are backed up nightly although
-    they're rebuildable.
-  - No offsite copy, and no restore has been tested.
+  Backups page (including staleness detection, which replaced the Uptime Kuma
+  heartbeat).
+- **The gap:** nothing leaves the machine. Losing the whole server loses
+  everything; the next step is a `restic copy` to another drive, node or
+  offsite target.
 
 ### Cosmos (see CLAUDE.md for detail)
 - Cargo workspace: `cosmos-agent` (axum, port 7700), `cosmos-common` (shared types
@@ -99,7 +100,7 @@ or filesystem path.
   infrastructure).
 - **Each agent is independent; there is no central Cosmos server.** The app
   connects to every agent directly. Anything "server-side" runs per node.
-- Jupiter runs agent 0.6.0 (once Jupiter#23 merges) with `allow_actions = true`. The agent, web UI and
+- Jupiter runs agent 0.9.2 with `allow_actions = true`. The agent, web UI and
   desktop app share one version (`npm run release`, see `RELEASING.md`). The web UI is served by
   the agent at `cosmos.jupiter.sunstead.net`; on my iPhone I use that.
 
@@ -206,7 +207,7 @@ iPhone, desktop notifications and "node unreachable" alerts.*
 *Shipped in 0.6 (Cosmos#15, Jupiter#23): an HTTP check per labelled service,
 custom HTTP and TCP checks edited in the UI, certificate expiry, an Uptime
 page. No ICMP: the agent runs with no capabilities, and TCP covers what ping
-would. Kuma is retired once the checks have run for a while.*
+would. Kuma was retired on 2026-09-29 (Jupiter#31).*
 - HTTP, TCP and ping probes per service with uptime history; targets default
   from the `cosmos.service` labels.
 - Failures and recoveries become events, so they notify and show on the timeline.
@@ -214,8 +215,8 @@ would. Kuma is retired once the checks have run for a while.*
   (and skip its v2 upgrade).
 
 ### C. Cosmos: updates (replaces Renovate)
-*In progress for 0.8: the Updates page, rules as compose labels, and
-`update.yml` in Jupiter as described below. Rollback of a service with a
+*Shipped in 0.8 and 0.9: the Updates page, rules as compose labels, and
+`update.yml` in Jupiter as described below; Renovate is removed. Rollback of a service with a
 database also points at the `pre-update` backup, since a downgrade may not read
 a migrated database.*
 No GitHub PRs to merge. Updates happen from a Cosmos screen or automatically.
@@ -252,7 +253,10 @@ generates `scripts/restore.sh` commands.*
 - **Automated restore drills:** periodically restore into a throwaway container
   and verify.
 
-### E. Homepage
+### E. Homepage (Horizon, working name)
+*Next. The server was prepared for it on 2026-09-29/30: originals sit under
+`/srv/storage/data`, one folder per app and user, so indexing can read them
+directly (section 4).*
 - App launcher built on `cosmos.service` label discovery.
 - Unified search: full-text (Tantivy) plus embeddings later. Off-the-shelf apps
   indexed through their APIs or on-disk files.
@@ -291,23 +295,27 @@ generates `scripts/restore.sh` commands.*
 | State | databases, app configs | NVMe | Nightly dumps + restic, copied to the other disk |
 | Derived | thumbnails, transcodes, search index | Anywhere with space | Not backed up (rebuildable) |
 
-### Proposed layout
-`/srv/storage` stays the root for originals. State and derived data paths are
-decided in the layout plan; the NVMe root has limited free space, so derived data
-may stay on the HDD, just excluded from backups.
+### Layout (built 2026-09-29/30; Jupiter's CLAUDE.md, Storage layout)
+`/srv/storage` (the HDD) is split by data class. Small state stays in named
+volumes on the NVMe; derived data stays on the HDD (the NVMe has limited free
+space), excluded from backups.
 ```
-/srv/storage/            # HDD: originals
-  data/
-    files/<user>/        # drive app
-    notes/<user>/        # Solstice
-    photos/              # Immich's upload location (its own library/<user>/ inside)
-    dav/<user>/          # calendars and contacts
-    kin/<user>/          # contacts app (Starbook, renamed)
-    shared/<space>/      # shared spaces
-
-<NVMe path>/state/<app>/ # databases, app configs
-<derived path>/          # thumbnails, index; excluded from backups
+/srv/storage/
+  data/                      # originals: backed up, and what Horizon indexes
+    photos/                  # Immich's upload location (library/<user>/ inside)
+    files/users/<user>/      # OpenCloud personal spaces (PosixFS, watched)
+    files/projects/<id>/     # OpenCloud shared spaces
+    notes/<user>/            # Solstice (when it syncs)
+    dav/<user>/              # calendars and contacts (when Radicale arrives)
+    kin/<user>/              # contacts app (Starbook, renamed)
+  apps/                      # app state on the HDD: gitea/, immich/backups/
+  derived/                   # rebuildable: immich/thumbs, immich/encoded-video
+  backups/                   # the state restic repository
+  restore/                   # restore.sh scratch
 ```
+OpenCloud's `users/` and `projects/` are its own default layout, kept rather
+than templated to `files/<user>` and `shared/`, so upgrades don't fight it.
+Folders are created when an app owns them, not ahead of time.
 App-first, then per user, because that matches how containers mount data. Each
 container mounts only its own folders. Off-the-shelf apps keep their own internal
 layout inside their folder.
@@ -336,15 +344,12 @@ moving its folders is a planned migration, never an `mv`.
 
 ## 5. Later
 
-- **Replace Nextcloud:** leading option is **OpenCloud** with the PosixFS storage
-  driver. Calendars and contacts move to **Radicale** (plain `.ics`/`.vcf`;
-  Apple devices connect natively). Run OpenCloud alongside Nextcloud, move files,
-  move calendars, retire Nextcloud. Each new service gets a blueprint and joins
-  the backup set. Sync endpoints (CalDAV, WebDAV, native clients) use app
-  passwords or basic auth; web UIs use SSO.
+- **Calendars and contacts:** **Radicale** (plain `.ics`/`.vcf` under
+  `data/dav/<user>`; Apple devices connect natively), when they're needed.
+  Nextcloud's weren't in use, so its replacement by OpenCloud (done 2026-09-30)
+  moved files only. CalDAV/CardDAV clients use app passwords; web UIs use SSO.
 - **Immich readability:** XMP sidecars, maybe an external library so a plain
   folder is the source of truth. Export albums and faces via the API.
-- **Retire Portainer** once Cosmos covers what I use it for.
 - **Starbook** joins the suite as a custom Sunstead app (renamed).
 - **Solstice sync:** a dedicated sync service, likely CRDT-based (Automerge or
   Yjs), enabling iOS Solstice.
@@ -373,9 +378,13 @@ moving its folders is a planned migration, never an `mv`.
 | 2026-09-26 | A broken update alerts and offers rollback (with a database restore where one migrated); nothing reverts on its own. |
 | 2026-09-26 | Restores from Cosmos are a guide only. |
 | 2026-09-26 | Order: health checks (0.6), backup controls (0.7), updates (0.8), one release each. |
+| 2026-09-29 | Homepage working name: Horizon. |
+| 2026-09-29 | HDD layout by data class: `data/` (originals), `apps/` (HDD app state), `derived/` (rebuildable, not backed up). |
+| 2026-09-29 | Files move to OpenCloud with PosixFS (plain files, watched), keeping its default `users/` and `projects/` folders; one Authentik client for all its apps. |
+| 2026-09-29 | Uptime Kuma and Portainer retired; Cosmos covers both. |
+| 2026-09-30 | Nextcloud retired, files only (no calendars or contacts were in use); a `nextcloud-final` snapshot is kept in both repositories. Radicale waits until calendars are needed. |
 
 ### Open
-- **Homepage name:** Sunstead Crest, Arc, Vista, Lume.
 - **Starbook name:** Sunstead Kin (current favorite), Tether, Folk.
 - **Homepage repo:** inside the Cosmos workspace or its own repo with a shared UI
   package.
