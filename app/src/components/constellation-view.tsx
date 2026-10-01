@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { Crosshair, Maximize2, Minus, Plus } from 'lucide-react';
+import { Crosshair, Maximize2, Minimize2, Minus, Plus } from 'lucide-react';
 import type { HostInfo } from '@/generated/HostInfo';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -18,6 +18,7 @@ import {
   reconcile,
 } from '@/lib/constellation/model';
 import { toneOf } from '@/lib/constellation/hud';
+import { usePreferencesStore } from '@/stores/preferences';
 
 /** Ghost buttons in hologram colours, since the viewport is dark in every theme. */
 const HOLO_BUTTON =
@@ -50,6 +51,8 @@ interface Props {
   onOpen: (body: Body) => void;
   /** Shows an expand button; gets the focused node's id. */
   onExpand?: (nodeId: string | null) => void;
+  /** Shows a button leaving the full view. */
+  onCollapse?: () => void;
   /** WebGL went away or never came. */
   onUnsupported: () => void;
 }
@@ -59,7 +62,16 @@ interface Props {
  * the source; React renders only the overlay (HUD panel, controls), and
  * only when focus or the set of bodies changes.
  */
-export function ConstellationView({ source, variant, className, initialNode, onOpen, onExpand, onUnsupported }: Props) {
+export function ConstellationView({
+  source,
+  variant,
+  className,
+  initialNode,
+  onOpen,
+  onExpand,
+  onCollapse,
+  onUnsupported,
+}: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const labelsRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<ConstellationScene | null>(null);
@@ -69,6 +81,8 @@ export function ConstellationView({ source, variant, className, initialNode, onO
     () => source.snapshot(),
   );
   const layout = useMemo(() => reconcile(null, snapshot).layout, [snapshot]);
+  const scanlines = usePreferencesStore((s) => s.scanlines);
+  const scanlinesRef = useRef(scanlines);
 
   // Callbacks change identity with their owner; the scene is built once.
   const handlers = useRef({ onOpen, onUnsupported });
@@ -94,6 +108,7 @@ export function ConstellationView({ source, variant, className, initialNode, onO
       return;
     }
     sceneRef.current = scene;
+    scene.setScanlines(scanlinesRef.current);
     scene.setSnapshot(source.snapshot());
     if (initialRef.current) scene.select(nodeKey(initialRef.current), true);
     const unsubscribe = source.subscribe(() => scene.setSnapshot(source.snapshot()));
@@ -106,6 +121,11 @@ export function ConstellationView({ source, variant, className, initialNode, onO
     };
   }, [source, variant]);
 
+  useEffect(() => {
+    scanlinesRef.current = scanlines;
+    sceneRef.current?.setScanlines(scanlines);
+  }, [scanlines]);
+
   const counts = useMemo(
     () => ({ nodes: layout.nodes.length, moons: layout.moons.length, probes: layout.probes.length }),
     [layout],
@@ -116,6 +136,7 @@ export function ConstellationView({ source, variant, className, initialNode, onO
       ref={wrapRef}
       data-constellation
       data-variant={variant}
+      data-scanlines={scanlines ? 'on' : 'off'}
       className={cn('@container relative isolate overflow-hidden bg-[var(--holo-space)] text-[var(--holo-text)]', className)}
     >
       {/* The scene puts its canvas first, under everything here. */}
@@ -136,8 +157,9 @@ export function ConstellationView({ source, variant, className, initialNode, onO
         onActivate={(key) => sceneRef.current?.activate(key)}
       />
 
-      {variant === 'full' && !focus.selected && (
-        <div className='holo-panel pointer-events-none absolute top-3 left-3 hidden rounded-sm px-3 py-2 text-2xs @lg:block'>
+      {/* The HUD panel takes the legend's corner whenever it shows a body. */}
+      {variant === 'full' && !(focus.selected || focus.hovered || focus.focused) && (
+        <div data-legend className='holo-panel pointer-events-none absolute top-3 left-3 hidden rounded-sm px-3 py-2 text-2xs @lg:block'>
           <Legend counts={counts} />
         </div>
       )}
@@ -167,11 +189,23 @@ export function ConstellationView({ source, variant, className, initialNode, onO
             <Maximize2 />
           </Button>
         )}
+        {onCollapse && (
+          <Button
+            variant='ghost'
+            size='icon'
+            className={HOLO_BUTTON}
+            aria-label='Leave full view'
+            title='Leave full view'
+            onClick={onCollapse}
+          >
+            <Minimize2 />
+          </Button>
+        )}
       </div>
 
       {variant === 'full' && (
         <p className='pointer-events-none absolute bottom-3 left-1/2 hidden -translate-x-1/2 text-2xs text-[var(--holo-dim)] @3xl:block'>
-          Drag to orbit, scroll to zoom, click a planet to focus it. Tab and arrow keys move between bodies.
+          Drag to orbit, scroll to zoom, click a planet or device to focus it. Tab and arrow keys move between bodies.
         </p>
       )}
     </div>
@@ -264,7 +298,7 @@ function HudPanel({
       title = body.name;
       status = probeStateLabel(body);
       detail = <p className='text-2xs text-[var(--holo-dim)]'>{body.os || 'Device'} on the tailnet</p>;
-      action = { label: 'Show network' };
+      action = { label: key === focus.selected ? 'Show network' : 'Focus' };
       break;
   }
 
@@ -298,7 +332,7 @@ function HudPanel({
           {action.label}
         </Button>
       )}
-      {!actionable && body.kind === 'node' && (
+      {!actionable && body.kind !== 'moon' && (
         <p className='text-2xs text-[var(--holo-dim)]'>Click to focus</p>
       )}
     </div>

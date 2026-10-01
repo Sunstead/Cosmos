@@ -720,6 +720,16 @@ test.describe('with a node', () => {
     await expect(page.locator('[data-constellation]')).toBeVisible();
   });
 
+  test('the full view leaves back to where it was opened', async ({ page }) => {
+    await addNodeOnline(page);
+    await page.goto('/overview');
+    await page.getByRole('button', { name: 'Open full view' }).click();
+    await expect(page).toHaveURL(/\/constellation/);
+    await page.getByRole('button', { name: 'Leave full view' }).click();
+    await expect(page).toHaveURL(/\/overview$/);
+    await expect(page.locator('[data-constellation-canvas]')).toHaveCount(1);
+  });
+
   test('logs deep link selects node and container', async ({ page, request }) => {
     await addNodeOnline(page);
     const nodeId = page.url().split('/').pop()!;
@@ -878,6 +888,26 @@ test.describe('constellation preview', () => {
       await page.locator('[data-constellation]').screenshot({ path: info.outputPath(`constellation-${theme}-card.png`) });
     });
   }
+
+  test('hovering swaps the legend for the HUD, and a device focuses before it opens', async ({ page }) => {
+    await page.goto('/e2e/constellation.html');
+    const legend = page.locator('[data-legend]');
+    const hud = page.locator('[data-hud]');
+    await expect(legend).toBeVisible();
+    await page.locator('[data-kind=node]').first().hover();
+    await expect(hud).toBeVisible();
+    await expect(legend).toHaveCount(0);
+    await page.mouse.move(5, 5);
+    await expect(legend).toBeVisible();
+
+    // A device: the first click focuses it, and only the HUD's button opens it.
+    const url = page.url();
+    await page.locator('[data-kind=probe]').first().click();
+    await expect(hud.getByRole('button', { name: 'Show network' })).toBeVisible();
+    expect(page.url()).toBe(url);
+    await page.keyboard.press('Escape');
+    await expect(hud.getByRole('button', { name: 'Show network' })).toHaveCount(0);
+  });
 
   test('on a phone, and with reduced motion', async ({ page }, info) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });

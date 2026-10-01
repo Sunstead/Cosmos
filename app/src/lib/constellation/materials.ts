@@ -6,7 +6,9 @@
  *
  * Colours arrive as uniforms from theme tokens (see `scene.ts`); there are
  * no literal colours here. `uMotion` is 0 under reduced motion, which stops
- * every time-driven effect (scanlines, flicker, twinkle, pulses).
+ * every time-driven effect (twinkle, pulses, the floor ripple). Nothing
+ * flickers or sweeps: the bodies hold steady, and `uScan` (Settings,
+ * Constellation scanlines) only turns their still scanlines on or off.
  */
 import {
   AdditiveBlending,
@@ -23,6 +25,8 @@ export interface SharedUniforms {
   uMotion: IUniform<number>;
   uGlow: IUniform<number>;
   uPixelRatio: IUniform<number>;
+  /** 1 shows the scanlines on bodies, 0 hides them. */
+  uScan: IUniform<number>;
 }
 
 export function sharedUniforms(): SharedUniforms {
@@ -31,19 +35,9 @@ export function sharedUniforms(): SharedUniforms {
     uMotion: { value: 1 },
     uGlow: { value: 0.8 },
     uPixelRatio: { value: 1 },
+    uScan: { value: 1 },
   };
 }
-
-/** Rare, brief dips in brightness, different per body. Off under reduced motion. */
-const FLICKER = /* glsl */ `
-  float hash11(float p) { return fract(sin(p * 127.1) * 43758.5453); }
-  float flicker(float seed) {
-    float t = floor(uTime * 14.0);
-    float dip = step(0.965, hash11(t + seed * 31.7)) * 0.35;
-    float hum = 0.04 * sin(uTime * 7.0 + seed * 5.0);
-    return 1.0 - uMotion * (dip + hum);
-  }
-`;
 
 const BILLBOARD_VERTEX = /* glsl */ `
   uniform float uSize;
@@ -62,10 +56,10 @@ const additive = {
   blending: AdditiveBlending,
 } as const;
 
-/** The translucent shell of a body: fresnel rim, scanlines and a slow sweep. */
+/** The translucent shell of a body: fresnel rim and still scanlines. */
 export function shellMaterial(
   shared: SharedUniforms,
-  opts: { color: Color; fill: number; seed: number; lines?: number },
+  opts: { color: Color; fill: number; lines?: number },
 ): ShaderMaterial {
   return new ShaderMaterial({
     ...additive,
@@ -75,7 +69,6 @@ export function shellMaterial(
       uColor: { value: opts.color },
       uOpacity: { value: 1 },
       uFill: { value: opts.fill },
-      uSeed: { value: opts.seed },
       uLines: { value: opts.lines ?? 9 },
     },
     vertexShader: /* glsl */ `
@@ -92,23 +85,20 @@ export function shellMaterial(
     `,
     fragmentShader: /* glsl */ `
       uniform vec3 uColor;
-      uniform float uOpacity, uFill, uSeed, uLines, uTime, uMotion, uGlow;
+      uniform float uOpacity, uFill, uLines, uGlow, uScan;
       varying vec3 vNormal;
       varying vec3 vView;
       varying vec3 vLocal;
-      ${FLICKER}
       void main() {
         float facing = abs(dot(normalize(vNormal), normalize(vView)));
         float rim = pow(1.0 - facing, 2.4);
-        // Horizontal scanlines in the body's own space, drifting up.
+        // Horizontal scanlines in the body's own space. They hold still:
+        // anything moving across a body read as a glitch.
         float y = vLocal.y / max(length(vLocal), 0.0001);
-        float scan = smoothstep(0.6, 1.0, 0.5 + 0.5 * sin(y * uLines * 3.14159 - uTime * 1.6 * uMotion));
-        // A brighter band sweeping up through the body now and then.
-        float sweepPos = fract(uTime * 0.09 * uMotion + uSeed) * 2.6 - 1.3;
-        float sweep = exp(-pow((y - sweepPos) * 7.0, 2.0)) * uMotion;
-        float a = uFill + rim * (0.55 + 0.45 * uGlow) + scan * 0.07 * facing + sweep * 0.22;
-        vec3 c = mix(uColor, vec3(1.0), rim * 0.3 + sweep * 0.2);
-        gl_FragColor = vec4(c, a * uOpacity * flicker(uSeed));
+        float scan = smoothstep(0.6, 1.0, 0.5 + 0.5 * sin(y * uLines * 3.14159)) * uScan;
+        float a = uFill + rim * (0.55 + 0.45 * uGlow) + scan * 0.07 * facing;
+        vec3 c = mix(uColor, vec3(1.0), rim * 0.3);
+        gl_FragColor = vec4(c, a * uOpacity);
       }
     `,
   });
@@ -153,7 +143,7 @@ export function coreMaterial(opts: { space: Color; tint: Color }): ShaderMateria
 /** 1px wire lines: globe graticules, device edges, drop lines. */
 export function wireMaterial(
   shared: SharedUniforms,
-  opts: { color: Color; opacity: number; seed: number; dashed?: boolean },
+  opts: { color: Color; opacity: number; dashed?: boolean },
 ): ShaderMaterial {
   return new ShaderMaterial({
     ...additive,
@@ -161,7 +151,6 @@ export function wireMaterial(
       ...shared,
       uColor: { value: opts.color },
       uOpacity: { value: opts.opacity },
-      uSeed: { value: opts.seed },
     },
     defines: opts.dashed ? { DASHED: 1 } : {},
     vertexShader: /* glsl */ `
@@ -173,11 +162,10 @@ export function wireMaterial(
     `,
     fragmentShader: /* glsl */ `
       uniform vec3 uColor;
-      uniform float uOpacity, uSeed, uTime, uMotion, uGlow;
+      uniform float uOpacity;
       varying float vY;
-      ${FLICKER}
       void main() {
-        float a = uOpacity * flicker(uSeed);
+        float a = uOpacity;
         #ifdef DASHED
           a *= step(0.45, fract(vY * 2.5));
         #endif
