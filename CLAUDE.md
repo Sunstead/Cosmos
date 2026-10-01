@@ -38,7 +38,8 @@ npm run release -- 0.6.0 [--push]  # agent, web UI and desktop app together; see
 history DB, a fake `tailscaled` and a mock OIDC provider in `e2e/mock-oidc.ts`,
 so every spec signs in for real) and Vite on :1431, then drives system Chrome
 (`PW_CHANNEL` overrides). Docker-dependent specs skip when no daemon is up.
-Screenshots of every page in both themes land in `app/e2e/.results/`.
+Screenshots of every page in Cosmos Dark and Cosmos Light, and of Overview in
+every theme (`theme-<id>-overview.png`), land in `app/e2e/.results/`.
 `e2e/constellation.html` (dev server only, never built) renders the
 constellation on fixture data, 5 nodes, 50 services and 15 devices, for
 judging its look and frame time without Docker.
@@ -76,7 +77,7 @@ Two things to know:
 
 Background samplers publish to `tokio::sync::watch` channels; handlers hand out the latest value, already serialized. A request does no collection, no serde and takes no locks — `/v1/host` is ~0.3 ms.
 
-- `sample/host.rs` — `HostProbe` owns persistent `System`/`Disks`/`Networks`, refreshed in place, on a dedicated OS thread (sysinfo does blocking `/proc` reads, and the loop owns `&mut System` for its lifetime). It exclusively owns `prev_net`/`prev_disk`, which is why rate deltas are correct with any number of clients. Absolute-deadline scheduling avoids drift and catch-up bursts. The one `MINIMUM_CPU_UPDATE_INTERVAL` sleep happens once at startup.
+- `sample/host.rs` — `HostProbe` owns persistent `System`/`Disks`/`Networks`, refreshed in place, on a dedicated OS thread (sysinfo does blocking `/proc` reads, and the loop owns `&mut System` for its lifetime). It exclusively owns `prev_net`/`prev_disk`, which is why rate deltas are correct with any number of clients. Absolute-deadline scheduling avoids drift and catch-up bursts. The one `MINIMUM_CPU_UPDATE_INTERVAL` sleep happens once at startup. On Linux, disk I/O doesn't come from sysinfo (`sample/diskstats.rs`): sysinfo resolves `/dev/<device>` to find a disk's counters, and the distroless container has no host block devices, so every disk read 0 B/s. Instead each mount's `major:minor` from `/proc/self/mountinfo` (re-read on re-enumeration) is looked up in `/proc/diskstats` (read every tick; it isn't namespaced, so it shows the host's devices), falling back to the source's name under `/dev` for `0:N` mounts like btrfs. A disk with no counters is sent with `io_available: false`, and the app and history totals leave it out. Jupiter's mountinfo and diskstats are test fixtures.
 - `sample/docker.rs` — `DockerProbe` computes container CPU % by differencing absolute counters across *our own* ticks (`one_shot: true` zeroes `precpu_stats`, so differencing against those is meaningless). `started_at` is cached against state transitions, so steady state costs zero inspect calls. `stats` calls are bounded by `buffer_unordered`.
 - `sample/mod.rs` — spawns everything. Host 1 s, containers 2 s, volumes 60 s, backups 30 s. The Docker event watcher and the action handlers poke each sampler's own `Notify` (volume events and container create/destroy wake volumes too, since `in_use_by` changes) so lists refresh immediately. Pokes use `notify_one`, which stores a permit: `notify_waiters` lost any poke that landed mid-sample. Containers and volumes both stream (`/v1/volumes/stream`, `volume_stream` capability); older agents' volumes are polled every 30 s.
 - `watch` not `broadcast`: subscribers only want the newest sample, and `watch` coalesces by construction.
@@ -180,10 +181,21 @@ microtask.
 
 **Shell.** `layouts/AppLayout.tsx` mounts the title bar, sidebar, command
 palette, add-node dialog and `CommandHost` (shortcuts + native menu events).
-The sidebar's foot is `AccountMenu`: who you are (initials on
-`--sidebar-primary`, or an https `picture` claim), role, a gear for Settings
-(which isn't in the nav list) and a menu with settings, theme and sign in or
-out. Title bar controls are all ghost `Button`s so they match.
+The sidebar's foot is `AccountMenu`: who you are, role, a gear for Settings
+(which isn't in the nav list) and a menu with settings, a theme picker and
+sign in or out. `UserAvatar` (also in Settings) shows the access token's `picture` claim,
+only if it is `https://` (`setSession`), else initials on the neutral
+`--sidebar-accent` with a `--sidebar-border` ring, never the primary colour.
+Radix swaps the image in only once it has loaded, so a 404 or an offline
+provider never shows a broken image. On Jupiter the picture is the Authentik
+user's `avatar` attribute, a URL Caddy serves from Authentik's media volume
+(Jupiter's `docs/AVATARS.md`): Authentik 2026.8 only serves its own media with
+a 15-minute signed token. Title bar controls are all ghost `Button`s so they match.
+Nav items (`app-sidebar.tsx`) are default-size `h-8` buttons, rounded all
+round and inset from the edges; the current page is a fill
+(`sidebar-accent`), never an edge bar, and the rest are `muted-foreground`
+so the fill reads in light themes too. Collapsed, each icon is centred in
+the 4rem rail, under the title bar's toggle and over the avatar.
 Routes are lazy (`lazyRouteComponent`) and pick a layout through
 `staticData.layout`: `scroll` (default) or `fill` (logs, constellation). The body never
 scrolls; `<main>` does. Content is a `@container`, so layouts use container
@@ -202,15 +214,33 @@ ones. An e2e spec checks header height and title position on every page.
 rejects them in JSX text and string literals under `pages/` and
 `components/`. Missing values render as `NO_VALUE` (`n/a`).
 
-**Tokens.** Everything is themed through CSS variables in `App.css`, defined
-for both themes: semantic colours, `--text-2xs`, `--titlebar-height`,
-`--titlebar-inset`, canvas tokens (`--space`, `--star`, `--orbit`,
-`--planet-*`) and the hologram tokens (`--holo-space`, `-primary`,
-`-secondary`, `-text`, `-dim`, `-glow`), which are dark-surface colours in
-every theme because the constellation is always dark. Canvas and WebGL code
-never uses literal colours; it reads them through `lib/theme-tokens.ts`,
-which caches per theme and fires `onThemeChange`, and three.js gets them via
-`lib/constellation/colors.ts` (three can't parse `oklch()`).
+**Themes.** Standalone themes, each with one scheme (dark or light), no
+custom ones. A theme is one `[data-theme='<id>']` block in `src/themes/*.css`
+(imported by `App.css`) plus one entry in `lib/themes.ts`, and its id and
+scheme in the first-paint script in `index.html`, which sets `data-theme`, the
+scheme's `dark`/`light` class (Tailwind's `dark:`, sonner) and `color-scheme`
+before anything renders. `themes.test.ts` checks the three agree, that every
+theme defines exactly the tokens Cosmos Dark does, WCAG AA for text pairs
+(translucent surfaces composited first), that metric colours stay apart from
+each other and from status colours, and that the active sidebar item shows.
+Storage: `cosmos-theme` (an id, or `system` to follow the OS) plus
+`cosmos-theme-light`/`cosmos-theme-dark` for Follow system; the pre-0.10
+`dark`/`light` values read as the Cosmos themes. `ThemeProvider`/`useTheme`
+expose `themeId`, `followSystem`, `pair` and `resolved`. Themes are picked in
+Settings (cards, previews scoped with `data-theme`) or the account menu; there
+is no toggle or shortcut.
+
+**Tokens.** Everything is themed through CSS variables, defined by every
+theme: semantic colours, metric colours (`--cpu`, `--ram`, `--network`,
+`--disk`), `--ansi-*`, `--mark-*`, `--glass-*`, canvas tokens (`--space`,
+`--star`, `--orbit`, `--planet-*`) and the hologram tokens for the 3D
+constellation (`--holo-space`, always dark, `--holo-primary`,
+`--holo-secondary`, `--holo-text`, `--holo-dim`, `--holo-glow` 0..1). Layout
+tokens (`--text-2xs`, `--titlebar-height`, `--titlebar-inset`, `--radius`)
+stay in `App.css`. Canvas and WebGL code never uses literal colours; it reads them
+through `lib/theme-tokens.ts`, which caches per theme id and fires
+`onThemeChange` when `data-theme` or the scheme class changes; three.js gets
+them via `lib/constellation/colors.ts` (three can't parse `oklch()`).
 `.glass` is applied deliberately, `.label-hud` is the small-caps label, and
 `.chrome` disables text selection on UI chrome (content stays selectable).
 Container log colours go through `lib/ansi.ts` (`--ansi-0..15` tokens); other
@@ -298,3 +328,6 @@ Composer). The glass icon only shows in a bundled build, not `tauri dev`.
   perfectly healthy open stream that no handler ever sees.
 - `npm run build` fails on a fresh clone until `cargo test -p cosmos-common`
   has generated `app/src/generated/`.
+- **Wrap a `DropdownMenuSubContent` in `DropdownMenuPortal`.** Left inside the
+  menu, its `.glass` backdrop filter becomes the containing block for the
+  submenu's fixed positioning and the menu's overflow clips it out of sight.

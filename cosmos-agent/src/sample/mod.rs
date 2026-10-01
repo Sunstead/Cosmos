@@ -2,6 +2,10 @@
 //! to a `watch` channel, so cost and rate deltas are independent of client
 //! count. `watch` over `broadcast`: subscribers only want the latest value.
 
+// The parsers are pure, so their tests run everywhere; only Linux reads procfs.
+#[cfg(any(target_os = "linux", test))]
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+pub mod diskstats;
 pub mod docker;
 pub mod facts;
 pub mod filters;

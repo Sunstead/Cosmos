@@ -4,7 +4,17 @@ import { msToDuration, relativeTime, secondsToDuration } from './time';
 import { matchesQuery, NO_VALUE, plural, sentence } from './format';
 import { cancelDraw, requestDraw } from './frame-scheduler';
 import { canvasTokens, onThemeChange } from './theme-tokens';
-import { formatBytes, getDiskType, getMemUsagePct } from './node-metrics';
+import {
+  formatBytes,
+  formatDiskRead,
+  formatDiskReadWrite,
+  formatDiskWrite,
+  getDiskType,
+  getMemUsagePct,
+  hasDiskIo,
+  sumDisk,
+} from './node-metrics';
+import { DiskInfo } from '@/generated/DiskInfo';
 import { hostInfo } from '@/test/fixtures';
 
 describe('planet', () => {
@@ -87,6 +97,43 @@ describe('node metrics', () => {
     expect(getMemUsagePct(hostInfo())).toBe(25);
     expect(getDiskType(hostInfo())).toBe('Unknown');
   });
+
+  describe('disk rates', () => {
+    const MiB = 1024 ** 2;
+    const disk = (read: number, io_available?: boolean): DiskInfo => ({
+      mount: '/',
+      label: '/',
+      used_bytes: 0,
+      total_bytes: 1,
+      read_bps: read,
+      write_bps: read / 2,
+      kind: 'ssd',
+      ...(io_available === undefined ? {} : { io_available }),
+    });
+
+    it('sums only disks with I/O counters', () => {
+      const host = hostInfo({ disk: [disk(2 * MiB, true), disk(9 * MiB, false), disk(MiB, true)] });
+      expect(sumDisk(host, 'read_bps')).toBe(3 * MiB);
+      expect(formatDiskRead(host)).toBe('3 MB/s');
+      expect(formatDiskWrite(host)).toBe('1.5 MB/s');
+      expect(formatDiskReadWrite(host)).toBe('3 / 1.5 MB/s');
+    });
+
+    it('counts disks from older agents, which do not say', () => {
+      const host = hostInfo({ disk: [disk(MiB)] });
+      expect(hasDiskIo(host)).toBe(true);
+      expect(formatDiskRead(host)).toBe('1 MB/s');
+    });
+
+    it('is n/a when no disk has I/O counters', () => {
+      for (const host of [hostInfo({ disk: [disk(0, false)] }), hostInfo(), undefined]) {
+        expect(hasDiskIo(host)).toBe(false);
+        expect(formatDiskRead(host)).toBe(NO_VALUE);
+        expect(formatDiskWrite(host)).toBe(NO_VALUE);
+        expect(formatDiskReadWrite(host)).toBe(NO_VALUE);
+      }
+    });
+  });
 });
 
 describe('frame scheduler', () => {
@@ -118,26 +165,34 @@ describe('frame scheduler', () => {
 describe('theme tokens', () => {
   afterEach(() => {
     document.documentElement.className = '';
+    document.documentElement.removeAttribute('data-theme');
     document.documentElement.style.cssText = '';
   });
 
   it('reads CSS variables and refreshes on theme change', async () => {
-    document.documentElement.style.setProperty('--orbit', 'red');
-    document.documentElement.style.setProperty('--planet-light', '70');
+    const root = document.documentElement;
+    root.dataset.theme = 'cosmos-dark';
+    root.style.setProperty('--orbit', 'red');
+    root.style.setProperty('--planet-light', '70');
+    root.style.setProperty('--holo-primary', '#7cc4ff');
+    root.style.setProperty('--holo-glow', '0.8');
     const first = canvasTokens();
     expect(first.orbit).toBe('red');
     expect(first.planetLight).toBe(70);
+    expect(first.holoPrimary).toBe('#7cc4ff');
+    expect(first.holoGlow).toBe(0.8);
     expect(canvasTokens()).toBe(first);
 
     const changed = vi.fn();
     const stop = onThemeChange(changed);
-    document.documentElement.style.setProperty('--orbit', 'blue');
-    document.documentElement.classList.add('light');
+    root.style.setProperty('--orbit', 'blue');
+    // Two dark themes: same scheme class, different id.
+    root.dataset.theme = 'nebula';
     await Promise.resolve();
 
     expect(changed).toHaveBeenCalledOnce();
     expect(canvasTokens().orbit).toBe('blue');
-    expect(canvasTokens().theme).toBe('light');
+    expect(canvasTokens().theme).toBe('nebula');
     stop();
   });
 });
