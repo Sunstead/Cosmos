@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useState } from 'react';
-import { Link, useCanGoBack, useNavigate, useRouter } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
 import { Orbit } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/empty-state';
@@ -31,8 +31,6 @@ export function Constellation({
   const [supported, setSupported] = useState(hasWebGL);
   const source = useConstellationSource();
   const navigate = useNavigate();
-  const router = useRouter();
-  const canGoBack = useCanGoBack();
 
   const open = useCallback(
     (body: Body) => {
@@ -50,11 +48,6 @@ export function Constellation({
     (node: string | null) => void navigate({ to: '/constellation', search: node ? { node } : {} }),
     [navigate],
   );
-  // Back where you came from (Overview, usually), or Overview after a reload.
-  const collapse = useCallback(() => {
-    if (canGoBack) router.history.back();
-    else void navigate({ to: '/overview' });
-  }, [canGoBack, router, navigate]);
   const unsupported = useCallback(() => setSupported(false), []);
 
   if (!supported) {
@@ -84,7 +77,6 @@ export function Constellation({
         initialNode={initialNode}
         onOpen={open}
         onExpand={variant === 'card' ? expand : undefined}
-        onCollapse={variant === 'full' ? collapse : undefined}
         onUnsupported={unsupported}
       />
     </Suspense>

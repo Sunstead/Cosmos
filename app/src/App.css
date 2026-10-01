@@ -187,24 +187,13 @@ html[data-platform='macos'] {
     border-bottom-width: 1px;
   }
 
-  /* A vignette over the constellation, plus still scanlines unless they're
-     turned off in Settings (data-scanlines on the viewport). */
-  .holo-scanlines {
+  /* A vignette over the constellation, darkening its edges. */
+  .holo-vignette {
     background-image: radial-gradient(
       ellipse at center,
       transparent 55%,
       color-mix(in oklab, var(--holo-space) 80%, transparent)
     );
-  }
-
-  [data-scanlines='on'] > .holo-scanlines {
-    background-image:
-      repeating-linear-gradient(
-        to bottom,
-        color-mix(in oklab, var(--holo-primary) 5%, transparent) 0 1px,
-        transparent 1px 3px
-      ),
-      radial-gradient(ellipse at center, transparent 55%, color-mix(in oklab, var(--holo-space) 80%, transparent));
   }
 
   .titlebar-inset {

@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { Crosshair, Maximize2, Minimize2, Minus, Plus } from 'lucide-react';
+import { Crosshair, Maximize2, Minus, Plus } from 'lucide-react';
 import type { HostInfo } from '@/generated/HostInfo';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -18,7 +18,6 @@ import {
   reconcile,
 } from '@/lib/constellation/model';
 import { toneOf } from '@/lib/constellation/hud';
-import { usePreferencesStore } from '@/stores/preferences';
 
 /** Ghost buttons in hologram colours, since the viewport is dark in every theme. */
 const HOLO_BUTTON =
@@ -51,8 +50,6 @@ interface Props {
   onOpen: (body: Body) => void;
   /** Shows an expand button; gets the focused node's id. */
   onExpand?: (nodeId: string | null) => void;
-  /** Shows a button leaving the full view. */
-  onCollapse?: () => void;
   /** WebGL went away or never came. */
   onUnsupported: () => void;
 }
@@ -69,7 +66,6 @@ export function ConstellationView({
   initialNode,
   onOpen,
   onExpand,
-  onCollapse,
   onUnsupported,
 }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -81,8 +77,6 @@ export function ConstellationView({
     () => source.snapshot(),
   );
   const layout = useMemo(() => reconcile(null, snapshot).layout, [snapshot]);
-  const scanlines = usePreferencesStore((s) => s.scanlines);
-  const scanlinesRef = useRef(scanlines);
 
   // Callbacks change identity with their owner; the scene is built once.
   const handlers = useRef({ onOpen, onUnsupported });
@@ -108,7 +102,6 @@ export function ConstellationView({
       return;
     }
     sceneRef.current = scene;
-    scene.setScanlines(scanlinesRef.current);
     scene.setSnapshot(source.snapshot());
     if (initialRef.current) scene.select(nodeKey(initialRef.current), true);
     const unsubscribe = source.subscribe(() => scene.setSnapshot(source.snapshot()));
@@ -121,11 +114,6 @@ export function ConstellationView({
     };
   }, [source, variant]);
 
-  useEffect(() => {
-    scanlinesRef.current = scanlines;
-    sceneRef.current?.setScanlines(scanlines);
-  }, [scanlines]);
-
   const counts = useMemo(
     () => ({ nodes: layout.nodes.length, moons: layout.moons.length, probes: layout.probes.length }),
     [layout],
@@ -136,11 +124,10 @@ export function ConstellationView({
       ref={wrapRef}
       data-constellation
       data-variant={variant}
-      data-scanlines={scanlines ? 'on' : 'off'}
       className={cn('@container relative isolate overflow-hidden bg-[var(--holo-space)] text-[var(--holo-text)]', className)}
     >
       {/* The scene puts its canvas first, under everything here. */}
-      <div aria-hidden className='holo-scanlines pointer-events-none absolute inset-0' />
+      <div aria-hidden className='holo-vignette pointer-events-none absolute inset-0' />
       <div
         ref={labelsRef}
         role='group'
@@ -187,18 +174,6 @@ export function ConstellationView({
             }}
           >
             <Maximize2 />
-          </Button>
-        )}
-        {onCollapse && (
-          <Button
-            variant='ghost'
-            size='icon'
-            className={HOLO_BUTTON}
-            aria-label='Leave full view'
-            title='Leave full view'
-            onClick={onCollapse}
-          >
-            <Minimize2 />
           </Button>
         )}
       </div>
