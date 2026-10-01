@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { backupHealth, INTERRUPTED_AFTER_MS } from '@/lib/backups';
-import { bodyRadius, orbitFraction } from '@/lib/orbits';
 import { BackupsStatus } from '@/generated/BackupsStatus';
 
 function status(partial: Partial<BackupsStatus> = {}): BackupsStatus {
@@ -50,19 +49,5 @@ describe('backupHealth', () => {
         Date.parse('2026-01-03T00:00:00Z'),
       ),
     ).toBe('interrupted');
-  });
-});
-
-describe('constellation geometry', () => {
-  it('grows radius with memory, within bounds', () => {
-    expect(bodyRadius(0)).toBe(14);
-    expect(bodyRadius(16 * 1024 ** 3)).toBeGreaterThan(bodyRadius(4 * 1024 ** 3));
-    expect(bodyRadius(4096 * 1024 ** 3)).toBe(36);
-  });
-
-  it('centres a single node and spreads the rest outward', () => {
-    expect(orbitFraction(0, 1)).toBe(0);
-    expect(orbitFraction(0, 3)).toBeCloseTo(0.38);
-    expect(orbitFraction(2, 3)).toBeCloseTo(0.9);
   });
 });

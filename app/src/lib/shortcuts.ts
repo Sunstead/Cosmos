@@ -17,6 +17,7 @@ export const SHORTCUTS = {
   settings: 'mod+,',
   search: '/',
   'go.overview': 'g o',
+  'go.constellation': 'g x',
   'go.nodes': 'g n',
   'go.services': 'g s',
   'go.containers': 'g c',
