@@ -11,11 +11,14 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useStatusToasts } from '@/hooks/use-status-toasts';
 import { useUnreachableAlerts } from '@/hooks/use-unreachable-alerts';
 
-export type PageLayout = 'scroll' | 'fill';
+export type PageLayout = 'scroll' | 'fill' | 'bleed';
 
 declare module '@tanstack/react-router' {
   interface StaticDataRouteOption {
-    /** `fill` pages size to the viewport and scroll internally (logs). */
+    /**
+     * `fill` pages size to the viewport and scroll internally (logs);
+     * `bleed` pages take the whole content area, no padding (constellation).
+     */
     layout?: PageLayout;
   }
 }
@@ -40,7 +43,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <AppSidebar />
         <SidebarInset className='min-w-0 bg-sidebar'>
           <main className='size-full max-w-full overflow-hidden border-t border-l bg-background md:rounded-tl-2xl'>
-            {layout === 'fill' ? (
+            {layout === 'bleed' ? (
+              <div className='flex size-full flex-col @container'>{children}</div>
+            ) : layout === 'fill' ? (
               <div className={`${CONTENT} h-full`}>{children}</div>
             ) : (
               <ScrollArea className='h-full w-full'>

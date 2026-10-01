@@ -4,7 +4,7 @@ import { readdirSync, readFileSync, unlinkSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
-import { addNode, addNodeOnline, agentUrl, apiToken, nextSignIn, overflowing, PAGES, section } from './helpers';
+import { addNode, addNodeOnline, agentUrl, apiToken, HEADERLESS, nextSignIn, overflowing, PAGES, section } from './helpers';
 import { THEMES } from '../src/lib/themes';
 
 test.describe('empty app', () => {
@@ -269,7 +269,7 @@ test.describe('with a node', () => {
   test('headers line up across pages', async ({ page }) => {
     await addNodeOnline(page);
     const rows: { path: string; top: number; height: number; controls: number[] }[] = [];
-    for (const path of PAGES) {
+    for (const path of PAGES.filter((p) => !HEADERLESS.includes(p))) {
       await page.goto(path);
       const header = page.locator('[data-page-header]');
       await expect(header).toBeVisible();
@@ -621,9 +621,9 @@ test.describe('with a node', () => {
     await expect(label).toBeVisible();
     const name = (await label.locator('span').first().textContent())!.trim();
 
-    // Tab in from the page, as a keyboard user would.
-    await page.locator('[data-page-header] h1').click();
-    for (let i = 0; i < 40; i += 1) {
+    // Tab in from the top of the page, as a keyboard user would.
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    for (let i = 0; i < 60; i += 1) {
       await page.keyboard.press('Tab');
       if (await page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset.kind === 'node')) break;
     }
@@ -708,6 +708,28 @@ test.describe('with a node', () => {
       await expect(page.locator('[data-constellation-canvas]')).toHaveCount(1);
     }
     expect(warnings.filter((w) => /too many active/i.test(w))).toEqual([]);
+  });
+
+  test('the constellation page is a window into space: no header, edge to edge', async ({ page }) => {
+    await addNodeOnline(page);
+    await page.getByRole('link', { name: 'Constellation' }).click();
+    await expect(page).toHaveURL(/\/constellation$/);
+    await expect(page.locator('[data-page-header]')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Constellation', level: 1 })).toBeAttached();
+    const view = (await page.locator('[data-constellation]').boundingBox())!;
+    // The layout's <main>, inside the sidebar inset's own.
+    const main = await page.locator('main main').evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      const s = getComputedStyle(el);
+      // Inside main's own border.
+      return {
+        x: r.x + parseFloat(s.borderLeftWidth),
+        y: r.y + parseFloat(s.borderTopWidth),
+        width: el.clientWidth,
+        height: el.clientHeight,
+      };
+    });
+    for (const k of ['x', 'y', 'width', 'height'] as const) expect(Math.abs(view[k] - main[k]), k).toBeLessThanOrEqual(1);
   });
 
   test('G then X opens the constellation', async ({ page }) => {

@@ -594,12 +594,6 @@ export class ConstellationScene {
     this.labels.focus(key);
   }
 
-  /** The scanlines on bodies (Settings); the overlay's are CSS. */
-  setScanlines(on: boolean) {
-    this.shared.uScan.value = on ? 1 : 0;
-    this.invalidate();
-  }
-
   stats(): SceneStats {
     const n = this.frameTimes.length;
     return {
@@ -683,7 +677,7 @@ export class ConstellationScene {
 
     const core = new Mesh(this.geo.sphere, coreMaterial({ space: p.space, tint: p.primary }));
     core.scale.setScalar(0.985);
-    const shell = new Mesh(this.geo.sphere, shellMaterial(this.shared, { color: p.primary, fill: 0.03, lines: 11 }));
+    const shell = new Mesh(this.geo.sphere, shellMaterial(this.shared, { color: p.primary, fill: 0.03 }));
     const wireGeo = style.kind === 'rocky' ? this.geo.geodesic : style.kind === 'ice' ? this.geo.graticuleIce : this.geo.graticuleGas;
     const wire = new LineSegments(wireGeo, wireMaterial(this.shared, { color: p.primary, opacity: 0.32 }));
     // Gas giants spin on a tilted axis; the lines show it.
@@ -787,7 +781,7 @@ export class ConstellationScene {
   private addMoon(body: MoonBody) {
     const mesh = new Mesh(
       this.geo.moon,
-      shellMaterial(this.shared, { color: this.palette.secondary, fill: 0.32, lines: 3 }),
+      shellMaterial(this.shared, { color: this.palette.secondary, fill: 0.32 }),
     );
     this.world.add(mesh);
     const view: MoonView = { body, mesh, halo: null, slot: body.slot, size: 0.2 };
@@ -800,7 +794,7 @@ export class ConstellationScene {
     const seed = hashString(body.id);
     const group = new Group();
     const edgeLines = new LineSegments(edges, wireMaterial(this.shared, { color: this.palette.probe, opacity: 0.9 }));
-    const fill = new Mesh(solid, shellMaterial(this.shared, { color: this.palette.probe, fill: 0.06, lines: 2 }));
+    const fill = new Mesh(solid, shellMaterial(this.shared, { color: this.palette.probe, fill: 0.06 }));
     group.add(edgeLines, fill);
     group.scale.setScalar(PROBE_SIZE);
     group.rotation.set(seed * TAU, seed * 3.1, 0);
