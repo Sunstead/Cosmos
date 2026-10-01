@@ -17,6 +17,7 @@ import {
   IUniform,
   NormalBlending,
   ShaderMaterial,
+  Texture,
 } from 'three';
 
 export interface SharedUniforms {
@@ -212,6 +213,96 @@ export function ringMaterial(
         }
         if (uDashes > 0.0) a *= step(0.5, fract(t * uDashes));
         gl_FragColor = vec4(uColor, a);
+      }
+    `,
+  });
+}
+
+/**
+ * Rounded themes: a node as its 2D planet sprite (the same drawing as the
+ * planet avatars), on a billboard. Opaque where the planet is, so it hides
+ * the orbits behind it; the soft edge is cut rather than blended into depth.
+ */
+export function planetMaterial(shared: SharedUniforms, opts: { map: Texture }): ShaderMaterial {
+  return new ShaderMaterial({
+    transparent: true,
+    depthWrite: true,
+    blending: NormalBlending,
+    uniforms: {
+      ...shared,
+      uMap: { value: opts.map },
+      uSize: { value: 1 },
+      uOpacity: { value: 1 },
+    },
+    vertexShader: BILLBOARD_VERTEX,
+    fragmentShader: /* glsl */ `
+      uniform sampler2D uMap;
+      uniform float uOpacity;
+      varying vec2 vUv;
+      void main() {
+        vec4 c = texture2D(uMap, vUv);
+        if (c.a < 0.04) discard;
+        gl_FragColor = vec4(c.rgb, c.a * uOpacity);
+      }
+    `,
+  });
+}
+
+/** Rounded themes: a moon as a small solid dot that always faces the camera. */
+export function dotMaterial(shared: SharedUniforms, opts: { color: Color }): ShaderMaterial {
+  return new ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    blending: NormalBlending,
+    uniforms: {
+      ...shared,
+      uColor: { value: opts.color },
+      uSize: { value: 1 },
+      uOpacity: { value: 1 },
+    },
+    vertexShader: BILLBOARD_VERTEX,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uColor;
+      uniform float uOpacity;
+      varying vec2 vUv;
+      void main() {
+        float d = length(vUv - 0.5) * 2.0;
+        float edge = fwidth(d);
+        float a = 1.0 - smoothstep(1.0 - edge * 1.5, 1.0, d);
+        if (a <= 0.0) discard;
+        gl_FragColor = vec4(uColor, a * uOpacity);
+      }
+    `,
+  });
+}
+
+/** Rounded themes: a device as a solid, flat-shaded shape. */
+export function solidMaterial(opts: { color: Color }): ShaderMaterial {
+  return new ShaderMaterial({
+    transparent: true,
+    blending: NormalBlending,
+    uniforms: {
+      uColor: { value: opts.color },
+      uOpacity: { value: 1 },
+    },
+    vertexShader: /* glsl */ `
+      varying vec3 vNormal;
+      varying vec3 vView;
+      void main() {
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vNormal = normalize(normalMatrix * normal);
+        vView = normalize(-mv.xyz);
+        gl_Position = projectionMatrix * mv;
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uColor;
+      uniform float uOpacity;
+      varying vec3 vNormal;
+      varying vec3 vView;
+      void main() {
+        float facing = abs(dot(normalize(vNormal), normalize(vView)));
+        gl_FragColor = vec4(uColor * (0.5 + 0.5 * facing), uOpacity);
       }
     `,
   });

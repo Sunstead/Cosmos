@@ -18,6 +18,8 @@ import {
   reconcile,
 } from '@/lib/constellation/model';
 import { toneOf } from '@/lib/constellation/hud';
+import type { ThemeStyle } from '@/lib/themes';
+import { useThemeStyle } from '@/hooks/use-theme-style';
 
 /** Ghost buttons in hologram colours, since the viewport is dark in every theme. */
 const HOLO_BUTTON =
@@ -40,6 +42,16 @@ const TONE_BG = {
 } as const;
 
 const NO_FOCUS: FocusInfo = { selected: null, hovered: null, focused: null };
+
+/**
+ * HUD and legend panels: a context menu in rounded themes (`.sky-panel`
+ * points the hologram variables at the app's tokens), a bracketed hologram
+ * panel in tech ones.
+ */
+const PANEL: Record<ThemeStyle, string> = {
+  rounded: 'sky-panel glass rounded-lg bg-popover shadow-md ring-1 ring-foreground/10',
+  tech: 'holo-panel rounded-sm',
+};
 
 interface Props {
   source: ConstellationSource;
@@ -77,6 +89,8 @@ export function ConstellationView({
     () => source.snapshot(),
   );
   const layout = useMemo(() => reconcile(null, snapshot).layout, [snapshot]);
+  const style = useThemeStyle();
+  const styleRef = useRef(style);
 
   // Callbacks change identity with their owner; the scene is built once.
   const handlers = useRef({ onOpen, onUnsupported });
@@ -93,6 +107,7 @@ export function ConstellationView({
     try {
       scene = new ConstellationScene(wrap, labels, source, {
         variant,
+        style: styleRef.current,
         reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
         onFocusChange: setFocus,
         onOpen: (body) => handlers.current.onOpen(body),
@@ -114,6 +129,11 @@ export function ConstellationView({
     };
   }, [source, variant]);
 
+  useEffect(() => {
+    styleRef.current = style;
+    sceneRef.current?.setStyle(style);
+  }, [style]);
+
   const counts = useMemo(
     () => ({ nodes: layout.nodes.length, moons: layout.moons.length, probes: layout.probes.length }),
     [layout],
@@ -124,16 +144,20 @@ export function ConstellationView({
       ref={wrapRef}
       data-constellation
       data-variant={variant}
+      data-sky-style={style}
       className={cn('@container relative isolate overflow-hidden bg-[var(--holo-space)] text-[var(--holo-text)]', className)}
     >
       {/* The scene puts its canvas first, under everything here. */}
+      {style === 'tech' && <div aria-hidden className='holo-scanlines pointer-events-none absolute inset-0' />}
       <div aria-hidden className='holo-vignette pointer-events-none absolute inset-0' />
+      {/* isolate: labels order themselves with z-index; this keeps that inside
+          the layer, under the HUD, legend and controls. */}
       <div
         ref={labelsRef}
         role='group'
         aria-label='Node map'
         aria-roledescription='3D map'
-        className='pointer-events-none absolute inset-0 overflow-hidden'
+        className='pointer-events-none absolute inset-0 isolate overflow-hidden'
       />
 
       <HudPanel
@@ -141,17 +165,21 @@ export function ConstellationView({
         focus={focus}
         source={source}
         variant={variant}
+        panel={PANEL[style]}
         onActivate={(key) => sceneRef.current?.activate(key)}
       />
 
       {/* The HUD panel takes the legend's corner whenever it shows a body. */}
       {variant === 'full' && !(focus.selected || focus.hovered || focus.focused) && (
-        <div data-legend className='holo-panel pointer-events-none absolute top-3 left-3 hidden rounded-sm px-3 py-2 text-2xs @lg:block'>
+        <div
+          data-legend
+          className={cn(PANEL[style], 'pointer-events-none absolute top-3 left-3 z-10 hidden px-3 py-2 text-2xs @lg:block')}
+        >
           <Legend counts={counts} />
         </div>
       )}
 
-      <div className='absolute right-2 bottom-2 flex flex-col gap-1'>
+      <div className='absolute right-2 bottom-2 z-10 flex flex-col gap-1'>
         <Button variant='ghost' size='icon' className={HOLO_BUTTON} aria-label='Zoom in' title='Zoom in' onClick={() => sceneRef.current?.zoom(1)}>
           <Plus />
         </Button>
@@ -179,7 +207,7 @@ export function ConstellationView({
       </div>
 
       {variant === 'full' && (
-        <p className='pointer-events-none absolute bottom-3 left-1/2 hidden -translate-x-1/2 text-2xs text-[var(--holo-dim)] @3xl:block'>
+        <p className='pointer-events-none absolute bottom-3 left-1/2 z-10 hidden -translate-x-1/2 text-2xs text-[var(--holo-dim)] @3xl:block'>
           Drag to orbit, scroll to zoom, click a planet or device to focus it. Tab and arrow keys move between bodies.
         </p>
       )}
@@ -219,12 +247,15 @@ function HudPanel({
   focus,
   source,
   variant,
+  panel,
   onActivate,
 }: {
   layout: Layout;
   focus: FocusInfo;
   source: ConstellationSource;
   variant: Variant;
+  /** The panel's look, from the theme's style. */
+  panel: string;
   onActivate: (key: string) => void;
 }) {
   // While focus is inside the panel (on its button), keep showing what it was showing.
@@ -286,7 +317,8 @@ function HudPanel({
         if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setHeld(null);
       }}
       className={cn(
-        'holo-panel absolute grid gap-2 rounded-sm p-3',
+        panel,
+        'absolute z-10 grid gap-2 p-3',
         variant === 'full' ? 'top-3 left-3 w-64' : 'bottom-2 left-2 w-56',
         // Room for the controls on a narrow card.
         'max-w-[calc(100%-4rem)]',

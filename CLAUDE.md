@@ -215,32 +215,44 @@ ones. An e2e spec checks header height and title position on every page.
 rejects them in JSX text and string literals under `pages/` and
 `components/`. Missing values render as `NO_VALUE` (`n/a`).
 
-**Themes.** Standalone themes, each with one scheme (dark or light), no
-custom ones. A theme is one `[data-theme='<id>']` block in `src/themes/*.css`
-(imported by `App.css`) plus one entry in `lib/themes.ts`, and its id and
-scheme in the first-paint script in `index.html`, which sets `data-theme`, the
-scheme's `dark`/`light` class (Tailwind's `dark:`, sonner) and `color-scheme`
-before anything renders. `themes.test.ts` checks the three agree, that every
+**Themes.** Standalone themes, each with one scheme (dark or light) and one
+style (`rounded` or `tech`), no custom ones. A theme is one
+`[data-theme='<id>']` block in `src/themes/*.css` (imported by `App.css`) plus
+one entry in `lib/themes.ts`, and its id, scheme and style in the first-paint
+script in `index.html`, which sets `data-theme`, `data-style`, the scheme's
+`dark`/`light` class (Tailwind's `dark:`, sonner) and `color-scheme` before
+anything renders. **Rounded** themes are shadcn as it comes. **Tech** themes
+(Hologram, Terminal, Red Alert, Blueprint) restyle the app from
+`[data-style='tech']` in `App.css`, CSS only: `--radius: 0` (every `rounded-*`
+derives from it), bracketed panels on every `[data-slot]` card, menu, popover,
+select and dialog (corners drawn as background gradients so they stay put
+while a menu scrolls, keeping the `.glass` tint), and mono for `.label-hud`,
+`.tabular-nums` and `--font-heading` (via `--heading-family`). A new tech theme
+needs no component changes. Follow system only pairs rounded themes
+(`themesOf`, `normalizeSlot`); tech themes are picked directly (`techThemes`). `themes.test.ts` checks the three agree, that every
 theme defines exactly the tokens Cosmos Dark does, WCAG AA for text pairs
 (translucent surfaces composited first), that metric colours stay apart from
 each other and from status colours, and that the active sidebar item shows.
 Storage: `cosmos-theme` (an id, or `system` to follow the OS) plus
 `cosmos-theme-light`/`cosmos-theme-dark` for Follow system; the pre-0.10
 `dark`/`light` values read as the Cosmos themes. `ThemeProvider`/`useTheme`
-expose `themeId`, `followSystem`, `pair` and `resolved`. Themes are picked in
-Settings (cards, previews scoped with `data-theme`) or the account menu; there
-is no toggle or shortcut.
+expose `themeId`, `followSystem`, `pair` and `resolved`; `useThemeStyle` reads
+the style off `<html>` (works without the provider). Themes are picked in
+Settings (Dark, Light and Tech cards, previews scoped with `data-theme` and
+`data-style`) or the account menu; there is no toggle or shortcut.
 
 **Tokens.** Everything is themed through CSS variables, defined by every
 theme: semantic colours, metric colours (`--cpu`, `--ram`, `--network`,
 `--disk`), `--ansi-*`, `--mark-*`, `--glass-*`, canvas tokens (`--space`,
-`--star`, `--orbit`, `--planet-*`) and the hologram tokens for the 3D
-constellation (`--holo-space`, always dark, `--holo-primary`,
-`--holo-secondary`, `--holo-text`, `--holo-dim`, `--holo-glow` 0..1). Layout
+`--star`, `--orbit`, `--planet-*`) and the constellation tokens
+(`--holo-space`, always dark, a touch deeper than the page in rounded themes;
+`--holo-primary`, `--holo-secondary`, `--holo-text`, `--holo-dim`,
+`--holo-glow` 0..1; from the theme's own accent in rounded themes, the full
+hologram in tech ones). Layout
 tokens (`--text-2xs`, `--titlebar-height`, `--titlebar-inset`, `--radius`)
 stay in `App.css`. Canvas and WebGL code never uses literal colours; it reads them
 through `lib/theme-tokens.ts`, which caches per theme id and fires
-`onThemeChange` when `data-theme` or the scheme class changes; three.js gets
+`onThemeChange` when `data-theme`, `data-style` or the scheme class changes; three.js gets
 them via `lib/constellation/colors.ts` (three can't parse `oklch()`).
 `.glass` is applied deliberately, `.label-hud` is the small-caps label, and
 `.chrome` disables text selection on UI chrome (content stays selectable).
@@ -264,11 +276,20 @@ answers falls back to the real empty state.
 constellation reads the same style for its wireframes (rocky bodies are
 geodesic, gas and ice giants have graticules, ringed ones keep their rings).
 
-**Constellation** (`lib/constellation/`, three.js). A hologram of the
-cluster: nodes are planets sized by memory with a CPU and memory gauge,
-services are moons (calm when fine, warning or error colours with a halo when
-not), tailnet devices are spinning wireframe probes on a tilted outer ring
-(shape by OS, waking pulses). It's the Overview card and the `/constellation`
+**Constellation** (`lib/constellation/`, three.js). The cluster in 3D: nodes
+are planets sized by memory with a CPU and memory gauge, services are moons,
+tailnet devices sit on a tilted outer ring (shape by OS, waking pulses). It
+follows the theme's style (`SceneOptions.style`, `setStyle`; every body has
+both looks built and the style picks by visibility). **Rounded**: planets are
+their avatar sprites (`planetSprite` on a billboard), moons solid dots (warning
+or error colour when unhealthy), devices solid shapes; orbits, the gauge,
+legend and hint stay; no floor grid, drop lines, glow or wireframes; panels are
+context menus (`.sky-panel` points the `--holo-*` variables at popover tokens).
+**Tech**: wireframe and fresnel planets, moons with a halo in trouble, spinning
+wireframe probes, the floor grid, bracketed `.holo-panel`s and still
+`.holo-scanlines`. Labels (`.sky-label`) sit on whole pixels, anchored from
+their measured size, never `translate(-50%)` (that blurred the CPU line), and
+their layer is `isolate` so their z-indices stay under the HUD. It's the Overview card and the `/constellation`
 page, under Overview in the sidebar (`bleed`: a window into space filling the
 content area, with no header or border, and an `sr-only` h1; also `G then X`,
 the palette, or the card's expand button, which carries the focused node as
@@ -289,9 +310,11 @@ so three.js is its own chunk. Rules it keeps: data reaches meshes from
 subscriptions, never React renders; the scene makes its own canvas (a
 context lost on purpose can't be re-made, which StrictMode would do);
 resizing draws inside the ResizeObserver callback so the canvas never shows
-blank; frames are on demand (30 fps for orbits, full rate while the camera
-moves, nothing off-screen or hidden, only on change under reduced motion,
-which also stops twinkle, auto-rotate and flights); `dispose()` releases the
+blank; frames go at the display's refresh rate while anything moves (nothing
+off-screen or hidden, only on change under reduced motion, which also stops
+twinkle, auto-rotate and flights), at the screen's pixel density (up to 3x,
+re-read by a resolution media query when the window changes screens), and
+labels snap to device pixels, not CSS ones; `dispose()` releases the
 context with `forceContextLoss()`.
 
 **Platforms.** Tauri builds the window in Rust (`src-tauri/src/window.rs`),

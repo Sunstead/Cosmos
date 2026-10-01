@@ -1,7 +1,7 @@
 import { Link, useLocation } from '@tanstack/react-router';
 import { LogIn, LogOut, Settings, SunMoon } from 'lucide-react';
 import { useTheme } from '@/hooks/use-theme';
-import { themesOf } from '@/lib/themes';
+import { techThemes, ThemeDef, themesOf } from '@/lib/themes';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -191,11 +191,17 @@ export function AccountMenu() {
               <DropdownMenuPortal>
                 <DropdownMenuSubContent className='w-48'>
                   <DropdownMenuRadioGroup value={followSystem ? '' : themeId} onValueChange={setThemeId}>
-                    {(['dark', 'light'] as const).map((scheme) => (
-                      <DropdownMenuGroup key={scheme}>
-                        {scheme === 'light' && <DropdownMenuSeparator />}
-                        <DropdownMenuLabel className='text-xs'>{scheme === 'dark' ? 'Dark' : 'Light'}</DropdownMenuLabel>
-                        {themesOf(scheme).map((t) => (
+                    {(
+                      [
+                        ['Dark', themesOf('dark')],
+                        ['Light', themesOf('light')],
+                        ['Tech', techThemes()],
+                      ] as [string, ThemeDef[]][]
+                    ).map(([label, themes], i) => (
+                      <DropdownMenuGroup key={label}>
+                        {i > 0 && <DropdownMenuSeparator />}
+                        <DropdownMenuLabel className='text-xs'>{label}</DropdownMenuLabel>
+                        {themes.map((t) => (
                           <DropdownMenuRadioItem key={t.id} value={t.id}>
                             <ThemeSwatch id={t.id} /> {t.name}
                           </DropdownMenuRadioItem>

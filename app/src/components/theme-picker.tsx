@@ -1,6 +1,6 @@
 import { Moon, Sun } from 'lucide-react';
 import { useTheme } from '@/hooks/use-theme';
-import { Scheme, ThemeDef, themesOf } from '@/lib/themes';
+import { Scheme, techThemes, ThemeDef, themeById, themesOf } from '@/lib/themes';
 import { cn } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -28,11 +28,12 @@ export function ThemeSwatch({ id, className }: { id: string; className?: string 
   );
 }
 
-/** A thumbnail of the shell in a theme: frame, sidebar, a card, metrics. */
+/** A thumbnail of the shell in a theme: frame, sidebar, a card, metrics. Square for tech themes. */
 function ThemePreview({ id }: { id: string }) {
   return (
     <div
       data-theme={id}
+      data-style={themeById(id)?.style}
       aria-hidden='true'
       className='flex aspect-16/9 w-full overflow-hidden rounded-md border bg-sidebar'
     >
@@ -100,9 +101,9 @@ function ThemeCard({ theme, badge }: { theme: ThemeDef; badge?: Scheme }) {
 }
 
 /**
- * Settings > Appearance: every theme as a card, grouped by scheme, one radio
- * group so arrow keys move through them all. Below, Follow system and the
- * theme it uses for each OS scheme.
+ * Settings > Appearance: every theme as a card, grouped Dark, Light and
+ * Tech, one radio group so arrow keys move through them all. Below, Follow
+ * system and the (rounded) theme it uses for each OS scheme.
  */
 export function ThemeSettings() {
   const { themeId, setThemeId, followSystem, setFollowSystem, pair, setPair } = useTheme();
@@ -125,6 +126,14 @@ export function ThemeSettings() {
             </div>
           </div>
         ))}
+        <div role='group' aria-label='Tech' className='flex flex-col gap-2'>
+          <h3 className='label-hud text-2xs text-muted-foreground'>Tech</h3>
+          <div className='grid grid-cols-2 gap-2 @xl:grid-cols-3 @4xl:grid-cols-4'>
+            {techThemes().map((t) => (
+              <ThemeCard key={t.id} theme={t} />
+            ))}
+          </div>
+        </div>
       </RadioGroup>
 
       <div className='flex flex-col gap-3 border-t pt-4'>
