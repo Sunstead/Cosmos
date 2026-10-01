@@ -606,12 +606,118 @@ test.describe('with a node', () => {
   test('constellation canvas is stable over time', async ({ page }) => {
     await addNodeOnline(page);
     await page.goto('/overview');
-    const canvas = page.getByRole('img', { name: 'Node map' });
+    const canvas = page.locator('[data-constellation-canvas]');
     await expect(canvas).toBeVisible();
     await canvas.evaluate((el) => ((window as unknown as { __c: Element }).__c = el));
     await page.waitForTimeout(3_000);
     const same = await canvas.evaluate((el) => (window as unknown as { __c: Element }).__c === el);
     expect(same).toBe(true);
+  });
+
+  test('constellation: keyboard focus on a node shows it in the HUD', async ({ page }, info) => {
+    await addNodeOnline(page);
+    await page.goto('/constellation');
+    const label = page.locator('[data-kind=node]').first();
+    await expect(label).toBeVisible();
+    const name = (await label.locator('span').first().textContent())!.trim();
+
+    // Tab in from the page, as a keyboard user would.
+    await page.locator('[data-page-header] h1').click();
+    for (let i = 0; i < 40; i += 1) {
+      await page.keyboard.press('Tab');
+      if (await page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset.kind === 'node')) break;
+    }
+    await expect(label).toBeFocused();
+    const hud = page.locator('[data-hud]');
+    await expect(hud).toBeVisible();
+    await expect(hud).toContainText(name, { ignoreCase: true });
+
+    // Enter focuses the node; the HUD then offers to open it.
+    await page.keyboard.press('Enter');
+    await expect(hud.getByRole('button', { name: 'Open node' })).toBeVisible();
+    await page.waitForTimeout(1_200);
+    await page.screenshot({ path: info.outputPath('constellation-focused.png') });
+    // Escape flies back out; focus stays on the node.
+    await page.keyboard.press('Escape');
+    await expect(hud.getByRole('button', { name: 'Open node' })).toHaveCount(0);
+    await expect(label).toBeFocused();
+  });
+
+  test('constellation never collapses to nothing while the window resizes', async ({ page }) => {
+    await addNodeOnline(page);
+    for (const path of ['/overview', '/constellation']) {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto(path);
+      const canvas = page.locator('[data-constellation-canvas]');
+      await expect(canvas).toBeVisible();
+      // Sample the canvas every frame while the window is dragged about.
+      await page.evaluate(() => {
+        const w = window as unknown as { __min: number[]; __stop: boolean };
+        w.__min = [Infinity, Infinity, Infinity, Infinity];
+        w.__stop = false;
+        const loop = () => {
+          const c = document.querySelector<HTMLCanvasElement>('[data-constellation-canvas]');
+          if (c) {
+            const m = w.__min;
+            w.__min = [Math.min(m[0], c.width), Math.min(m[1], c.height), Math.min(m[2], c.clientWidth), Math.min(m[3], c.clientHeight)];
+          } else w.__min = [0, 0, 0, 0];
+          if (!w.__stop) requestAnimationFrame(loop);
+        };
+        requestAnimationFrame(loop);
+      });
+      for (const [width, height] of [[1200, 800], [900, 700], [1440, 900], [800, 600], [1300, 760], [1000, 900], [1440, 900]]) {
+        await page.setViewportSize({ width, height });
+        await page.waitForTimeout(60);
+        // The buffer follows the box at once: it was resized and drawn in the observer callback.
+        const size = await canvas.evaluate((c: HTMLCanvasElement) => ({
+          w: c.width,
+          h: c.height,
+          cw: c.clientWidth,
+          ch: c.clientHeight,
+          dpr: Math.min(window.devicePixelRatio, 2),
+        }));
+        expect(size.w, `${path} ${width}x${height}`).toBeGreaterThan(0);
+        expect(Math.abs(size.w - size.cw * size.dpr), `${path} ${width}x${height}`).toBeLessThanOrEqual(2);
+        expect(Math.abs(size.h - size.ch * size.dpr), `${path} ${width}x${height}`).toBeLessThanOrEqual(2);
+      }
+      const min = await page.evaluate(() => {
+        const w = window as unknown as { __min: number[]; __stop: boolean };
+        w.__stop = true;
+        return w.__min;
+      });
+      expect(Math.min(...min), path).toBeGreaterThan(0);
+    }
+  });
+
+  test('constellation releases its WebGL context on every navigation', async ({ page }) => {
+    await addNodeOnline(page);
+    const warnings: string[] = [];
+    page.on('console', (m) => {
+      if (/WebGL/i.test(m.text()) && /context/i.test(m.text())) warnings.push(m.text());
+    });
+    for (let i = 0; i < 12; i += 1) {
+      await page.goto(i % 2 ? '/overview' : '/constellation');
+      await expect(page.locator('[data-constellation-canvas]')).toHaveCount(1);
+    }
+    // Client-side navigation too, which is what the expand button does.
+    for (let i = 0; i < 8; i += 1) {
+      await page.getByRole('button', { name: 'Open full view' }).click();
+      await expect(page).toHaveURL(/\/constellation/);
+      await page.goBack();
+      await expect(page).toHaveURL(/\/overview/);
+      await expect(page.locator('[data-constellation-canvas]')).toHaveCount(1);
+    }
+    expect(warnings.filter((w) => /too many active/i.test(w))).toEqual([]);
+  });
+
+  test('G then X opens the constellation', async ({ page }) => {
+    await addNodeOnline(page);
+    await page.goto('/overview');
+    await page.locator('[data-page-header] h1').click();
+    await page.keyboard.press('g');
+    await page.keyboard.press('x');
+    await expect(page).toHaveURL(/\/constellation$/);
+    await expect(page.locator('[data-constellation]')).toBeVisible();
   });
 
   test('logs deep link selects node and container', async ({ page, request }) => {
@@ -744,4 +850,46 @@ test.describe('logs', () => {
         }
       }
     });
+});
+
+test.describe('constellation preview', () => {
+  // Fixture data on the dev server (src/dev/constellation-preview.tsx):
+  // 5 nodes, 50 services and 15 devices, so the look can be judged without Docker.
+  for (const theme of ['dark', 'light']) {
+    test(`a full sky in ${theme}`, async ({ page }, info) => {
+      await page.goto(`/e2e/constellation.html?theme=${theme}`);
+      await expect(page.locator('[data-kind=node]').first()).toBeVisible();
+      await page.waitForTimeout(1_500);
+      await page.screenshot({ path: info.outputPath(`constellation-${theme}.png`) });
+      const stats = await page.evaluate(() =>
+        (window as unknown as { __constellation: { stats(): unknown } }).__constellation.stats(),
+      );
+      await info.attach('frame stats', { body: JSON.stringify(stats), contentType: 'application/json' });
+      console.log(`constellation ${theme}: ${JSON.stringify(stats)}`);
+
+      await page.locator('[data-kind=node]').first().click();
+      await expect(page.locator('[data-hud]').getByRole('button', { name: 'Open node' })).toBeVisible();
+      await page.waitForTimeout(1_200);
+      await page.screenshot({ path: info.outputPath(`constellation-${theme}-focused.png`) });
+
+      await page.goto(`/e2e/constellation.html?theme=${theme}&variant=card`);
+      await expect(page.locator('[data-kind=node]').first()).toBeVisible();
+      await page.waitForTimeout(1_000);
+      await page.locator('[data-constellation]').screenshot({ path: info.outputPath(`constellation-${theme}-card.png`) });
+    });
+  }
+
+  test('on a phone, and with reduced motion', async ({ page }, info) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/e2e/constellation.html');
+    await expect(page.locator('[data-kind=node]').first()).toBeVisible();
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: info.outputPath('constellation-phone.png') });
+    // Nothing moves, so nothing is drawn until something changes.
+    const before = await page.evaluate(() =>
+      (window as unknown as { __constellation: { stats(): { fps: number } } }).__constellation.stats().fps,
+    );
+    expect(before).toBeLessThan(10);
+  });
 });

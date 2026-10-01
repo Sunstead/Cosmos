@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   Logs,
   Network,
+  Orbit,
   PackageCheck,
   Server,
   Settings,
@@ -18,6 +19,7 @@ import type { ShortcutId } from './shortcuts';
 
 export type PagePath =
   | '/overview'
+  | '/constellation'
   | '/nodes'
   | '/services'
   | '/containers'
@@ -40,6 +42,7 @@ export interface PageDef {
 
 export const PAGES: PageDef[] = [
   { path: '/overview', label: 'Overview', icon: LayoutDashboard, shortcut: 'go.overview' },
+  { path: '/constellation', label: 'Constellation', icon: Orbit, shortcut: 'go.constellation' },
   { path: '/nodes', label: 'Nodes', icon: Server, shortcut: 'go.nodes' },
   { path: '/services', label: 'Services', icon: Hexagon, shortcut: 'go.services' },
   { path: '/containers', label: 'Containers', icon: Container, shortcut: 'go.containers' },
@@ -54,7 +57,10 @@ export const PAGES: PageDef[] = [
   { path: '/settings', label: 'Settings', icon: Settings, shortcut: 'settings' },
 ];
 
-/** Settings isn't listed: it lives in the account menu at the foot of the sidebar. */
+/**
+ * Settings isn't listed: it lives in the account menu at the foot of the
+ * sidebar. Nor is Constellation: it's the Overview's map, expanded.
+ */
 export const NAV_GROUPS: { label: string | null; paths: PagePath[] }[] = [
   { label: null, paths: ['/overview', '/nodes', '/services'] },
   { label: 'Infrastructure', paths: ['/containers', '/volumes', '/network'] },

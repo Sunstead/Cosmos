@@ -150,6 +150,85 @@ html[data-platform='macos'] {
     cursor: default;
   }
 
+  /* The constellation's glass: a dark pane with lit corner brackets. */
+  .holo-panel {
+    position: relative;
+    color: var(--holo-text);
+    background: color-mix(in oklab, var(--holo-space) 74%, transparent);
+    border: 1px solid color-mix(in oklab, var(--holo-primary) 26%, transparent);
+    box-shadow:
+      0 0 28px -10px color-mix(in oklab, var(--holo-primary) 55%, transparent),
+      inset 0 0 22px -12px color-mix(in oklab, var(--holo-primary) 60%, transparent);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+  }
+
+  .holo-panel::before,
+  .holo-panel::after {
+    content: '';
+    position: absolute;
+    width: 0.75rem;
+    height: 0.75rem;
+    border: 0 solid var(--holo-primary);
+    pointer-events: none;
+  }
+
+  .holo-panel::before {
+    top: -1px;
+    left: -1px;
+    border-top-width: 1px;
+    border-left-width: 1px;
+  }
+
+  .holo-panel::after {
+    right: -1px;
+    bottom: -1px;
+    border-right-width: 1px;
+    border-bottom-width: 1px;
+  }
+
+  /* Scanlines and a vignette over the constellation, with a slow sweep. */
+  .holo-scanlines {
+    background-image:
+      repeating-linear-gradient(
+        to bottom,
+        color-mix(in oklab, var(--holo-primary) 5%, transparent) 0 1px,
+        transparent 1px 3px
+      ),
+      radial-gradient(ellipse at center, transparent 55%, color-mix(in oklab, var(--holo-space) 80%, transparent));
+  }
+
+  .holo-scanlines::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to bottom,
+      transparent 0%,
+      color-mix(in oklab, var(--holo-primary) 5%, transparent) 50%,
+      transparent 100%
+    );
+    background-size: 100% 30%;
+    background-repeat: no-repeat;
+    animation: holo-sweep 9s linear infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .holo-scanlines::after {
+      animation: none;
+      opacity: 0;
+    }
+  }
+
+  @keyframes holo-sweep {
+    from {
+      background-position: 0 -40%;
+    }
+    to {
+      background-position: 0 140%;
+    }
+  }
+
   .titlebar-inset {
     width: var(--titlebar-inset);
     transition: width 150ms ease;
