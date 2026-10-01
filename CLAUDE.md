@@ -197,12 +197,13 @@ round and inset from the edges; the current page is a fill
 so the fill reads in light themes too. Collapsed, each icon is centred in
 the 4rem rail, under the title bar's toggle and over the avatar.
 Routes are lazy (`lazyRouteComponent`) and pick a layout through
-`staticData.layout`: `scroll` (default) or `fill` (logs, constellation). The body never
+`staticData.layout`: `scroll` (default), `fill` (logs) or `bleed` (constellation:
+no padding, no header, edge to edge in `<main>`). The body never
 scrolls; `<main>` does. Content is a `@container`, so layouts use container
 queries (`@xl`, `@3xl`, `@5xl`), not viewport breakpoints.
 
 **Pages are built from shared primitives**, not bespoke markup:
-`PageHeader` (always rendered, even when empty; the row is `h-8` and every
+`PageHeader` (always rendered, even when empty, except on `bleed` pages; the row is `h-8` and every
 header control is `h-8` so titles align), `SegmentedControl`, `SearchInput`
 (`/` focuses it), `NodeSelect`, `StatCard`/`StatRow`, `Section`, `DataTable`,
 `EmptyState` (`page | card | inline`) with an optional `SetupHint` (`?`
@@ -268,13 +269,12 @@ cluster: nodes are planets sized by memory with a CPU and memory gauge,
 services are moons (calm when fine, warning or error colours with a halo when
 not), tailnet devices are spinning wireframe probes on a tilted outer ring
 (shape by OS, waking pulses). It's the Overview card and the `/constellation`
-page (`fill`, not in the sidebar; `G then X`, the palette, or the card's
-expand button, which carries the focused node as `?node=`; its collapse
-button goes back, or to Overview). Clicking a node or a device focuses it
-(the camera follows it), and a second click opens it; a moon opens at once.
-Nothing flickers or sweeps: bodies hold steady, and scanlines (the CSS
-overlay and the still lines on bodies, `uScan`) are a switch in Settings,
-`usePreferencesStore().scanlines`. Pieces:
+page, under Overview in the sidebar (`bleed`: a window into space filling the
+content area, with no header or border, and an `sr-only` h1; also `G then X`,
+the palette, or the card's expand button, which carries the focused node as
+`?node=`). Clicking a node or a device focuses it (the camera follows it),
+and a second click opens it; a moon opens at once. Nothing flickers, sweeps or scans: bodies hold steady.
+Pieces:
 `model.ts` is pure and tested (reconcile a `Snapshot` into a `Layout` keeping
 phases, moon shells, focus order, the focus-then-open `interact` reducer,
 screen-space `pick`); `source.ts` builds snapshots from the stores and only

@@ -7,8 +7,7 @@
  * Colours arrive as uniforms from theme tokens (see `scene.ts`); there are
  * no literal colours here. `uMotion` is 0 under reduced motion, which stops
  * every time-driven effect (twinkle, pulses, the floor ripple). Nothing
- * flickers or sweeps: the bodies hold steady, and `uScan` (Settings,
- * Constellation scanlines) only turns their still scanlines on or off.
+ * flickers, sweeps or scans: the bodies hold steady.
  */
 import {
   AdditiveBlending,
@@ -25,8 +24,6 @@ export interface SharedUniforms {
   uMotion: IUniform<number>;
   uGlow: IUniform<number>;
   uPixelRatio: IUniform<number>;
-  /** 1 shows the scanlines on bodies, 0 hides them. */
-  uScan: IUniform<number>;
 }
 
 export function sharedUniforms(): SharedUniforms {
@@ -35,7 +32,6 @@ export function sharedUniforms(): SharedUniforms {
     uMotion: { value: 1 },
     uGlow: { value: 0.8 },
     uPixelRatio: { value: 1 },
-    uScan: { value: 1 },
   };
 }
 
@@ -56,10 +52,10 @@ const additive = {
   blending: AdditiveBlending,
 } as const;
 
-/** The translucent shell of a body: fresnel rim and still scanlines. */
+/** The translucent shell of a body: a faint fill and a fresnel rim. */
 export function shellMaterial(
   shared: SharedUniforms,
-  opts: { color: Color; fill: number; lines?: number },
+  opts: { color: Color; fill: number },
 ): ShaderMaterial {
   return new ShaderMaterial({
     ...additive,
@@ -69,14 +65,11 @@ export function shellMaterial(
       uColor: { value: opts.color },
       uOpacity: { value: 1 },
       uFill: { value: opts.fill },
-      uLines: { value: opts.lines ?? 9 },
     },
     vertexShader: /* glsl */ `
       varying vec3 vNormal;
       varying vec3 vView;
-      varying vec3 vLocal;
       void main() {
-        vLocal = position;
         vec4 mv = modelViewMatrix * vec4(position, 1.0);
         vNormal = normalize(normalMatrix * normal);
         vView = normalize(-mv.xyz);
@@ -85,18 +78,13 @@ export function shellMaterial(
     `,
     fragmentShader: /* glsl */ `
       uniform vec3 uColor;
-      uniform float uOpacity, uFill, uLines, uGlow, uScan;
+      uniform float uOpacity, uFill, uGlow;
       varying vec3 vNormal;
       varying vec3 vView;
-      varying vec3 vLocal;
       void main() {
         float facing = abs(dot(normalize(vNormal), normalize(vView)));
         float rim = pow(1.0 - facing, 2.4);
-        // Horizontal scanlines in the body's own space. They hold still:
-        // anything moving across a body read as a glitch.
-        float y = vLocal.y / max(length(vLocal), 0.0001);
-        float scan = smoothstep(0.6, 1.0, 0.5 + 0.5 * sin(y * uLines * 3.14159)) * uScan;
-        float a = uFill + rim * (0.55 + 0.45 * uGlow) + scan * 0.07 * facing;
+        float a = uFill + rim * (0.55 + 0.45 * uGlow);
         vec3 c = mix(uColor, vec3(1.0), rim * 0.3);
         gl_FragColor = vec4(c, a * uOpacity);
       }

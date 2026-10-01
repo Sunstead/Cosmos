@@ -21,9 +21,6 @@ import { getPlatform } from '@/lib/platform';
 import { ServerOff } from 'lucide-react';
 import { DeviceNotifications, NodeChannels } from '@/components/notify-settings';
 import { ThemeSettings } from '@/components/theme-picker';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { usePreferencesStore } from '@/stores/preferences';
 
 const CAPS = [
   ['container_actions', 'Actions'],
@@ -105,23 +102,6 @@ function NodeRow({ nodeId }: { nodeId: string }) {
   );
 }
 
-/** Settings > Appearance, under the themes. */
-function ConstellationSettings() {
-  const scanlines = usePreferencesStore((s) => s.scanlines);
-  const setScanlines = usePreferencesStore((s) => s.setScanlines);
-  return (
-    <div className='px-4 pb-4'>
-      <div className='flex items-center justify-between gap-4 border-t pt-4'>
-        <div className='grid gap-1'>
-          <Label htmlFor='constellation-scanlines'>Constellation scanlines</Label>
-          <span className='text-xs text-muted-foreground'>Fine horizontal lines over the 3D view, like a projection</span>
-        </div>
-        <Switch id='constellation-scanlines' checked={scanlines} onCheckedChange={setScanlines} />
-      </div>
-    </div>
-  );
-}
-
 function SignInStorageInfo() {
   return (
     <Popover>
@@ -195,7 +175,6 @@ export function SettingsPage() {
 
       <Section title='Appearance' data-appearance>
         <ThemeSettings />
-        <ConstellationSettings />
       </Section>
 
       <Section title='About' contentClassName='grid gap-2 p-4 text-sm @4xl:grid-cols-2 @4xl:gap-8'>
