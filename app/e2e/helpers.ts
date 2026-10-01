@@ -5,6 +5,7 @@ export const agentUrl = () => process.env.E2E_AGENT_URL!;
 
 export const PAGES = [
   '/overview',
+  '/constellation',
   '/nodes',
   '/services',
   '/containers',
