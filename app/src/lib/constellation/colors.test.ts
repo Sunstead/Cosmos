@@ -6,9 +6,13 @@ import { cssToRgba, ensureLightness, parseCssColor, rgbaToHex, rgbToOklab } from
 // Every stylesheet, wherever the theme blocks live. Read from disk: vitest
 // runs with `css: false`, which empties `?raw` CSS imports.
 const SRC = path.resolve(__dirname, '../..');
+// Only the theme blocks: those are what the scene reads. Elsewhere (the
+// rounded HUD panel) the hologram variables are pointed at other tokens for
+// DOM content, which WebGL never sees.
 const appCss = readdirSync(SRC, { recursive: true, encoding: 'utf8' })
   .filter((f) => f.endsWith('.css'))
   .map((f) => readFileSync(path.join(SRC, f), 'utf8'))
+  .flatMap((css) => [...css.matchAll(/\[data-theme='[\w-]+'\]\s*\{[^}]*\}/g)].map((m) => m[0]))
   .join('\n');
 
 const close = (a: number, b: number, eps = 0.01) => Math.abs(a - b) <= eps;
