@@ -1,0 +1,19 @@
+979 504 0:53 / / ro,relatime - overlay overlay rw,lowerdir=/var/lib/containerd/snapshots/930/fs,upperdir=/var/lib/containerd/snapshots/931/fs,workdir=/var/lib/containerd/snapshots/931/work
+984 979 0:152 / /proc rw,nosuid,nodev,noexec,relatime - proc proc rw
+986 979 0:153 / /dev rw,nosuid - tmpfs tmpfs rw,size=65536k,mode=755,inode64
+1012 979 0:22 / /sys ro,nosuid,nodev,noexec,relatime - sysfs sysfs rw
+1018 979 0:25 /tailscale /host/tailscale rw,nosuid,nodev,noexec,relatime - tmpfs tmpfs rw,size=6575248k,mode=755,inode64
+1019 979 259:5 /srv/backups /host/backups ro,relatime - ext4 /dev/nvme0n1p5 rw,errors=remount-ro
+1020 979 259:5 /var/lib/systemd/timers /host/systemd-timers ro,relatime - ext4 /dev/nvme0n1p5 rw,errors=remount-ro
+1021 979 259:5 / /host/rootfs ro,relatime master:1 - ext4 /dev/nvme0n1p5 rw,errors=remount-ro
+1022 1021 0:6 / /host/rootfs/dev ro,nosuid,relatime master:2 - devtmpfs udev rw,size=32788732k,nr_inodes=8197183,mode=755,inode64
+1029 1021 0:25 / /host/rootfs/run ro,nosuid,nodev,noexec,relatime master:5 - tmpfs tmpfs rw,size=6575248k,mode=755,inode64
+1075 1021 0:22 / /host/rootfs/sys ro,nosuid,nodev,noexec,relatime master:6 - sysfs sysfs rw
+1089 1021 0:23 / /host/rootfs/proc ro,nosuid,nodev,noexec,relatime master:12 - proc proc rw
+1092 1021 0:41 / /host/rootfs/tmp ro,nosuid,nodev master:49 - tmpfs tmpfs rw,nr_inodes=1048576,inode64
+1093 1021 259:4 / /host/rootfs/boot/efi ro,relatime master:88 - vfat /dev/nvme0n1p4 rw,fmask=0077,dmask=0077,codepage=437,iocharset=ascii,shortname=mixed,utf8,errors=remount-ro
+1094 1021 8:1 / /host/rootfs/srv/storage ro,relatime master:91 - ext4 /dev/sda1 rw
+1096 1021 0:75 / /host/rootfs/var/lib/docker/rootfs/overlayfs/0277e5d54bc8 ro,relatime master:244 - overlay overlay rw,lowerdir=/x,upperdir=/y,workdir=/z
+1123 979 0:25 /jupiter-requests/inbox /host/requests rw,nosuid,nodev,noexec,relatime - tmpfs tmpfs rw,size=6575248k,mode=755,inode64
+1127 979 259:5 /var/lib/docker/volumes/jupiter_cosmos_agent_data/_data /var/lib/cosmos-agent rw,relatime master:1 - ext4 /dev/nvme0n1p5 rw,errors=remount-ro
+1129 979 0:25 /docker.sock /var/run/docker.sock rw,nosuid,nodev,noexec,relatime - tmpfs tmpfs rw,size=6575248k,mode=755,inode64
