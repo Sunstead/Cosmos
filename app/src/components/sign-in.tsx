@@ -3,13 +3,13 @@ import { OidcAuthInfo } from '@/api/connection';
 import { useNodeName, useNodeStore } from '@/stores/nodes';
 import { useNodeMeta } from '@/api/queries';
 import { useAccounts } from '@/hooks/use-accounts';
-import { initials, providerHost, roleLabel } from '@/lib/accounts';
+import { providerHost, roleLabel } from '@/lib/accounts';
 import { plural } from '@/lib/format';
 import { signOutAndSay, useNodeSignIn, useSignIn } from '@/lib/sign-in';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { EmptyState } from './empty-state';
+import { UserAvatar } from './user-avatar';
 
 export function SignInButton({
   auth,
@@ -79,12 +79,7 @@ export function AccountList() {
         const name = s ? (s.name ?? s.username ?? 'Signed in') : 'Not signed in';
         return (
           <div key={a.auth.issuer} className='flex items-center gap-3 px-4 py-3 text-sm'>
-            <Avatar>
-              {s?.picture && <AvatarImage src={s.picture} alt='' />}
-              <AvatarFallback className={s ? 'bg-sidebar-primary text-xs font-medium text-sidebar-primary-foreground' : ''}>
-                {s ? initials(name) : <UserRound className='size-4' />}
-              </AvatarFallback>
-            </Avatar>
+            <UserAvatar who={{ name, picture: s?.picture ?? null, known: !!s }} />
             <div className='min-w-0 flex-1'>
               <div className='flex items-center gap-2'>
                 <span className='truncate font-medium'>{name}</span>
