@@ -38,7 +38,8 @@ npm run release -- 0.6.0 [--push]  # agent, web UI and desktop app together; see
 history DB, a fake `tailscaled` and a mock OIDC provider in `e2e/mock-oidc.ts`,
 so every spec signs in for real) and Vite on :1431, then drives system Chrome
 (`PW_CHANNEL` overrides). Docker-dependent specs skip when no daemon is up.
-Screenshots of every page in both themes land in `app/e2e/.results/`.
+Screenshots of every page in Cosmos Dark and Cosmos Light, and of Overview in
+every theme (`theme-<id>-overview.png`), land in `app/e2e/.results/`.
 
 Agent container (agent + bundled web UI):
 ```bash
@@ -179,8 +180,8 @@ microtask.
 palette, add-node dialog and `CommandHost` (shortcuts + native menu events).
 The sidebar's foot is `AccountMenu`: who you are (initials on
 `--sidebar-primary`, or an https `picture` claim), role, a gear for Settings
-(which isn't in the nav list) and a menu with settings, theme and sign in or
-out. Title bar controls are all ghost `Button`s so they match.
+(which isn't in the nav list) and a menu with settings, a theme picker and
+sign in or out. Title bar controls are all ghost `Button`s so they match.
 Routes are lazy (`lazyRouteComponent`) and pick a layout through
 `staticData.layout`: `scroll` (default) or `fill` (logs). The body never
 scrolls; `<main>` does. Content is a `@container`, so layouts use container
@@ -199,11 +200,32 @@ ones. An e2e spec checks header height and title position on every page.
 rejects them in JSX text and string literals under `pages/` and
 `components/`. Missing values render as `NO_VALUE` (`n/a`).
 
-**Tokens.** Everything is themed through CSS variables in `App.css`, defined
-for both themes: semantic colours, `--text-2xs`, `--titlebar-height`,
-`--titlebar-inset`, and canvas tokens (`--space`, `--star`, `--orbit`,
-`--planet-*`). Canvas code never uses literal colours; it reads them through
-`lib/theme-tokens.ts`, which caches per theme and fires `onThemeChange`.
+**Themes.** Standalone themes, each with one scheme (dark or light), no
+custom ones. A theme is one `[data-theme='<id>']` block in `src/themes/*.css`
+(imported by `App.css`) plus one entry in `lib/themes.ts`, and its id and
+scheme in the first-paint script in `index.html`, which sets `data-theme`, the
+scheme's `dark`/`light` class (Tailwind's `dark:`, sonner) and `color-scheme`
+before anything renders. `themes.test.ts` checks the three agree, that every
+theme defines exactly the tokens Cosmos Dark does, WCAG AA for text pairs
+(translucent surfaces composited first), that metric colours stay apart from
+each other and from status colours, and that the active sidebar item shows.
+Storage: `cosmos-theme` (an id, or `system` to follow the OS) plus
+`cosmos-theme-light`/`cosmos-theme-dark` for Follow system; the pre-0.10
+`dark`/`light` values read as the Cosmos themes. `ThemeProvider`/`useTheme`
+expose `themeId`, `followSystem`, `pair` and `resolved`. Themes are picked in
+Settings (cards, previews scoped with `data-theme`) or the account menu; there
+is no toggle or shortcut.
+
+**Tokens.** Everything is themed through CSS variables, defined by every
+theme: semantic colours, metric colours (`--cpu`, `--ram`, `--network`,
+`--disk`), `--ansi-*`, `--mark-*`, `--glass-*`, canvas tokens (`--space`,
+`--star`, `--orbit`, `--planet-*`) and the hologram tokens for the 3D
+constellation (`--holo-space`, always dark, `--holo-primary`,
+`--holo-secondary`, `--holo-text`, `--holo-dim`, `--holo-glow` 0..1). Layout
+tokens (`--text-2xs`, `--titlebar-height`, `--titlebar-inset`, `--radius`)
+stay in `App.css`. Canvas code never uses literal colours; it reads them
+through `lib/theme-tokens.ts`, which caches per theme id and fires
+`onThemeChange` when `data-theme` or the scheme class changes.
 `.glass` is applied deliberately, `.label-hud` is the small-caps label, and
 `.chrome` disables text selection on UI chrome (content stays selectable).
 Container log colours go through `lib/ansi.ts` (`--ansi-0..15` tokens); other
@@ -265,3 +287,6 @@ Composer). The glass icon only shows in a bundled build, not `tauri dev`.
   perfectly healthy open stream that no handler ever sees.
 - `npm run build` fails on a fresh clone until `cargo test -p cosmos-common`
   has generated `app/src/generated/`.
+- **Wrap a `DropdownMenuSubContent` in `DropdownMenuPortal`.** Left inside the
+  menu, its `.glass` backdrop filter becomes the containing block for the
+  submenu's fixed positioning and the menu's overflow clips it out of sight.
