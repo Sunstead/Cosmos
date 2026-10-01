@@ -11,7 +11,7 @@ const pathData = (svg: string) => / d="([^"]*)"/.exec(svg)?.[1];
 const source = read('src/assets/icon_simple.svg');
 const favicon = read('public/favicon.svg');
 const mark = read('src/assets/icon-mark.svg');
-const css = read('src/App.css');
+const css = read('src/themes/cosmos.css');
 
 describe('generated mark', () => {
   it('matches the Inkscape source (re-run scripts/build-mark.mjs if this fails)', () => {
@@ -35,8 +35,9 @@ describe('generated mark', () => {
     expect(mark).not.toContain('prefers-color-scheme');
   });
 
-  it('both themes define the mark tokens', () => {
-    const dark = css.indexOf('.dark {');
+  it('both Cosmos themes define the mark tokens (themes.test.ts checks every theme)', () => {
+    const dark = css.indexOf("[data-theme='cosmos-dark']");
+    expect(css.indexOf("[data-theme='cosmos-light']")).toBeLessThan(dark);
     expect(dark).toBeGreaterThan(0);
     for (const token of ['--mark-0:', '--mark-1:']) {
       const hits = [...css.matchAll(new RegExp(token, 'g'))].map((m) => m.index!);

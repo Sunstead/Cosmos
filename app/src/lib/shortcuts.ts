@@ -15,7 +15,6 @@ export const SHORTCUTS = {
   palette: 'mod+k',
   sidebar: 'mod+b',
   settings: 'mod+,',
-  theme: 'mod+shift+l',
   search: '/',
   'go.overview': 'g o',
   'go.constellation': 'g x',

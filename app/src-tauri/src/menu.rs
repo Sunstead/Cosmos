@@ -76,7 +76,6 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let view = SubmenuBuilder::new(app, "View")
         .item(&item(app, "view.command-palette", "Command Palette", Some("CmdOrCtrl+K"))?)
         .item(&item(app, "view.toggle-sidebar", "Toggle Sidebar", Some("CmdOrCtrl+B"))?)
-        .item(&item(app, "view.toggle-theme", "Toggle Theme", Some("CmdOrCtrl+Shift+L"))?)
         .separator()
         .item(&item(app, "view.reload", "Reload", Some("CmdOrCtrl+R"))?)
         .separator()

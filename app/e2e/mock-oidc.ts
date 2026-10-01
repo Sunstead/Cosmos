@@ -19,6 +19,8 @@ interface User {
   sub: string;
   preferred_username: string;
   groups: string[];
+  /** Sent as the `picture` claim, like Authentik's profile mapping. */
+  picture?: string;
 }
 
 const ADMIN: User = { sub: 'e2e-admin', preferred_username: 'pwb', groups: ['homelab-users', 'homelab-admins'] };
@@ -129,9 +131,14 @@ export function startMockOidc(): Promise<MockOidc> {
 
     // Test controls, kept apart from the OIDC surface.
     if (url.pathname === '/test/user' && req.method === 'POST') {
-      const input = JSON.parse((await body(req)) || '{}') as { groups?: string[]; name?: string };
+      const input = JSON.parse((await body(req)) || '{}') as { groups?: string[]; name?: string; picture?: string };
       nextUser = input.groups
-        ? { sub: `e2e-${input.name ?? 'user'}`, preferred_username: input.name ?? 'guest', groups: input.groups }
+        ? {
+            sub: `e2e-${input.name ?? 'user'}`,
+            preferred_username: input.name ?? 'guest',
+            groups: input.groups,
+            ...(input.picture && { picture: input.picture }),
+          }
         : ADMIN;
       return json(res, 200, { ok: true });
     }

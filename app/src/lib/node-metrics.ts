@@ -1,5 +1,7 @@
+import { DiskInfo } from '@/generated/DiskInfo';
 import { DiskKind } from '@/generated/DiskKind';
 import { HostInfo } from '@/generated/HostInfo';
+import { NO_VALUE } from './format';
 
 /** Display values from a raw `HostInfo`. The wire format is bytes and bytes/sec. */
 
@@ -60,20 +62,46 @@ export function getNetTxMbps(host: HostInfo | undefined): number {
   return round1(((host?.net_tx_bps ?? 0) * 8) / 1_000_000);
 }
 
+/**
+ * Whether the agent found this disk's I/O counters. Its rates are 0 and mean
+ * nothing when it didn't. Agents before 0.10 don't say, and always had them.
+ */
+function diskHasIo(disk: DiskInfo): boolean {
+  return disk.io_available !== false;
+}
+
+/** Whether any disk on the node has I/O counters; if none does, disk rates are n/a. */
+export function hasDiskIo(host: HostInfo | undefined): boolean {
+  return (host?.disk ?? []).some(diskHasIo);
+}
+
 /** Disk throughput in MiB/s, summed across filesystems to match history. */
-export function getDiskReadMbps(host: HostInfo | undefined): number {
-  return round1(sumDisk(host, 'read_bps') / BYTES_PER_MIB);
+function diskMbps(host: HostInfo | undefined, field: 'read_bps' | 'write_bps'): number {
+  return round1(sumDisk(host, field) / BYTES_PER_MIB);
 }
 
-export function getDiskWriteMbps(host: HostInfo | undefined): number {
-  return round1(sumDisk(host, 'write_bps') / BYTES_PER_MIB);
+/** Disk read rate, e.g. `1.4 MB/s`, or n/a when no disk has I/O counters. */
+export function formatDiskRead(host: HostInfo | undefined): string {
+  return hasDiskIo(host) ? `${diskMbps(host, 'read_bps')} MB/s` : NO_VALUE;
 }
 
+export function formatDiskWrite(host: HostInfo | undefined): string {
+  return hasDiskIo(host) ? `${diskMbps(host, 'write_bps')} MB/s` : NO_VALUE;
+}
+
+/** Read and write together, e.g. `1.4 / 0.2 MB/s`, or n/a. */
+export function formatDiskReadWrite(host: HostInfo | undefined): string {
+  return hasDiskIo(host)
+    ? `${diskMbps(host, 'read_bps')} / ${diskMbps(host, 'write_bps')} MB/s`
+    : NO_VALUE;
+}
+
+/** Bytes/sec summed across the disks that have I/O counters. */
 export function sumDisk(
   host: HostInfo | undefined,
   field: 'read_bps' | 'write_bps',
 ): number {
-  return (host?.disk ?? []).reduce((sum, d) => sum + d[field], 0);
+  return (host?.disk ?? []).reduce((sum, d) => (diskHasIo(d) ? sum + d[field] : sum), 0);
 }
 
 /** Human-readable byte size, e.g. `1.4 GB`. */

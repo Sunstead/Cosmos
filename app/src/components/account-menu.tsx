@@ -1,14 +1,16 @@
 import { Link, useLocation } from '@tanstack/react-router';
-import { LogIn, LogOut, Monitor, Moon, Settings, Sun, SunMoon, UserRound } from 'lucide-react';
-import { Theme, useTheme } from '@/hooks/use-theme';
-import { Avatar, AvatarBadge, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { LogIn, LogOut, Settings, SunMoon } from 'lucide-react';
+import { useTheme } from '@/hooks/use-theme';
+import { themesOf } from '@/lib/themes';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuPortal,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
@@ -20,35 +22,23 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from '@/components/ui/resizable-sidebar';
 import { useAccounts } from '@/hooks/use-accounts';
-import { Account, initials, openPrincipal, providerHost, roleLabel } from '@/lib/accounts';
+import { Account, openPrincipal, providerHost, roleLabel } from '@/lib/accounts';
 import { signOutAndSay, useSignIn } from '@/lib/sign-in';
 import { plural } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useNodeStore } from '@/stores/nodes';
 import { Hint, ShortcutKeys } from './hint';
+import { ThemeSwatch } from './theme-picker';
+import { UserAvatar } from './user-avatar';
 
 interface Identity {
   name: string;
   detail: string | null;
   picture: string | null;
-  /** Signed in: initials on the accent. Otherwise a muted person. */
+  /** Signed in: initials when there's no picture. Otherwise a muted person. */
   known: boolean;
   /** Something is waiting on you: a node wants a sign-in. */
   attention: boolean;
-}
-
-function UserAvatar({ who, size = 'default' }: { who: Identity; size?: 'default' | 'lg' }) {
-  return (
-    <Avatar size={size}>
-      {who.picture && <AvatarImage src={who.picture} alt='' />}
-      <AvatarFallback
-        className={cn('text-xs font-medium', who.known && 'bg-sidebar-primary text-sidebar-primary-foreground')}
-      >
-        {who.known ? initials(who.name) : <UserRound className='size-4' />}
-      </AvatarFallback>
-      {who.attention && <AvatarBadge className='bg-warning' />}
-    </Avatar>
-  );
 }
 
 function NameBlock({ who }: { who: Identity }) {
@@ -129,12 +119,6 @@ function AccountHeader({ account, showProvider }: { account: Account; showProvid
   );
 }
 
-const THEMES: { value: Theme; label: string; icon: typeof Sun }[] = [
-  { value: 'dark', label: 'Dark', icon: Moon },
-  { value: 'light', label: 'Light', icon: Sun },
-  { value: 'system', label: 'System', icon: Monitor },
-];
-
 /**
  * The sidebar footer: who you are, and the way to settings, theme and
  * signing in or out. Modelled on Discord's user panel. Collapsed, it's just
@@ -145,7 +129,7 @@ export function AccountMenu() {
   const open = useNodeStore((s) => openPrincipal(s.meta));
   const nodeCount = useNodeStore((s) => s.nodes.length);
   const { state, isMobile, setOpenMobile } = useSidebar();
-  const { theme, setTheme } = useTheme();
+  const { themeId, setThemeId, followSystem, setFollowSystem } = useTheme();
   const { pathname } = useLocation();
   const { start, busy } = useSignIn();
 
@@ -203,15 +187,28 @@ export function AccountMenu() {
               <DropdownMenuSubTrigger>
                 <SunMoon /> Theme
               </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent>
-                <DropdownMenuRadioGroup value={theme} onValueChange={(v) => setTheme(v as Theme)}>
-                  {THEMES.map((t) => (
-                    <DropdownMenuRadioItem key={t.value} value={t.value}>
-                      <t.icon /> {t.label}
-                    </DropdownMenuRadioItem>
-                  ))}
-                </DropdownMenuRadioGroup>
-              </DropdownMenuSubContent>
+              {/* Portaled: inside the menu's glass it was clipped out of sight. */}
+              <DropdownMenuPortal>
+                <DropdownMenuSubContent className='w-48'>
+                  <DropdownMenuRadioGroup value={followSystem ? '' : themeId} onValueChange={setThemeId}>
+                    {(['dark', 'light'] as const).map((scheme) => (
+                      <DropdownMenuGroup key={scheme}>
+                        {scheme === 'light' && <DropdownMenuSeparator />}
+                        <DropdownMenuLabel className='text-xs'>{scheme === 'dark' ? 'Dark' : 'Light'}</DropdownMenuLabel>
+                        {themesOf(scheme).map((t) => (
+                          <DropdownMenuRadioItem key={t.id} value={t.id}>
+                            <ThemeSwatch id={t.id} /> {t.name}
+                          </DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuGroup>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuCheckboxItem checked={followSystem} onCheckedChange={setFollowSystem}>
+                    Follow system
+                  </DropdownMenuCheckboxItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuPortal>
             </DropdownMenuSub>
             {signedIn.length > 0 && <DropdownMenuSeparator />}
             {signedIn.map((a) => (

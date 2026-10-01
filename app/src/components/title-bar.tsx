@@ -9,7 +9,6 @@ import { getPlatform } from '@/lib/platform';
 import { cn } from '@/lib/utils';
 import { useWindowState, windowAction } from '@/hooks/use-window-state';
 import { Hint, ShortcutKeys } from './hint';
-import { ThemeToggle } from './theme-toggle';
 import { Dot } from './dot';
 import { EventsBell } from './events-bell';
 
@@ -119,7 +118,6 @@ export const TitleBar = memo(function TitleBar() {
       <div className={cn('flex items-center justify-end gap-1', !customControls && 'pr-2')}>
         <NodesOnline />
         <EventsBell />
-        <ThemeToggle />
         {customControls && <WindowControls maximized={maximized} />}
       </div>
     </header>

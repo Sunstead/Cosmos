@@ -4,7 +4,10 @@
 use super::{ facts::HostFacts, filters::HostFilters };
 use cosmos_common::types::{ DiskInfo, DiskKind, HostInfo, NetInfo };
 use std::{ collections::HashMap, sync::Arc, time::Instant };
-use sysinfo::{ CpuRefreshKind, Disks, MemoryRefreshKind, Networks, RefreshKind, System };
+use sysinfo::{ CpuRefreshKind, DiskRefreshKind, Disks, MemoryRefreshKind, Networks, RefreshKind, System };
+
+#[cfg(target_os = "linux")]
+use super::diskstats::DiskIo;
 
 /// Re-enumerate devices every this many ticks. In between we only refresh the
 /// counters of devices we already know about, which is far cheaper than
@@ -90,8 +93,12 @@ pub struct HostProbe {
     filters: Arc<HostFilters>,
     /// iface -> cumulative (rx, tx)
     prev_net: HashMap<String, (u64, u64)>,
-    /// mount -> cumulative (read, written)
+    /// mount -> cumulative (read, written), for disks that have counters
     prev_disk: HashMap<String, (u64, u64)>,
+    /// Disk I/O counters by device number; see `diskstats.rs` for why not
+    /// sysinfo's.
+    #[cfg(target_os = "linux")]
+    io: DiskIo,
     /// mount -> storage pool, see `pool_key`. Cleared on re-enumeration.
     pools: HashMap<String, String>,
     prev_at: Instant,
@@ -108,6 +115,14 @@ impl HostProbe {
             .with_memory(MemoryRefreshKind::nothing().with_ram().with_swap())
     }
 
+    /// On Linux sysinfo's I/O counters are never found in a container (see
+    /// `diskstats.rs`), so don't let it read diskstats and canonicalize
+    /// device paths for nothing.
+    fn disk_refresh_kind() -> DiskRefreshKind {
+        let kind = DiskRefreshKind::nothing().with_storage().with_kind();
+        if cfg!(target_os = "linux") { kind } else { kind.with_io_usage() }
+    }
+
     pub fn new(filters: Arc<HostFilters>) -> Self {
         let mut sys = System::new_with_specifics(Self::refresh_kind());
 
@@ -117,7 +132,7 @@ impl HostProbe {
         std::thread::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL);
         sys.refresh_specifics(Self::refresh_kind());
 
-        let disks = Disks::new_with_refreshed_list();
+        let disks = Disks::new_with_refreshed_list_specifics(Self::disk_refresh_kind());
         let nets = Networks::new_with_refreshed_list();
 
         let mut probe = Self {
@@ -127,6 +142,8 @@ impl HostProbe {
             filters,
             prev_net: HashMap::new(),
             prev_disk: HashMap::new(),
+            #[cfg(target_os = "linux")]
+            io: DiskIo::new(),
             pools: HashMap::new(),
             prev_at: Instant::now(),
             ticks: 0,
@@ -141,8 +158,13 @@ impl HostProbe {
         }
         for d in self.disks.list() {
             let mount = d.mount_point().to_string_lossy().into_owned();
-            let usage = d.usage();
-            self.prev_disk.insert(mount, (usage.total_read_bytes, usage.total_written_bytes));
+            #[cfg(target_os = "linux")]
+            let io = self.io.counters(&mount).map(|c| (c.read_bytes, c.written_bytes));
+            #[cfg(not(target_os = "linux"))]
+            let io = sysinfo_io(d);
+            if let Some(io) = io {
+                self.prev_disk.insert(mount, io);
+            }
         }
     }
 
@@ -158,10 +180,12 @@ impl HostProbe {
         self.sys.refresh_specifics(Self::refresh_kind());
 
         let reenumerate = self.ticks.is_multiple_of(REENUMERATE_EVERY);
-        self.disks.refresh(reenumerate);
+        self.disks.refresh_specifics(reenumerate, Self::disk_refresh_kind());
         if reenumerate {
             self.pools.clear();
         }
+        #[cfg(target_os = "linux")]
+        self.io.refresh(reenumerate);
         self.nets.refresh(reenumerate);
 
         let (nets, net_rx_bps, net_tx_bps) = self.sample_nets(dt);
@@ -243,9 +267,6 @@ impl HostProbe {
 
         for d in self.disks.list() {
             let mount = d.mount_point().to_string_lossy().into_owned();
-            let usage = d.usage();
-            next_prev.insert(mount.clone(), (usage.total_read_bytes, usage.total_written_bytes));
-
             if d.total_space() == 0 {
                 continue;
             }
@@ -255,14 +276,14 @@ impl HostProbe {
                 continue;
             };
 
-            let (read_bps, write_bps) = match self.prev_disk.get(&mount) {
-                Some(&(prev_read, prev_written)) =>
-                    (
-                        (usage.total_read_bytes.saturating_sub(prev_read) as f64) / dt,
-                        (usage.total_written_bytes.saturating_sub(prev_written) as f64) / dt,
-                    ),
-                None => (0.0, 0.0),
-            };
+            #[cfg(target_os = "linux")]
+            let io = self.io.counters(&mount).map(|c| (c.read_bytes, c.written_bytes));
+            #[cfg(not(target_os = "linux"))]
+            let io = sysinfo_io(d);
+            let (read_bps, write_bps) = io_rates(self.prev_disk.get(&mount).copied(), io, dt);
+            if let Some(io) = io {
+                next_prev.insert(mount.clone(), io);
+            }
 
             let pool = self.pools
                 .entry(mount.clone())
@@ -278,6 +299,7 @@ impl HostProbe {
                 total_bytes: d.total_space(),
                 read_bps,
                 write_bps,
+                io_available: io.is_some(),
                 kind: match d.kind() {
                     sysinfo::DiskKind::SSD => DiskKind::Ssd,
                     sysinfo::DiskKind::HDD => DiskKind::Hdd,
@@ -290,6 +312,25 @@ impl HostProbe {
         let mut disk = dedupe_shared_volumes(disk);
         disk.sort_by(|a, b| a.label.cmp(&b.label));
         disk
+    }
+}
+
+/// sysinfo's cumulative counters, where they work (macOS reads IOKit).
+#[cfg(not(target_os = "linux"))]
+fn sysinfo_io(d: &sysinfo::Disk) -> Option<(u64, u64)> {
+    let usage = d.usage();
+    Some((usage.total_read_bytes, usage.total_written_bytes))
+}
+
+/// Bytes per second between two readings of cumulative (read, written)
+/// counters. The first sighting reports zero rather than a since-boot average
+/// masquerading as an instantaneous rate, and a counter that went backwards
+/// (a device reset) reports zero rather than wrapping.
+fn io_rates(prev: Option<(u64, u64)>, now: Option<(u64, u64)>, dt: f64) -> (f64, f64) {
+    match (prev, now) {
+        (Some((prev_read, prev_written)), Some((read, written))) =>
+            ((read.saturating_sub(prev_read) as f64) / dt, (written.saturating_sub(prev_written) as f64) / dt),
+        _ => (0.0, 0.0),
     }
 }
 
@@ -368,6 +409,7 @@ mod tests {
             total_bytes: total,
             read_bps: 0.0,
             write_bps: 0.0,
+            io_available: true,
             kind: DiskKind::Ssd,
         })
     }
@@ -452,6 +494,32 @@ mod tests {
             after_first,
             "delta maps must be rebuilt, not accumulated"
         );
+    }
+
+    #[test]
+    fn counters_from_the_device_map_give_a_rate() {
+        use super::super::diskstats::{ DiskIo, fixtures::* };
+
+        // Jupiter's root filesystem, then the same one second later after
+        // 1 MiB read (2048 sectors) and 4 MiB written (8192 sectors).
+        let mut io = DiskIo::from_text(JUPITER_MOUNTINFO, JUPITER_DISKSTATS);
+        let read = |io: &mut DiskIo| io.counters("/host/rootfs").map(|c| (c.read_bytes, c.written_bytes));
+
+        let first = read(&mut io);
+        assert!(first.is_some(), "the root filesystem must have counters");
+        assert_eq!(io_rates(None, first, 1.0), (0.0, 0.0), "first sighting");
+
+        let later = JUPITER_DISKSTATS.replace(
+            "nvme0n1p5 816345 42474 89384882 165880 124241086 60027584 2160798232",
+            "nvme0n1p5 816400 42474 89386930 165880 124241200 60027584 2160806424"
+        );
+        assert_ne!(later, JUPITER_DISKSTATS);
+        io.set_diskstats(&later);
+        let second = read(&mut io);
+        assert_eq!(io_rates(first, second, 1.0), (1024.0 * 1024.0, 4.0 * 1024.0 * 1024.0));
+        assert_eq!(io_rates(first, second, 2.0), (512.0 * 1024.0, 2.0 * 1024.0 * 1024.0));
+        // A counter going backwards (device reset) is not a huge rate.
+        assert_eq!(io_rates(second, first, 1.0), (0.0, 0.0));
     }
 
     #[test]

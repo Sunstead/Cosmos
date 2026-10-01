@@ -13,7 +13,6 @@ import { CommandHost } from './command-host';
 
 const navigate = vi.fn();
 const toggleSidebar = vi.fn();
-const toggleTheme = vi.fn();
 const run = vi.fn();
 const wake = vi.fn();
 let wolItems: WolItem[] = [];
@@ -27,9 +26,6 @@ vi.mock('@tanstack/react-router', () => ({
   ),
 }));
 vi.mock('@/components/ui/resizable-sidebar', () => ({ useSidebar: () => ({ toggleSidebar }) }));
-vi.mock('@/hooks/use-theme', () => ({
-  useTheme: () => ({ toggleTheme, resolvedTheme: 'dark', theme: 'dark', setTheme: vi.fn() }),
-}));
 vi.mock('@/api/queries', () => ({
   useContainerActions: () => ({ run, runMany: vi.fn(), pending: false }),
   useWol: () => ({ items: wolItems, networks: {}, nodes: ['n1'], loading: false, error: null }),
@@ -103,6 +99,11 @@ describe('TitleBar', () => {
     expect(toggleSidebar).toHaveBeenCalled();
   });
 
+  it('has no theme toggle', () => {
+    wrap(<TitleBar />);
+    expect(screen.queryByRole('button', { name: /theme/i })).toBeNull();
+  });
+
   it('shows the online count once nodes exist', () => {
     seedNode(false);
     wrap(<TitleBar />);
@@ -142,10 +143,17 @@ describe('CommandPalette', () => {
   it('filters by typed text', async () => {
     open();
     wrap(<CommandPalette />);
-    await userEvent.type(await screen.findByRole('combobox'), 'theme');
+    await userEvent.type(await screen.findByRole('combobox'), 'sidebar');
     const options = screen.getAllByRole('option');
     expect(options).toHaveLength(1);
-    expect(options[0]).toHaveTextContent('Toggle theme');
+    expect(options[0]).toHaveTextContent('Toggle sidebar');
+  });
+
+  it('has no theme toggle: themes are picked in Settings', async () => {
+    open();
+    wrap(<CommandPalette />);
+    await userEvent.type(await screen.findByRole('combobox'), 'toggle theme');
+    expect(screen.queryAllByRole('option')).toHaveLength(0);
   });
 
   it('shows nodes and opens a container sub-page with actions', async () => {
@@ -229,6 +237,14 @@ describe('CommandHost', () => {
   it('no longer jumps to pages on number keys', async () => {
     render(<CommandHost />);
     await userEvent.keyboard('{Control>}1{/Control}');
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('the old theme chord does nothing', async () => {
+    const before = document.documentElement.className;
+    render(<CommandHost />);
+    await userEvent.keyboard('{Control>}{Shift>}l{/Shift}{/Control}');
+    expect(document.documentElement.className).toBe(before);
     expect(navigate).not.toHaveBeenCalled();
   });
 

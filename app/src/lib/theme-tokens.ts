@@ -1,9 +1,10 @@
 /**
  * CSS tokens for canvas drawing. Canvas can't resolve `var(--x)`, so values
- * are read from the computed style and cached per theme.
+ * are read from the computed style and cached per theme id.
  */
 
 export interface CanvasTokens {
+  /** The theme id the values were read under. */
   theme: string;
   success: string;
   warning: string;
@@ -18,20 +19,20 @@ export interface CanvasTokens {
   planetMid: number;
   planetShade: number;
   atmosphere: number;
-  /** Hologram colours for the 3D constellation, always on a dark viewport. */
+  /** Hologram: a dark viewport in every theme, light themes too. */
   holoSpace: string;
   holoPrimary: string;
   holoSecondary: string;
   holoText: string;
   holoDim: string;
-  /** Glow strength, 0..1. */
+  /** Bloom and glow strength, 0..1. */
   holoGlow: number;
 }
 
 let cached: CanvasTokens | null = null;
 
 function currentTheme(): string {
-  return document.documentElement.classList.contains('light') ? 'light' : 'dark';
+  return document.documentElement.dataset.theme ?? '';
 }
 
 export function canvasTokens(): CanvasTokens {
@@ -69,7 +70,7 @@ export function canvasTokens(): CanvasTokens {
   return cached;
 }
 
-/** Calls `fn` when the theme class on <html> changes. */
+/** Calls `fn` when the theme on <html> (its id or scheme class) changes. */
 export function onThemeChange(fn: () => void): () => void {
   let last = currentTheme();
   const observer = new MutationObserver(() => {
@@ -79,6 +80,6 @@ export function onThemeChange(fn: () => void): () => void {
     cached = null;
     fn();
   });
-  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme'] });
   return () => observer.disconnect();
 }

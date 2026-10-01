@@ -24,7 +24,10 @@ const issuer = () => process.env.E2E_OIDC_ISSUER!;
 const mockOrigin = () => new URL(issuer()).origin;
 
 /** Who the mock provider signs in next. No groups given means the admin. */
-export async function nextSignIn(request: APIRequestContext, user?: { name: string; groups: string[] }) {
+export async function nextSignIn(
+  request: APIRequestContext,
+  user?: { name: string; groups: string[]; picture?: string },
+) {
   await request.post(`${mockOrigin()}/test/user`, { data: user ?? {} });
 }
 
