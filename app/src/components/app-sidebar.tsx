@@ -16,6 +16,11 @@ import { NAV_GROUPS, PAGES, pageFor } from '@/lib/navigation';
 import { ShortcutKeys } from './hint';
 import { AccountMenu } from './account-menu';
 
+// Rounded on every side and inset from the edges; the page you're on is a
+// fill, hover a lighter one. Collapsed, each button is centred in the rail.
+const ITEM =
+  'gap-2.5 rounded-md px-3 text-muted-foreground hover:bg-sidebar-accent/60 group-data-[collapsible=icon]:mx-auto';
+
 export function AppSidebar() {
   const { pathname } = useLocation();
   const active = pageFor(pathname)?.path;
@@ -25,16 +30,17 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible='icon' className='chrome'>
-      <SidebarContent className='pt-1'>
+      <SidebarContent className='gap-0 pt-1 in-data-[mobile=true]:pt-3'>
         {NAV_GROUPS.map((group, i) => (
-          <SidebarGroup key={group.label ?? i} className='pl-0'>
+          <SidebarGroup key={group.label ?? i} className='px-2 py-1.5'>
             {group.label && (
-              <SidebarGroupLabel className='label-hud pl-5 text-2xs'>
+              // Lined up with the item labels, not their icons.
+              <SidebarGroupLabel className='label-hud h-7 pl-9.5 text-2xs text-sidebar-foreground/60 group-data-[collapsible=icon]:-mt-7'>
                 {group.label}
               </SidebarGroupLabel>
             )}
             <SidebarGroupContent>
-              <SidebarMenu>
+              <SidebarMenu className='gap-0.5'>
                 {group.paths.map((path) => {
                   const page = PAGES.find((p) => p.path === path)!;
                   const Icon = page.icon;
@@ -43,7 +49,6 @@ export function AppSidebar() {
                       <SidebarMenuButton
                         asChild
                         isActive={active === path}
-                        size='lg'
                         tooltip={{
                           children: (
                             <span className='flex items-center gap-2'>
@@ -52,10 +57,10 @@ export function AppSidebar() {
                             </span>
                           ),
                         }}
-                        className='space-x-3 rounded-l-none pl-5 data-[active=true]:shadow-[inset_2px_0_0_0_var(--color-primary)]'
+                        className={ITEM}
                       >
                         <Link to={path} onClick={followed}>
-                          <Icon className='size-5!' />
+                          <Icon />
                           <span>{page.label}</span>
                         </Link>
                       </SidebarMenuButton>
@@ -67,7 +72,7 @@ export function AppSidebar() {
           </SidebarGroup>
         ))}
       </SidebarContent>
-      <SidebarFooter className='border-t border-sidebar-border p-2'>
+      <SidebarFooter>
         <AccountMenu />
       </SidebarFooter>
       <SidebarRail className='mt-3' />

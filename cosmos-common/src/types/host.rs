@@ -24,7 +24,19 @@ pub struct DiskInfo {
     pub total_bytes: u64,
     pub read_bps: f64,
     pub write_bps: f64,
+    /// False when the agent can't find this disk's I/O counters (a network
+    /// or pooled filesystem with no block device of its own). Its rates are
+    /// then 0 and mean nothing, so the UI shows n/a and totals leave it out.
+    /// Agents before 0.10 don't send it (they always claimed counters), hence
+    /// optional in TypeScript: only `false` means no I/O.
+    #[serde(default = "io_available_default")]
+    #[ts(as = "Option<bool>", optional)]
+    pub io_available: bool,
     pub kind: DiskKind,
+}
+
+fn io_available_default() -> bool {
+    true
 }
 
 #[derive(Serialize, Deserialize, TS, Debug, Clone)]
@@ -90,4 +102,19 @@ pub struct HostInfo {
     /// (seq goes backwards) and dropped samples.
     #[ts(type = "number")]
     pub seq: u64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DiskInfo;
+
+    #[test]
+    fn disks_from_older_agents_count_as_having_io() {
+        let d: DiskInfo = serde_json
+            ::from_str(
+                r#"{"mount":"/","label":"/","used_bytes":1,"total_bytes":2,"read_bps":0,"write_bps":0,"kind":"ssd"}"#
+            )
+            .unwrap();
+        assert!(d.io_available);
+    }
 }

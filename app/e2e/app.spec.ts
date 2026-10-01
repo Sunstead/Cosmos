@@ -62,6 +62,34 @@ test.describe('empty app', () => {
     await expect(sheet).toHaveCount(0);
   });
 
+  test('the sidebar collapses to centred icons that still name their page', async ({ page }, info) => {
+    for (const theme of ['dark', 'light']) {
+      await page.goto('/overview');
+      await page.evaluate((t) => {
+        localStorage.setItem('cosmos-theme', t);
+        localStorage.setItem('cosmos-sidebar-open', 'true');
+      }, theme);
+      await page.goto('/containers');
+      const sidebar = page.locator('[data-sidebar=sidebar]');
+      await page.getByRole('link', { name: 'Logs' }).hover();
+      await page.screenshot({ path: info.outputPath(`sidebar-${theme}.png`), clip: { x: 0, y: 0, width: 480, height: 900 } });
+
+      await page.getByRole('button', { name: 'Toggle sidebar', exact: true }).click();
+      await expect(page.locator('[data-collapsible=icon]')).toHaveCount(1);
+      const rail = (await sidebar.boundingBox())!;
+      // Wait out the width transition before measuring.
+      await expect.poll(async () => Math.round((await sidebar.boundingBox())!.width)).toBe(64);
+      const link = page.getByRole('link', { name: 'Volumes' });
+      const box = (await link.boundingBox())!;
+      expect(Math.abs(box.x + box.width / 2 - (rail.x + 32))).toBeLessThanOrEqual(1);
+      await link.hover();
+      await expect(page.getByRole('tooltip')).toContainText('Volumes');
+      // Let the tooltip finish fading in.
+      await page.waitForTimeout(250);
+      await page.screenshot({ path: info.outputPath(`sidebar-collapsed-${theme}.png`), clip: { x: 0, y: 0, width: 480, height: 900 } });
+    }
+  });
+
   test('body never scrolls and nothing overflows horizontally', async ({ page }) => {
     for (const width of [900, 1440]) {
       await page.setViewportSize({ width, height: 800 });
