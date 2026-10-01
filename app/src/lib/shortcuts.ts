@@ -18,6 +18,7 @@ export const SHORTCUTS = {
   theme: 'mod+shift+l',
   search: '/',
   'go.overview': 'g o',
+  'go.constellation': 'g x',
   'go.nodes': 'g n',
   'go.services': 'g s',
   'go.containers': 'g c',

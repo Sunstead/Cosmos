@@ -118,7 +118,7 @@ export function OverviewPage() {
 
       <div className='grid gap-4 @5xl:grid-cols-3'>
         <Section title='Constellation' className='@5xl:col-span-2' contentClassName='p-0'>
-          <Constellation className='aspect-[2/1] max-h-[28rem] min-h-64 w-full overflow-hidden rounded-b-xl' />
+          <Constellation className='aspect-[2/1] max-h-[28rem] min-h-64 w-full rounded-b-xl' />
         </Section>
 
         <div className='flex flex-col gap-4'>
