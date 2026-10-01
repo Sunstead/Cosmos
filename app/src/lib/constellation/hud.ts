@@ -120,7 +120,8 @@ export class LabelLayer {
       label.shown = true;
       label.el.hidden = false;
     }
-    if (Math.abs(label.x - x) > 0.2 || Math.abs(label.y - y) > 0.2) {
+    // NaN on the first placement, so the comparison must fail towards writing.
+    if (!(Math.abs(label.x - x) <= 0.2 && Math.abs(label.y - y) <= 0.2)) {
       label.x = x;
       label.y = y;
       label.el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) ${ANCHOR[label.kind]}`;

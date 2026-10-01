@@ -379,10 +379,11 @@ function LiveStat({
         </span>
       </div>
       {label !== 'Network' && (
-        <span className='h-0.5 overflow-hidden bg-[color-mix(in_oklab,var(--holo-primary)_14%,transparent)]'>
+        <span className='block h-0.5 overflow-hidden bg-[color-mix(in_oklab,var(--holo-primary)_14%,transparent)]'>
           <span
             ref={barRef}
-            className='block h-full origin-left scale-x-0 bg-[var(--holo-primary)] shadow-[0_0_6px_var(--holo-primary)] transition-transform duration-500 motion-reduce:transition-none'
+            style={{ transform: 'scaleX(0)' }}
+            className='block h-full origin-left bg-[var(--holo-primary)] shadow-[0_0_6px_var(--holo-primary)] transition-transform duration-500 motion-reduce:transition-none'
           />
         </span>
       )}

@@ -17,8 +17,9 @@ struct MenuPayload<'a> {
 /// Id and label, in sidebar order. No accelerators: pages are "G then a
 /// letter" (`SHORTCUTS` in `lib/shortcuts.ts`), which a menu can't show, and
 /// the webview handles those keys itself.
-const PAGES: [(&str, &str); 12] = [
+const PAGES: [(&str, &str); 13] = [
     ("overview", "Overview"),
+    ("constellation", "Constellation"),
     ("nodes", "Nodes"),
     ("services", "Services"),
     ("containers", "Containers"),

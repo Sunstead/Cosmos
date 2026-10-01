@@ -118,7 +118,7 @@ const MOON_BASE = 1.9;
 const MOON_SPREAD = 2.7;
 const SHELL_GAP = 0.8;
 const SHELL_GAP_SPREAD = 1.5;
-const PROBE_TILT = 0.34;
+const PROBE_TILT = 0.24;
 const PROBE_SIZE = 0.42;
 
 type Role = 'primary' | 'secondary' | 'text' | 'dim' | 'ok' | 'warn' | 'err' | 'probe';
@@ -876,7 +876,8 @@ export class ConstellationScene {
     view.shell.material.uniforms.uColor.value = tone;
     view.wire.material.uniforms.uColor.value = tone;
     view.glow.material.uniforms.uColor.value = tone;
-    view.core.material.uniforms.uTint.value = tone;
+    view.core.material.uniforms.uTint.value = state === 'online' ? tone : p.dim;
+    view.shell.material.uniforms.uFill.value = state === 'online' ? 0.03 : 0;
     if (view.rings) view.rings.material.uniforms.uColor.value = tone;
     view.gauge.visible = state === 'online';
     view.link.visible = state === 'online';
@@ -1047,7 +1048,9 @@ export class ConstellationScene {
     // The disc spans 2R across; seen from the home elevation it spans
     // 2R sin(elevation) up and down, plus room for labels and drop lines.
     const across = extent / (tanH * 0.9);
-    const tall = (extent * Math.sin(HOME_ELEVATION) + this.gridDrop * 0.6 + 1.5) / (tanV * 0.84);
+    // The device ring is tilted, so it reaches further up and down than the plane.
+    const lean = this.layout?.probes.length ? PROBE_TILT * 0.8 : 0;
+    const tall = (extent * Math.sin(HOME_ELEVATION + lean) + this.gridDrop * 0.4 + 1) / (tanV * 0.86);
     return Math.max(across, tall, 6);
   }
 
@@ -1096,7 +1099,7 @@ export class ConstellationScene {
     const reach = view.radius * MOON_SPREAD + (shells - 1) * SHELL_GAP_SPREAD + 1.2;
     const tanV = Math.tan(((FOV / 2) * Math.PI) / 180);
     const aspect = this.width > 0 && this.height > 0 ? this.width / this.height : 2;
-    return reach / (Math.min(tanV, tanV * aspect) * 0.62);
+    return reach / (Math.min(tanV, tanV * aspect) * 0.92);
   }
 
   private flyTo(key: string | null, instant = false, canonical = false) {
@@ -1413,14 +1416,15 @@ export class ConstellationScene {
       view.wire.rotation.y += motion * 0.08;
 
       const online = b.state === 'online';
-      const presence = view.presence * (online ? 1 : 0.65);
+      // Down nodes are a faint red outline, not a red planet.
+      const presence = view.presence * (online ? 1 : 0.42);
       view.shell.material.uniforms.uOpacity.value = presence;
-      view.wire.material.uniforms.uOpacity.value = 0.32 * presence;
+      view.wire.material.uniforms.uOpacity.value = (online ? 0.32 : 0.22) * presence;
       view.core.material.uniforms.uOpacity.value = presence;
       // Bodies are scaled by radius; billboards are sized in world units, so undo it.
       const g = view.glow.material.uniforms;
       g.uSize.value = view.radius * 5;
-      g.uIntensity.value = (online ? 0.35 + view.cpu * 0.45 : 0.18) * view.presence;
+      g.uIntensity.value = (online ? 0.35 + view.cpu * 0.45 : 0.08) * view.presence;
       const gauge = view.gauge.material.uniforms;
       gauge.uSize.value = 2 * 1.45 * view.radius;
       gauge.uCpu.value = ease(gauge.uCpu.value, view.cpu, 4);
@@ -1536,6 +1540,12 @@ export class ConstellationScene {
   private placeLabels() {
     const selected = this.focusState.selected;
     const focused = this.focusedLabel;
+    // Rough label boxes, to keep moon names from piling on top of each other.
+    const taken: { x0: number; y0: number; x1: number; y1: number }[] = [];
+    const free = (x0: number, y0: number, x1: number, y1: number) =>
+      !taken.some((r) => x0 < r.x1 && x1 > r.x0 && y0 < r.y1 && y1 > r.y0);
+    const textWidth = (text: string, px: number) => text.length * px + 14;
+
     for (const view of this.nodes.values()) {
       const s = this.toScreen(view.group.position);
       const key = view.body.key;
@@ -1544,19 +1554,35 @@ export class ConstellationScene {
         continue;
       }
       // Below the gauge.
-      this.labels.place(key, s.x, s.y + view.radius * 1.5 * s.scale + 2, s.depth);
+      const y = s.y + view.radius * 1.5 * s.scale + 2;
+      const w = textWidth(view.body.name, 8);
+      taken.push({ x0: s.x - w / 2, y0: y, x1: s.x + w / 2, y1: y + 28 });
+      this.labels.place(key, s.x, y, s.depth);
     }
+
+    const moons: { key: string; x: number; y: number; depth: number; name: string; forced: boolean }[] = [];
     for (const view of this.moons.values()) {
       const key = view.body.key;
-      const visible =
-        view.body.nodeKey === selected || key === this.hovered || key === focused;
-      const s = visible ? this.toScreen(view.mesh.position) : null;
+      const forced = key === this.hovered || key === focused;
+      const s = forced || view.body.nodeKey === selected ? this.toScreen(view.mesh.position) : null;
       if (!s || !this.onCanvas(s.x, s.y, 40)) {
         this.labels.hide(key);
         continue;
       }
-      this.labels.place(key, s.x + view.size * s.scale, s.y, s.depth);
+      moons.push({ key, x: s.x + view.size * s.scale, y: s.y, depth: s.depth, name: view.body.name, forced });
     }
+    // The one being pointed at first, then nearest first.
+    moons.sort((a, b) => Number(b.forced) - Number(a.forced) || a.depth - b.depth);
+    for (const m of moons) {
+      const box = { x0: m.x, y0: m.y - 8, x1: m.x + textWidth(m.name, 6.4), y1: m.y + 8 };
+      if (!m.forced && !free(box.x0, box.y0, box.x1, box.y1)) {
+        this.labels.hide(m.key);
+        continue;
+      }
+      taken.push(box);
+      this.labels.place(m.key, m.x, m.y, m.depth);
+    }
+
     for (const view of this.probes.values()) {
       const key = view.body.key;
       const s = this.toScreen(view.group.getWorldPosition(this.tmp2));
@@ -1564,7 +1590,15 @@ export class ConstellationScene {
         this.labels.hide(key);
         continue;
       }
-      this.labels.place(key, s.x, s.y + PROBE_SIZE * 1.2 * s.scale, s.depth);
+      const y = s.y + PROBE_SIZE * 1.2 * s.scale;
+      const w = textWidth(view.body.name, 6.4);
+      const forced = key === this.hovered || key === focused;
+      if (!forced && !free(s.x - w / 2, y + 4, s.x + w / 2, y + 20)) {
+        this.labels.hide(key);
+        continue;
+      }
+      taken.push({ x0: s.x - w / 2, y0: y + 4, x1: s.x + w / 2, y1: y + 20 });
+      this.labels.place(key, s.x, y, s.depth);
     }
   }
 

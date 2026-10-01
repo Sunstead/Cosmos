@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import { useNodeName, useNodeStore } from '@/stores/nodes';
 
 /**
- * A node drawn as a planet. Same renderer as the constellation, so a node
+ * A node drawn as a planet, from its name (`lib/planet.ts`), so a node
  * looks identical everywhere. Redraws only on size or theme change.
  */
 export const NodePlanet = memo(function NodePlanet({

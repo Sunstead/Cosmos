@@ -15,6 +15,11 @@ import { getDefaultNodes } from './config';
 import { isDesktop } from './lib/platform';
 import { signIn } from './stores/auth';
 
+export interface ConstellationSearch {
+  /** A node to start focused on. */
+  node?: string;
+}
+
 export interface LogsSearch {
   node?: string;
   container?: string;
@@ -61,6 +66,17 @@ const overviewRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/overview',
   component: lazyRouteComponent(() => import('./pages/overview-page'), 'OverviewPage'),
+});
+
+/** The full-page constellation. Not in the sidebar; reached from the Overview card. */
+const constellationRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/constellation',
+  staticData: { layout: 'fill' },
+  validateSearch: (s: Record<string, unknown>): ConstellationSearch => ({
+    node: typeof s.node === 'string' ? s.node : undefined,
+  }),
+  component: lazyRouteComponent(() => import('./pages/constellation-page'), 'ConstellationPage'),
 });
 
 const nodesRoute = createRoute({
@@ -156,6 +172,7 @@ const settingsRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   overviewRoute,
+  constellationRoute,
   nodesRoute,
   nodeDetailRoute,
   servicesRoute,
