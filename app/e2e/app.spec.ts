@@ -115,6 +115,34 @@ test.describe('empty app', () => {
     await expect(sheet).toHaveCount(0);
   });
 
+  test('the sidebar collapses to centred icons that still name their page', async ({ page }, info) => {
+    for (const theme of ['dark', 'light']) {
+      await page.goto('/overview');
+      await page.evaluate((t) => {
+        localStorage.setItem('cosmos-theme', t);
+        localStorage.setItem('cosmos-sidebar-open', 'true');
+      }, theme);
+      await page.goto('/containers');
+      const sidebar = page.locator('[data-sidebar=sidebar]');
+      await page.getByRole('link', { name: 'Logs' }).hover();
+      await page.screenshot({ path: info.outputPath(`sidebar-${theme}.png`), clip: { x: 0, y: 0, width: 480, height: 900 } });
+
+      await page.getByRole('button', { name: 'Toggle sidebar', exact: true }).click();
+      await expect(page.locator('[data-collapsible=icon]')).toHaveCount(1);
+      const rail = (await sidebar.boundingBox())!;
+      // Wait out the width transition before measuring.
+      await expect.poll(async () => Math.round((await sidebar.boundingBox())!.width)).toBe(64);
+      const link = page.getByRole('link', { name: 'Volumes' });
+      const box = (await link.boundingBox())!;
+      expect(Math.abs(box.x + box.width / 2 - (rail.x + 32))).toBeLessThanOrEqual(1);
+      await link.hover();
+      await expect(page.getByRole('tooltip')).toContainText('Volumes');
+      // Let the tooltip finish fading in.
+      await page.waitForTimeout(250);
+      await page.screenshot({ path: info.outputPath(`sidebar-collapsed-${theme}.png`), clip: { x: 0, y: 0, width: 480, height: 900 } });
+    }
+  });
+
   test('body never scrolls and nothing overflows horizontally', async ({ page }) => {
     for (const width of [900, 1440]) {
       await page.setViewportSize({ width, height: 800 });
@@ -187,6 +215,38 @@ test.describe('with a node', () => {
     await expect(page.getByText('Your sign-in expired')).toHaveCount(0);
     await page.locator('[data-sidebar=footer]').getByRole('button', { name: 'Sign in' }).click();
     await expect(account).toContainText('pwb', { timeout: 15_000 });
+  });
+
+  test('the account shows the provider picture, or initials when it fails to load', async ({ page, request }) => {
+    // A 1x1 PNG for the one that works; the other 404s, like a removed file.
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+      'base64',
+    );
+    await page.route('https://avatars.e2e.test/**', (route) =>
+      route.request().url().endsWith('/pat.png')
+        ? route.fulfill({ contentType: 'image/png', body: png })
+        : route.fulfill({ status: 404 }),
+    );
+    const account = page.getByRole('button', { name: 'Account' });
+
+    await nextSignIn(request, { name: 'pat', groups: ['homelab-users'], picture: 'https://avatars.e2e.test/pat.png' });
+    await addNodeOnline(page);
+    await expect(account.locator('img')).toHaveAttribute('src', 'https://avatars.e2e.test/pat.png');
+    await expect(account.locator('[data-slot=avatar-fallback]')).toHaveCount(0);
+
+    await page.goto('/settings');
+    await page.getByRole('button', { name: 'Sign out' }).click();
+    await expect(account).toContainText('Not signed in', { timeout: 15_000 });
+
+    await nextSignIn(request, { name: 'pat', groups: ['homelab-users'], picture: 'https://avatars.e2e.test/gone.png' });
+    const failed = page.waitForResponse('https://avatars.e2e.test/gone.png');
+    await page.locator('[data-sidebar=footer]').getByRole('button', { name: 'Sign in' }).click();
+    await expect(account).toContainText('pat', { timeout: 15_000 });
+    await failed;
+    await expect(account.locator('[data-slot=avatar-fallback]')).toHaveText('P');
+    await expect(account.locator('img')).toHaveCount(0);
+    await nextSignIn(request);
   });
 
   test('G then a letter goes to a page', async ({ page }) => {

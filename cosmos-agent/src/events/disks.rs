@@ -99,6 +99,7 @@ mod tests {
             total_bytes: 418_000_000_000,
             read_bps: 0.0,
             write_bps: 0.0,
+            io_available: true,
             kind: DiskKind::Ssd,
         }
     }

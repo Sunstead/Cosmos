@@ -1,8 +1,7 @@
 import { Link, useLocation } from '@tanstack/react-router';
-import { LogIn, LogOut, Settings, SunMoon, UserRound } from 'lucide-react';
+import { LogIn, LogOut, Settings, SunMoon } from 'lucide-react';
 import { useTheme } from '@/hooks/use-theme';
 import { themesOf } from '@/lib/themes';
-import { Avatar, AvatarBadge, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -23,36 +22,23 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from '@/components/ui/resizable-sidebar';
 import { useAccounts } from '@/hooks/use-accounts';
-import { Account, initials, openPrincipal, providerHost, roleLabel } from '@/lib/accounts';
+import { Account, openPrincipal, providerHost, roleLabel } from '@/lib/accounts';
 import { signOutAndSay, useSignIn } from '@/lib/sign-in';
 import { plural } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useNodeStore } from '@/stores/nodes';
 import { Hint, ShortcutKeys } from './hint';
 import { ThemeSwatch } from './theme-picker';
+import { UserAvatar } from './user-avatar';
 
 interface Identity {
   name: string;
   detail: string | null;
   picture: string | null;
-  /** Signed in: initials on the accent. Otherwise a muted person. */
+  /** Signed in: initials when there's no picture. Otherwise a muted person. */
   known: boolean;
   /** Something is waiting on you: a node wants a sign-in. */
   attention: boolean;
-}
-
-function UserAvatar({ who, size = 'default' }: { who: Identity; size?: 'default' | 'lg' }) {
-  return (
-    <Avatar size={size}>
-      {who.picture && <AvatarImage src={who.picture} alt='' />}
-      <AvatarFallback
-        className={cn('text-xs font-medium', who.known && 'bg-sidebar-primary text-sidebar-primary-foreground')}
-      >
-        {who.known ? initials(who.name) : <UserRound className='size-4' />}
-      </AvatarFallback>
-      {who.attention && <AvatarBadge className='bg-warning' />}
-    </Avatar>
-  );
 }
 
 function NameBlock({ who }: { who: Identity }) {

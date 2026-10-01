@@ -7,9 +7,9 @@ import { useContainersStore } from '@/stores/containers';
 import { useAwaiting } from '@/hooks/use-awaiting';
 import {
   formatBytes,
+  formatDiskRead,
+  formatDiskWrite,
   getCpuPct,
-  getDiskReadMbps,
-  getDiskWriteMbps,
   getMemUsagePct,
   getNetRxMbps,
   getNetTxMbps,
@@ -159,8 +159,8 @@ export function NodeDetailPage({ nodeId }: { nodeId: string }) {
               <HardwareStatDisplay nodeId={nodeId} metric='ram' name='Memory' color='var(--color-ram)' scale='percent' format={(h) => `${getMemUsagePct(h)}%`} />
               <HardwareStatDisplay nodeId={nodeId} metric='netRx' name='Net in' color='var(--color-network)' format={(h) => `${getNetRxMbps(h)} Mbps`} />
               <HardwareStatDisplay nodeId={nodeId} metric='netTx' name='Net out' color='var(--color-network)' format={(h) => `${getNetTxMbps(h)} Mbps`} />
-              <HardwareStatDisplay nodeId={nodeId} metric='diskRead' name='Read' color='var(--color-disk)' format={(h) => `${getDiskReadMbps(h)} MB/s`} />
-              <HardwareStatDisplay nodeId={nodeId} metric='diskWrite' name='Write' color='var(--color-disk)' format={(h) => `${getDiskWriteMbps(h)} MB/s`} />
+              <HardwareStatDisplay nodeId={nodeId} metric='diskRead' name='Read' color='var(--color-disk)' format={formatDiskRead} />
+              <HardwareStatDisplay nodeId={nodeId} metric='diskWrite' name='Write' color='var(--color-disk)' format={formatDiskWrite} />
             </Section>
 
             <Section title='Processor' contentClassName='space-y-4 p-4'>
