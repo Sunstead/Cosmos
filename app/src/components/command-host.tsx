@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useSidebar } from '@/components/ui/resizable-sidebar';
-import { useTheme } from '@/hooks/use-theme';
 import { useUiStore } from '@/stores/ui';
 import { PAGES } from '@/lib/navigation';
 import { getPlatform } from '@/lib/platform';
@@ -36,7 +35,6 @@ function focusPageSearch(): boolean {
 export function CommandHost() {
   const navigate = useNavigate();
   const { toggleSidebar } = useSidebar();
-  const { toggleTheme } = useTheme();
   const setPaletteOpen = useUiStore((s) => s.setPaletteOpen);
 
   // Latest actions in a ref so the listeners subscribe once.
@@ -55,15 +53,12 @@ export function CommandHost() {
         case 'sidebar':
           toggleSidebar();
           break;
-        case 'theme':
-          toggleTheme();
-          break;
         case 'reload':
           window.location.reload();
           break;
       }
     };
-  }, [navigate, toggleSidebar, toggleTheme, setPaletteOpen]);
+  }, [navigate, toggleSidebar, setPaletteOpen]);
 
   useEffect(() => {
     const macApp = getPlatform() === 'macos';
