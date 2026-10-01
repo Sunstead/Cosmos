@@ -18,6 +18,14 @@ export interface CanvasTokens {
   planetMid: number;
   planetShade: number;
   atmosphere: number;
+  /** Hologram colours for the 3D constellation, always on a dark viewport. */
+  holoSpace: string;
+  holoPrimary: string;
+  holoSecondary: string;
+  holoText: string;
+  holoDim: string;
+  /** Glow strength, 0..1. */
+  holoGlow: number;
 }
 
 let cached: CanvasTokens | null = null;
@@ -51,6 +59,12 @@ export function canvasTokens(): CanvasTokens {
     planetMid: num('--planet-mid', 50),
     planetShade: num('--planet-shade', 12),
     atmosphere: num('--planet-atmosphere', 0.5),
+    holoSpace: get('--holo-space'),
+    holoPrimary: get('--holo-primary'),
+    holoSecondary: get('--holo-secondary'),
+    holoText: get('--holo-text'),
+    holoDim: get('--holo-dim'),
+    holoGlow: num('--holo-glow', 0.8),
   };
   return cached;
 }
