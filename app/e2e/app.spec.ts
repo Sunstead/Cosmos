@@ -65,6 +65,37 @@ test.describe('empty app', () => {
     expect(first).toEqual({ theme: 'solar', body: false });
   });
 
+  test('a tech theme is square, bracketed and mono, from the first paint', async ({ page }) => {
+    // The style <html> has when its theme is first set, before anything renders.
+    await page.addInitScript(() => {
+      const w = window as unknown as { firstStyle?: string };
+      new MutationObserver((_, obs) => {
+        if (!document.documentElement?.dataset.theme || w.firstStyle) return;
+        w.firstStyle = document.documentElement.dataset.style;
+        obs.disconnect();
+      }).observe(document, { subtree: true, attributes: true, attributeFilter: ['data-theme'] });
+    });
+    await page.goto('/settings');
+    const html = page.locator('html');
+    await expect(html).toHaveAttribute('data-style', 'rounded');
+    await page.getByRole('group', { name: 'Tech' }).getByRole('radio', { name: 'Blueprint' }).click();
+    await expect(html).toHaveAttribute('data-theme', 'blueprint');
+    await expect(html).toHaveAttribute('data-style', 'tech');
+    await expect(html).toHaveClass(/light/);
+    await page.reload();
+    expect(await page.evaluate(() => (window as unknown as { firstStyle?: string }).firstStyle)).toBe('tech');
+
+    const card = page.locator('[data-slot=card]').first();
+    const look = await card.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return { radius: s.borderTopLeftRadius, image: s.backgroundImage };
+    });
+    expect(look.radius).toBe('0px');
+    expect(look.image).toContain('linear-gradient');
+    const font = await page.locator('[data-page-header] h1').evaluate((el) => getComputedStyle(el).fontFamily);
+    expect(font).toContain('JetBrains Mono');
+  });
+
   test('a pre-0.10 light choice becomes Cosmos Light', async ({ page }) => {
     await page.goto('/overview');
     await page.evaluate(() => localStorage.setItem('cosmos-theme', 'light'));
@@ -878,7 +909,8 @@ test.describe('logs', () => {
 test.describe('constellation preview', () => {
   // Fixture data on the dev server (src/dev/constellation-preview.tsx):
   // 5 nodes, 50 services and 15 devices, so the look can be judged without Docker.
-  for (const theme of ['dark', 'light']) {
+  // Cosmos Dark and Light (rounded), and Hologram (tech).
+  for (const theme of ['dark', 'light', 'hologram']) {
     test(`a full sky in ${theme}`, async ({ page }, info) => {
       await page.goto(`/e2e/constellation.html?theme=${theme}`);
       await expect(page.locator('[data-kind=node]').first()).toBeVisible();
@@ -901,6 +933,36 @@ test.describe('constellation preview', () => {
       await page.locator('[data-constellation]').screenshot({ path: info.outputPath(`constellation-${theme}-card.png`) });
     });
   }
+
+  test('labels never paint over the HUD panel', async ({ page }) => {
+    await page.goto('/e2e/constellation.html');
+    await page.locator('[data-kind=node]').first().click();
+    const hud = page.locator('[data-hud]');
+    await expect(hud).toBeVisible();
+    // Labels order themselves by z-index; the layer must keep that to itself.
+    const layer = page.getByRole('group', { name: 'Node map' });
+    expect(await layer.evaluate((el) => getComputedStyle(el).isolation)).toBe('isolate');
+    // Wherever a label overlaps the panel, the panel is what's on top.
+    for (let frame = 0; frame < 20; frame += 1) {
+      const covered = await page.evaluate(() => {
+        const panel = document.querySelector('[data-hud]')!;
+        const p = panel.getBoundingClientRect();
+        const bad: string[] = [];
+        for (const label of document.querySelectorAll<HTMLElement>('[data-kind]')) {
+          if (label.hidden) continue;
+          const r = label.getBoundingClientRect();
+          const x = (Math.max(r.left, p.left) + Math.min(r.right, p.right)) / 2;
+          const y = (Math.max(r.top, p.top) + Math.min(r.bottom, p.bottom)) / 2;
+          if (x < p.left || x > p.right || y < p.top || y > p.bottom || r.right < p.left || r.bottom < p.top) continue;
+          const hit = document.elementFromPoint(x, y);
+          if (hit && !panel.contains(hit)) bad.push(label.dataset.key ?? '');
+        }
+        return bad;
+      });
+      expect(covered).toEqual([]);
+      await page.waitForTimeout(100);
+    }
+  });
 
   test('hovering swaps the legend for the HUD, and a device focuses before it opens', async ({ page }) => {
     await page.goto('/e2e/constellation.html');

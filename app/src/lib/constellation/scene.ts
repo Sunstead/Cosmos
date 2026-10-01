@@ -12,6 +12,7 @@ import {
   BoxGeometry,
   BufferAttribute,
   BufferGeometry,
+  CanvasTexture,
   Color,
   EdgesGeometry,
   Group,
@@ -31,13 +32,16 @@ import {
   ShaderMaterial,
   SphereGeometry,
   TetrahedronGeometry,
+  Texture,
   Vector3,
   WebGLRenderer,
 } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { HostInfo } from '@/generated/HostInfo';
 import { canvasTokens, onThemeChange } from '@/lib/theme-tokens';
+import type { ThemeStyle } from '@/lib/themes';
 import { planetStyle } from '@/lib/planet';
+import { planetSprite } from '@/lib/planet-render';
 import { cssToRgba, ensureLightness, Rgba, rgbaToHex } from './colors';
 import {
   Body,
@@ -61,15 +65,18 @@ import {
 import { LabelLayer } from './hud';
 import {
   coreMaterial,
+  dotMaterial,
   gaugeMaterial,
   glowMaterial,
   gridMaterial,
+  planetMaterial,
   pulseMaterial,
   reticleMaterial,
   ringMaterial,
   sharedUniforms,
   SharedUniforms,
   shellMaterial,
+  solidMaterial,
   starMaterial,
   wireMaterial,
 } from './materials';
@@ -87,6 +94,12 @@ export interface FocusInfo {
 
 export interface SceneOptions {
   variant: Variant;
+  /**
+   * Rounded themes get a calm sky: planets as their avatar sprites, solid
+   * moons and devices, no floor, glow or wireframes. Tech themes get the
+   * full hologram. Changed later with `setStyle`.
+   */
+  style: ThemeStyle;
   reducedMotion: boolean;
   onFocusChange(info: FocusInfo): void;
   onOpen(body: Body): void;
@@ -138,6 +151,11 @@ interface NodeView {
   body: NodeBody;
   group: Group;
   core: Mesh<SphereGeometry, ShaderMaterial>;
+  /** Rounded: the planet sprite, drawn by the 2D renderer the avatars use. */
+  planet: Mesh<PlaneGeometry, ShaderMaterial>;
+  /** Name and theme the sprite was drawn for, and its size in body radii. */
+  planetFor: string;
+  planetScale: number;
   shell: Mesh<SphereGeometry, ShaderMaterial>;
   wire: LineSegments<BufferGeometry, ShaderMaterial>;
   rings: LineSegments<BufferGeometry, ShaderMaterial> | null;
@@ -163,6 +181,8 @@ interface NodeView {
 interface MoonView {
   body: MoonBody;
   mesh: Mesh<IcosahedronGeometry, ShaderMaterial>;
+  /** Rounded: a solid dot. */
+  dot: Mesh<PlaneGeometry, ShaderMaterial>;
   halo: Mesh<PlaneGeometry, ShaderMaterial> | null;
   /** Current slot, eased towards the body's. */
   slot: number;
@@ -174,6 +194,8 @@ interface ProbeView {
   group: Group;
   edges: LineSegments<BufferGeometry, ShaderMaterial>;
   fill: Mesh<BufferGeometry, ShaderMaterial>;
+  /** Rounded: the same shape, solid. */
+  solid: Mesh<BufferGeometry, ShaderMaterial>;
   pulse: Mesh<PlaneGeometry, ShaderMaterial> | null;
   slot: number;
 }
@@ -323,6 +345,7 @@ export class ConstellationScene {
   private moons = new Map<string, MoonView>();
   private probes = new Map<string, ProbeView>();
   private probeWorld = new Vector3();
+  private style: ThemeStyle;
   private stars: Points<BufferGeometry, ShaderMaterial>;
   private grid: Mesh<PlaneGeometry, ShaderMaterial>;
   private gridDrop = 3;
@@ -371,6 +394,7 @@ export class ConstellationScene {
     },
     private readonly opts: SceneOptions,
   ) {
+    this.style = opts.style;
     // Our own canvas, not React's: a WebGL context can't be re-made on a
     // canvas whose context was lost on purpose, which StrictMode's
     // mount-unmount-mount would otherwise do.
@@ -473,6 +497,7 @@ export class ConstellationScene {
     });
 
     this.applyTheme();
+    this.applyStyle();
     this.stops.push(onThemeChange(() => this.applyTheme()));
 
     const ro = new ResizeObserver((entries) => {
@@ -594,6 +619,23 @@ export class ConstellationScene {
     this.labels.focus(key);
   }
 
+  /** Rounded or tech, when the theme changes. Every body has both looks built; this picks one. */
+  setStyle(style: ThemeStyle) {
+    if (style === this.style) return;
+    this.style = style;
+    this.applyStyle();
+  }
+
+  private applyStyle() {
+    const tech = this.style === 'tech';
+    this.grid.visible = tech;
+    this.core.visible = tech && (this.layout?.nodes.length ?? 0) > 1;
+    for (const view of this.nodes.values()) this.styleBodyForStyle(view);
+    for (const view of this.moons.values()) this.styleMoon(view);
+    for (const view of this.probes.values()) this.styleProbe(view);
+    this.invalidate();
+  }
+
   stats(): SceneStats {
     const n = this.frameTimes.length;
     return {
@@ -694,6 +736,10 @@ export class ConstellationScene {
       group.add(rings);
     }
 
+    const planet = new Mesh(this.geo.plane, planetMaterial(this.shared, { map: new Texture() }));
+    planet.frustumCulled = false;
+    group.add(planet);
+
     const glow = new Mesh(this.geo.plane, glowMaterial(this.shared, { color: p.primary, size: 1, intensity: 0.5 }));
     glow.frustumCulled = false;
     glow.renderOrder = -1;
@@ -719,6 +765,9 @@ export class ConstellationScene {
       body,
       group,
       core,
+      planet,
+      planetFor: '',
+      planetScale: 1.2,
       shell,
       wire,
       rings,
@@ -744,7 +793,7 @@ export class ConstellationScene {
     view.unsubscribe = this.source.onHost(body.id, (host) => {
       view.cpu = Math.min(Math.max(host.cpu_pct / 100, 0), 1);
       view.mem = host.mem_total_bytes > 0 ? Math.min(host.mem_used_bytes / host.mem_total_bytes, 1) : 0;
-      this.labels.setSub(body.key, view.body.state === 'online' ? `${Math.round(host.cpu_pct)}% cpu` : this.nodeSub(view.body));
+      this.labels.setSub(body.key, view.body.state === 'online' ? `${Math.round(host.cpu_pct)}% CPU` : this.nodeSub(view.body));
       this.styleGauge(view);
       if (this.opts.reducedMotion) this.invalidate();
     });
@@ -783,8 +832,10 @@ export class ConstellationScene {
       this.geo.moon,
       shellMaterial(this.shared, { color: this.palette.secondary, fill: 0.32 }),
     );
-    this.world.add(mesh);
-    const view: MoonView = { body, mesh, halo: null, slot: body.slot, size: 0.2 };
+    const dot = new Mesh(this.geo.plane, dotMaterial(this.shared, { color: this.palette.secondary }));
+    dot.frustumCulled = false;
+    this.world.add(mesh, dot);
+    const view: MoonView = { body, mesh, dot, halo: null, slot: body.slot, size: 0.2 };
     this.moons.set(body.key, view);
     this.styleMoon(view);
   }
@@ -795,11 +846,12 @@ export class ConstellationScene {
     const group = new Group();
     const edgeLines = new LineSegments(edges, wireMaterial(this.shared, { color: this.palette.probe, opacity: 0.9 }));
     const fill = new Mesh(solid, shellMaterial(this.shared, { color: this.palette.probe, fill: 0.06 }));
-    group.add(edgeLines, fill);
+    const solidMesh = new Mesh(solid, solidMaterial({ color: this.palette.probe }));
+    group.add(edgeLines, fill, solidMesh);
     group.scale.setScalar(PROBE_SIZE);
     group.rotation.set(seed * TAU, seed * 3.1, 0);
     this.probeRing.add(group);
-    const view: ProbeView = { body, group, edges: edgeLines, fill, pulse: null, slot: body.slot };
+    const view: ProbeView = { body, group, edges: edgeLines, fill, solid: solidMesh, pulse: null, slot: body.slot };
     this.probes.set(body.key, view);
     this.styleProbe(view);
   }
@@ -841,6 +893,7 @@ export class ConstellationScene {
     const node = this.nodes.get(key);
     if (node) {
       node.unsubscribe();
+      (node.planet.material.uniforms.uMap.value as Texture).dispose();
       dispose(node.group);
       for (const s of node.shells) s.ring.mesh.geometry.dispose();
       node.rings?.geometry.dispose();
@@ -857,6 +910,7 @@ export class ConstellationScene {
     const moon = this.moons.get(key);
     if (moon) {
       dispose(moon.mesh);
+      dispose(moon.dot);
       if (moon.halo) dispose(moon.halo);
       this.moons.delete(key);
     }
@@ -881,9 +935,39 @@ export class ConstellationScene {
     view.shell.material.uniforms.uFill.value = state === 'online' ? 0.03 : 0;
     if (view.rings) view.rings.material.uniforms.uColor.value = tone;
     view.gauge.visible = state === 'online';
-    view.link.visible = state === 'online';
+    this.drawPlanet(view);
+    this.styleBodyForStyle(view);
     if (state !== 'online') this.labels.setSub(view.body.key, this.nodeSub(view.body));
     this.styleGauge(view);
+  }
+
+  /** (Re)draws a node's planet sprite when its name or the theme changed. */
+  private drawPlanet(view: NodeView) {
+    const t = canvasTokens();
+    const key = `${view.body.name}|${t.theme}`;
+    if (view.planetFor === key) return;
+    view.planetFor = key;
+    // Drawn at 64 CSS px of body radius, twice over for sharpness.
+    const R = 64;
+    const sprite = planetSprite(view.body.name || view.body.id, R, 2);
+    const u = view.planet.material.uniforms;
+    (u.uMap.value as Texture).dispose();
+    u.uMap.value = new CanvasTexture(sprite.canvas);
+    // The sprite spans the planet and its rings: its side in body radii.
+    view.planetScale = sprite.size / R;
+  }
+
+  /** Which of a node's meshes show, for the theme's style. */
+  private styleBodyForStyle(view: NodeView) {
+    const tech = this.style === 'tech';
+    view.planet.visible = !tech;
+    view.core.visible = tech;
+    view.shell.visible = tech;
+    view.wire.visible = tech;
+    if (view.rings) view.rings.visible = tech;
+    view.glow.visible = tech;
+    view.drop.visible = tech;
+    view.foot.mesh.visible = tech;
   }
 
   private styleGauge(view: NodeView) {
@@ -895,9 +979,15 @@ export class ConstellationScene {
   private styleMoon(view: MoonView) {
     const p = this.palette;
     const s = view.body.state;
-    view.mesh.material.uniforms.uColor.value = s === 'ok' ? p.secondary : s === 'partial' ? p.warn : s === 'down' ? p.err : p.dim;
+    const tone = s === 'ok' ? p.secondary : s === 'partial' ? p.warn : s === 'down' ? p.err : p.dim;
+    view.mesh.material.uniforms.uColor.value = tone;
+    view.dot.material.uniforms.uColor.value = tone;
+    const tech = this.style === 'tech';
+    view.mesh.visible = tech;
+    view.dot.visible = !tech;
     // A halo only on moons in trouble, so problems stand out from a distance.
-    const troubled = s === 'partial' || s === 'down';
+    // Rounded themes let the dot's colour say it.
+    const troubled = tech && (s === 'partial' || s === 'down');
     if (troubled && !view.halo) {
       view.halo = new Mesh(this.geo.plane, glowMaterial(this.shared, { color: p.warn, size: 1.4, intensity: 0.8 }));
       view.halo.frustumCulled = false;
@@ -918,6 +1008,12 @@ export class ConstellationScene {
     view.edges.material.uniforms.uOpacity.value = online ? 0.95 : 0.4;
     view.fill.material.uniforms.uColor.value = tone;
     view.fill.material.uniforms.uOpacity.value = online ? 1 : 0.25;
+    view.solid.material.uniforms.uColor.value = tone;
+    view.solid.material.uniforms.uOpacity.value = online ? 0.95 : 0.4;
+    const tech = this.style === 'tech';
+    view.edges.visible = tech;
+    view.fill.visible = tech;
+    view.solid.visible = !tech;
     const waking = wol === 'waking';
     if (waking && !view.pulse) {
       view.pulse = new Mesh(this.geo.plane, pulseMaterial(this.shared, { color: p.warn, size: 2.6 }));
@@ -1033,7 +1129,8 @@ export class ConstellationScene {
     gu.uStep.value = 0.5 / Math.max(Math.round(extent / 2), 4);
     this.probeOrbit.mesh.visible = layout.probes.length > 0;
     this.setRingRadius(this.probeOrbit, layout.probeRadius);
-    this.core.visible = layout.nodes.length > 1;
+    this.core.visible = this.style === 'tech' && layout.nodes.length > 1;
+    this.grid.visible = this.style === 'tech';
     this.controls.minDistance = 2.5;
     this.controls.maxDistance = this.homeDistance() * 1.8;
   }
@@ -1439,6 +1536,9 @@ export class ConstellationScene {
       view.shell.material.uniforms.uOpacity.value = presence;
       view.wire.material.uniforms.uOpacity.value = (online ? 0.32 : 0.22) * presence;
       view.core.material.uniforms.uOpacity.value = presence;
+      const pu = view.planet.material.uniforms;
+      pu.uSize.value = view.radius * view.planetScale;
+      pu.uOpacity.value = view.presence * (online ? 1 : 0.45);
       // Bodies are scaled by radius; billboards are sized in world units, so undo it.
       const g = view.glow.material.uniforms;
       g.uSize.value = view.radius * 5;
@@ -1474,7 +1574,7 @@ export class ConstellationScene {
       link.setXYZ(0, x + toCore.x, 0, z + toCore.z);
       link.setXYZ(1, 0, 0, 0);
       link.needsUpdate = true;
-      view.link.visible = online && view.orbitR > 0.5 && this.nodes.size > 1;
+      view.link.visible = this.style === 'tech' && online && view.orbitR > 0.5 && this.nodes.size > 1;
 
       // Moon shells.
       view.shells.forEach((s, i) => {
@@ -1501,6 +1601,10 @@ export class ConstellationScene {
       view.mesh.scale.setScalar(view.size);
       const presence = node.presence * (view.body.state === 'stopped' ? 0.5 : 1);
       view.mesh.material.uniforms.uOpacity.value = presence;
+      view.dot.position.copy(view.mesh.position);
+      const du = view.dot.material.uniforms;
+      du.uSize.value = view.size * 1.3;
+      du.uOpacity.value = presence;
       if (view.halo) {
         view.halo.position.copy(view.mesh.position);
         view.halo.material.uniforms.uIntensity.value = 0.8 * presence;
@@ -1514,8 +1618,10 @@ export class ConstellationScene {
       view.slot = snap ? view.body.slot : approachTurn(view.slot, view.body.slot, 2, dt);
       const a = view.slot * TAU + this.probeAngle;
       view.group.position.set(Math.cos(a) * probeR, 0, Math.sin(a) * probeR);
-      view.group.rotation.y += motion * 0.5;
-      view.group.rotation.x += motion * 0.21;
+      if (this.style === 'tech') {
+        view.group.rotation.y += motion * 0.5;
+        view.group.rotation.x += motion * 0.21;
+      }
       view.pulse?.position.copy(view.group.position);
     }
     const dim = selected ? 0.5 : 1;
