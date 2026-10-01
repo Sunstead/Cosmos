@@ -1,19 +1,44 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en" class="dark" data-theme="cosmos-dark" style="color-scheme: dark">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Cosmos</title>
     <script>
-      // Apply the saved theme before first paint to avoid a light/dark flash.
+      // Apply the saved theme before first paint, so nothing flashes.
+      // Keep the ids and schemes in step with src/lib/themes.ts (a test checks).
       (function () {
+        var themes = {
+          'cosmos-dark': 'dark',
+          nebula: 'dark',
+          aurora: 'dark',
+          mars: 'dark',
+          'event-horizon': 'dark',
+          eclipse: 'dark',
+          'deep-field': 'dark',
+          'cosmos-light': 'light',
+          solar: 'light',
+          lunar: 'light',
+          comet: 'light',
+        };
+        var scheme = function (id) {
+          return Object.prototype.hasOwnProperty.call(themes, id) ? themes[id] : null;
+        };
         try {
-          var t = localStorage.getItem('cosmos-theme') || 'dark';
+          var t = localStorage.getItem('cosmos-theme') || 'cosmos-dark';
           if (t === 'system') {
-            t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            var s = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            t = localStorage.getItem('cosmos-theme-' + s);
+            if (scheme(t) !== s) t = 'cosmos-' + s;
+          } else if (t === 'dark' || t === 'light') {
+            t = 'cosmos-' + t; // before 0.10
           }
-          document.documentElement.className = t;
+          if (!scheme(t)) t = 'cosmos-dark';
+          var root = document.documentElement;
+          root.setAttribute('data-theme', t);
+          root.className = scheme(t);
+          root.style.colorScheme = scheme(t);
         } catch (e) {}
       })();
     </script>

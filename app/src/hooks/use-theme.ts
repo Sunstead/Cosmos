@@ -1,13 +1,18 @@
 import { createContext, useContext } from 'react';
-
-export type Theme = 'dark' | 'light' | 'system';
-export type ResolvedTheme = 'dark' | 'light';
+import type { Scheme, ThemeDef, ThemePair } from '@/lib/themes';
 
 export type ThemeState = {
-  theme: Theme;
-  resolvedTheme: ResolvedTheme;
-  setTheme: (theme: Theme) => void;
-  toggleTheme: () => void;
+  /** The theme chosen outright. While following the system, the one showing. */
+  themeId: string;
+  /** Picks a theme, and stops following the system. */
+  setThemeId: (id: string) => void;
+  followSystem: boolean;
+  setFollowSystem: (follow: boolean) => void;
+  /** The themes Follow system uses for light and dark. */
+  pair: ThemePair;
+  setPair: (scheme: Scheme, id: string) => void;
+  /** The theme on screen now. */
+  resolved: ThemeDef;
 };
 
 export const ThemeContext = createContext<ThemeState | null>(null);

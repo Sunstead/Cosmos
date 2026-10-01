@@ -1,11 +1,9 @@
 import { useState } from 'react';
-import { Info, Monitor, Moon, PencilLine, RefreshCw, Sun, Trash } from 'lucide-react';
+import { Info, PencilLine, RefreshCw, Trash } from 'lucide-react';
 import { useNodeStore, nodeDisplayName } from '@/stores/nodes';
 import { useNodeMeta } from '@/api/queries';
-import { useTheme, Theme } from '@/hooks/use-theme';
 import { PageHeader } from '@/components/page-header';
 import { Section } from '@/components/section';
-import { SegmentedControl } from '@/components/segmented-control';
 import { NodeStatusBadge } from '@/components/node-status-badge';
 import { NodeAvatar } from '@/components/node-planet';
 import { ConfirmDialog } from '@/components/confirm-dialog';
@@ -22,6 +20,7 @@ import { ShortcutId } from '@/lib/shortcuts';
 import { getPlatform } from '@/lib/platform';
 import { ServerOff } from 'lucide-react';
 import { DeviceNotifications, NodeChannels } from '@/components/notify-settings';
+import { ThemeSettings } from '@/components/theme-picker';
 
 const CAPS = [
   ['container_actions', 'Actions'],
@@ -120,7 +119,6 @@ const SHORTCUT_ROWS: { id: ShortcutId; label: string }[] = [
   { id: 'palette', label: 'Command palette' },
   { id: 'search', label: 'Search this page' },
   { id: 'sidebar', label: 'Toggle sidebar' },
-  { id: 'theme', label: 'Toggle theme' },
   { id: 'settings', label: 'Settings' },
   ...PAGES.filter((p) => p.shortcut.startsWith('go.')).map((p) => ({
     id: p.shortcut,
@@ -132,7 +130,6 @@ const PLATFORM_LABEL = { macos: 'macOS', windows: 'Windows', linux: 'Linux', web
 
 export function SettingsPage() {
   const nodes = useNodeStore((s) => s.nodes);
-  const { theme, setTheme } = useTheme();
   // Joined so the list only changes when a node gains or loses the feature.
   const notifyKey = useNodeStore((s) =>
     s.nodes
@@ -176,32 +173,20 @@ export function SettingsPage() {
         <NodeChannels key={id} nodeId={id} />
       ))}
 
-      <div className='grid gap-4 @4xl:grid-cols-2'>
-        <Section title='Appearance' contentClassName='flex items-center justify-between gap-4 p-4'>
-          <span className='text-sm'>Theme</span>
-          <SegmentedControl<Theme>
-            label='Theme'
-            value={theme}
-            onChange={setTheme}
-            options={[
-              { value: 'dark', label: 'Dark', icon: Moon },
-              { value: 'light', label: 'Light', icon: Sun },
-              { value: 'system', label: 'System', icon: Monitor },
-            ]}
-          />
-        </Section>
+      <Section title='Appearance' data-appearance>
+        <ThemeSettings />
+      </Section>
 
-        <Section title='About' contentClassName='space-y-2 p-4 text-sm'>
-          <div className='flex justify-between'>
-            <span className='text-muted-foreground'>Version</span>
-            <span className='font-mono tabular-nums'>{__APP_VERSION__}</span>
-          </div>
-          <div className='flex justify-between'>
-            <span className='text-muted-foreground'>Platform</span>
-            <span>{PLATFORM_LABEL[getPlatform()]}</span>
-          </div>
-        </Section>
-      </div>
+      <Section title='About' contentClassName='grid gap-2 p-4 text-sm @4xl:grid-cols-2 @4xl:gap-8'>
+        <div className='flex justify-between'>
+          <span className='text-muted-foreground'>Version</span>
+          <span className='font-mono tabular-nums'>{__APP_VERSION__}</span>
+        </div>
+        <div className='flex justify-between'>
+          <span className='text-muted-foreground'>Platform</span>
+          <span>{PLATFORM_LABEL[getPlatform()]}</span>
+        </div>
+      </Section>
 
       <Section title='Keyboard shortcuts' contentClassName='grid @2xl:grid-cols-2'>
         {SHORTCUT_ROWS.map((r) => (
