@@ -5,10 +5,10 @@ import { useHostInfo, useNodeMeta } from '@/api/queries';
 import { useNodeName } from '@/stores/nodes';
 import {
   formatBytes,
+  formatDiskRead,
+  formatDiskWrite,
   getCpuPct,
-  getDiskReadMbps,
   getDiskType,
-  getDiskWriteMbps,
   getMemUsagePct,
   getNetRxMbps,
   getNetTxMbps,
@@ -131,8 +131,8 @@ export const NodeCard = memo(function NodeCard({ nodeId }: { nodeId: string }) {
               nodeId={nodeId}
               icon1={BookOpen}
               icon2={PencilLine}
-              format1={(h) => `${getDiskReadMbps(h)} MB/s`}
-              format2={(h) => `${getDiskWriteMbps(h)} MB/s`}
+              format1={formatDiskRead}
+              format2={formatDiskWrite}
               color='var(--color-disk)'
               side='right'
             />
