@@ -2,10 +2,13 @@
  * CSS tokens for canvas drawing. Canvas can't resolve `var(--x)`, so values
  * are read from the computed style and cached per theme id.
  */
+import type { ThemeStyle } from './themes';
 
 export interface CanvasTokens {
   /** The theme id the values were read under. */
   theme: string;
+  /** Rounded or tech; a theme's style never changes, so the id still keys the cache. */
+  style: ThemeStyle;
   success: string;
   warning: string;
   error: string;
@@ -19,7 +22,7 @@ export interface CanvasTokens {
   planetMid: number;
   planetShade: number;
   atmosphere: number;
-  /** Hologram: a dark viewport in every theme, light themes too. */
+  /** The constellation: a dark viewport in every theme, light themes too. */
   holoSpace: string;
   holoPrimary: string;
   holoSecondary: string;
@@ -48,6 +51,7 @@ export function canvasTokens(): CanvasTokens {
 
   cached = {
     theme,
+    style: document.documentElement.dataset.style === 'tech' ? 'tech' : 'rounded',
     success: get('--success'),
     warning: get('--warning'),
     error: get('--error'),
@@ -70,7 +74,7 @@ export function canvasTokens(): CanvasTokens {
   return cached;
 }
 
-/** Calls `fn` when the theme on <html> (its id or scheme class) changes. */
+/** Calls `fn` when the theme on <html> (its id, style or scheme class) changes. */
 export function onThemeChange(fn: () => void): () => void {
   let last = currentTheme();
   const observer = new MutationObserver(() => {
@@ -80,6 +84,6 @@ export function onThemeChange(fn: () => void): () => void {
     cached = null;
     fn();
   });
-  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme'] });
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme', 'data-style'] });
   return () => observer.disconnect();
 }

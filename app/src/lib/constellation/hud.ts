@@ -24,33 +24,42 @@ interface Label {
   x: number;
   y: number;
   z: number;
+  /** Measured size, for whole-pixel anchoring; null when the text changed. */
+  size: { w: number; h: number } | null;
   shown: boolean;
   text: string;
   subText: string;
   tone: string;
 }
 
+// Type, case and glow depend on the theme's style: see .sky-label in App.css.
 const BASE =
-  'group pointer-events-auto absolute top-0 left-0 flex select-none items-center gap-1 whitespace-nowrap rounded-sm ' +
-  'px-1 py-px leading-tight outline-none will-change-transform label-hud ' +
-  'text-[var(--holo-text)] [text-shadow:0_0_6px_var(--holo-halo),0_0_2px_var(--holo-space)] ' +
+  'sky-label group pointer-events-auto absolute top-0 left-0 flex select-none items-center gap-1 whitespace-nowrap rounded-sm ' +
+  'px-1 py-px leading-tight outline-none text-[var(--holo-text)] ' +
   'focus-visible:bg-[var(--holo-veil)] focus-visible:ring-1 focus-visible:ring-[var(--holo-primary)]';
 
 const KIND_CLASS: Record<Body['kind'], string> = {
-  node: 'flex-col gap-0 text-[0.6875rem] tracking-[0.16em]',
-  moon: 'text-2xs tracking-[0.08em] normal-case',
-  probe: 'text-2xs tracking-[0.1em] normal-case text-[var(--holo-dim)] hover:text-[var(--holo-text)] focus-visible:text-[var(--holo-text)]',
+  node: 'flex-col gap-0 text-xs',
+  moon: 'text-2xs',
+  probe: 'text-2xs text-[var(--holo-dim)] hover:text-[var(--holo-text)] focus-visible:text-[var(--holo-text)]',
 };
 
-/** Where a label sits relative to its body's screen point. */
-const ANCHOR: Record<Body['kind'], string> = {
-  node: 'translate(-50%, 0)',
-  moon: 'translate(10px, -50%)',
-  probe: 'translate(-50%, 8px)',
+/**
+ * Where a label sits relative to its body's screen point, from its measured
+ * size; the total is snapped to device pixels in `place`. Not
+ * `translate(-50%)`: half a pixel off the grid is what blurred the CPU line
+ * under a node.
+ */
+const ANCHOR: Record<Body['kind'], (w: number, h: number) => [number, number]> = {
+  node: (w) => [-w / 2, 0],
+  moon: (_, h) => [10, -h / 2],
+  probe: (w) => [-w / 2, 8],
 };
 
 export class LabelLayer {
   private labels = new Map<string, Label>();
+  /** Device pixels per CSS pixel: labels land on the screen's own grid. */
+  private dpr = 1;
   private order = '';
   private disposed = false;
 
@@ -79,6 +88,7 @@ export class LabelLayer {
       if (label.text !== body.name) {
         label.text = body.name;
         (label.el.firstChild as HTMLElement).textContent = body.name;
+        label.size = null;
       }
       label.el.setAttribute('aria-label', describe(body));
       const tone = toneOf(body);
@@ -110,6 +120,13 @@ export class LabelLayer {
     if (!label?.sub || label.subText === text) return;
     label.subText = text;
     label.sub.textContent = text;
+    label.size = null;
+  }
+
+  setPixelRatio(dpr: number) {
+    if (dpr === this.dpr) return;
+    this.dpr = dpr;
+    for (const label of this.labels.values()) label.x = NaN;
   }
 
   /** Shows a label at a screen point; `z` orders overlapping labels nearest first. */
@@ -120,11 +137,22 @@ export class LabelLayer {
       label.shown = true;
       label.el.hidden = false;
     }
-    // NaN on the first placement, so the comparison must fail towards writing.
-    if (!(Math.abs(label.x - x) <= 0.2 && Math.abs(label.y - y) <= 0.2)) {
-      label.x = x;
-      label.y = y;
-      label.el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) ${ANCHOR[label.kind]}`;
+    // Measured once per text change; a layout read, but not every frame.
+    let moved = false;
+    if (!label.size) {
+      label.size = { w: label.el.offsetWidth, h: label.el.offsetHeight };
+      moved = true;
+    }
+    // Snapped to device pixels, not CSS ones: crisp text that still moves
+    // in the screen's finest steps (whole CSS pixels jumped 2-3 at a time).
+    const [dx, dy] = ANCHOR[label.kind](label.size.w, label.size.h);
+    const snap = (v: number) => Math.round(v * this.dpr) / this.dpr;
+    const px = snap(x + dx);
+    const py = snap(y + dy);
+    if (moved || px !== label.x || py !== label.y) {
+      label.x = px;
+      label.y = py;
+      label.el.style.transform = `translate(${px}px, ${py}px)`;
     }
     const zi = Math.round(10_000 - z * 10);
     if (zi !== label.z) {
@@ -187,7 +215,7 @@ export class LabelLayer {
     let sub: HTMLSpanElement | null = null;
     if (body.kind === 'node') {
       sub = document.createElement('span');
-      sub.className = 'text-[0.625rem] tracking-[0.1em] text-[var(--holo-dim)] group-data-[tone=err]:text-[var(--holo-err)]';
+      sub.className = 'sky-sub text-2xs group-data-[tone=err]:text-[var(--holo-err)]';
       sub.setAttribute('aria-hidden', 'true');
       el.append(sub);
     } else {
@@ -199,7 +227,19 @@ export class LabelLayer {
         'group-data-[tone=warn]:bg-[var(--holo-warn)] group-data-[tone=err]:bg-[var(--holo-err)] group-data-[tone=dim]:bg-[var(--holo-dim)]';
       el.append(dot);
     }
-    const label: Label = { el, sub, kind: body.kind, x: NaN, y: NaN, z: NaN, shown: false, text: '', subText: '', tone: '' };
+    const label: Label = {
+      el,
+      sub,
+      kind: body.kind,
+      x: NaN,
+      y: NaN,
+      z: NaN,
+      size: null,
+      shown: false,
+      text: '',
+      subText: '',
+      tone: '',
+    };
     this.labels.set(body.key, label);
     this.root.append(el);
     return label;

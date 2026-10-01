@@ -79,13 +79,13 @@
   --planet-shade: 26%;
   --planet-atmosphere: 0.35;
 
-  /* Hologram (the 3D constellation). Always a dark viewport, also here. */
-  --holo-space: oklch(0.2 0.035 258);
-  --holo-primary: oklch(0.82 0.12 215);
-  --holo-secondary: oklch(0.76 0.13 285);
-  --holo-text: oklch(0.95 0.02 225);
-  --holo-dim: oklch(0.58 0.04 245);
-  --holo-glow: 0.65;
+  /* The constellation: a dark viewport even here, in the theme's own zinc. */
+  --holo-space: #0c0c10;
+  --holo-primary: oklch(0.88 0.006 286);
+  --holo-secondary: oklch(0.74 0.03 280);
+  --holo-text: oklch(0.97 0.002 286);
+  --holo-dim: oklch(0.56 0.014 286);
+  --holo-glow: 0.5;
 }
 
 /* The dark theme Cosmos was designed for, and the default. */
@@ -162,10 +162,11 @@
   --planet-shade: 12%;
   --planet-atmosphere: 0.5;
 
-  --holo-space: oklch(0.13 0.025 262);
-  --holo-primary: oklch(0.84 0.12 220);
-  --holo-secondary: oklch(0.78 0.13 290);
-  --holo-text: oklch(0.93 0.03 225);
-  --holo-dim: oklch(0.55 0.04 240);
-  --holo-glow: 0.85;
+  /* The constellation: a touch deeper than the page, in the theme's own whites. */
+  --holo-space: #000104;
+  --holo-primary: oklch(0.9 0.008 270);
+  --holo-secondary: oklch(0.76 0.04 275);
+  --holo-text: oklch(0.97 0.003 270);
+  --holo-dim: oklch(0.55 0.015 280);
+  --holo-glow: 0.5;
 }
