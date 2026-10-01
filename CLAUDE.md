@@ -177,10 +177,16 @@ microtask.
 
 **Shell.** `layouts/AppLayout.tsx` mounts the title bar, sidebar, command
 palette, add-node dialog and `CommandHost` (shortcuts + native menu events).
-The sidebar's foot is `AccountMenu`: who you are (initials on
-`--sidebar-primary`, or an https `picture` claim), role, a gear for Settings
+The sidebar's foot is `AccountMenu`: who you are, role, a gear for Settings
 (which isn't in the nav list) and a menu with settings, theme and sign in or
-out. Title bar controls are all ghost `Button`s so they match.
+out. `UserAvatar` (also in Settings) shows the access token's `picture` claim,
+only if it is `https://` (`setSession`), else initials on the neutral
+`--sidebar-accent` with a `--sidebar-border` ring, never the primary colour.
+Radix swaps the image in only once it has loaded, so a 404 or an offline
+provider never shows a broken image. On Jupiter the picture is the Authentik
+user's `avatar` attribute, a URL Caddy serves from Authentik's media volume
+(Jupiter's `docs/AVATARS.md`): Authentik 2026.8 only serves its own media with
+a 15-minute signed token. Title bar controls are all ghost `Button`s so they match.
 Routes are lazy (`lazyRouteComponent`) and pick a layout through
 `staticData.layout`: `scroll` (default) or `fill` (logs). The body never
 scrolls; `<main>` does. Content is a `@container`, so layouts use container

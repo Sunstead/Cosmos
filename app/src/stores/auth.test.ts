@@ -52,6 +52,29 @@ describe('getAccessToken', () => {
     expect(localStorage.getItem(`cosmos-oidc:${auth.issuer}`)).toBe('rt2');
   });
 
+  it('takes only an https picture from the token', async () => {
+    const pictureFrom = async (picture: string) => {
+      useAuthStore.setState({ sessions: {} });
+      localStorage.setItem(`cosmos-oidc:${auth.issuer}`, 'rt');
+      const access = jwt({ exp: Math.floor(Date.now() / 1000) + 600, preferred_username: 'pat', picture });
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (url: string) =>
+          url.includes('openid-configuration')
+            ? new Response(JSON.stringify(discovery))
+            : new Response(JSON.stringify({ access_token: access, refresh_token: 'rt2' })),
+        ),
+      );
+      await getAccessToken(auth);
+      return useAuthStore.getState().sessions[auth.issuer].picture;
+    };
+
+    expect(await pictureFrom('https://auth.example/avatars/pat.png')).toBe('https://auth.example/avatars/pat.png');
+    expect(await pictureFrom('http://auth.example/avatars/pat.png')).toBeNull();
+    expect(await pictureFrom('data:image/svg+xml;base64,PHN2Zy8+')).toBeNull();
+    expect(await pictureFrom('/static/dist/assets/images/user_default.png')).toBeNull();
+  });
+
   it('means "sign in" when there is nothing to refresh with', async () => {
     expect(await getAccessToken(auth)).toBeNull();
   });

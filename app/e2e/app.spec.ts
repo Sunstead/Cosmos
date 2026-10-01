@@ -136,6 +136,38 @@ test.describe('with a node', () => {
     await expect(account).toContainText('pwb', { timeout: 15_000 });
   });
 
+  test('the account shows the provider picture, or initials when it fails to load', async ({ page, request }) => {
+    // A 1x1 PNG for the one that works; the other 404s, like a removed file.
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+      'base64',
+    );
+    await page.route('https://avatars.e2e.test/**', (route) =>
+      route.request().url().endsWith('/pat.png')
+        ? route.fulfill({ contentType: 'image/png', body: png })
+        : route.fulfill({ status: 404 }),
+    );
+    const account = page.getByRole('button', { name: 'Account' });
+
+    await nextSignIn(request, { name: 'pat', groups: ['homelab-users'], picture: 'https://avatars.e2e.test/pat.png' });
+    await addNodeOnline(page);
+    await expect(account.locator('img')).toHaveAttribute('src', 'https://avatars.e2e.test/pat.png');
+    await expect(account.locator('[data-slot=avatar-fallback]')).toHaveCount(0);
+
+    await page.goto('/settings');
+    await page.getByRole('button', { name: 'Sign out' }).click();
+    await expect(account).toContainText('Not signed in', { timeout: 15_000 });
+
+    await nextSignIn(request, { name: 'pat', groups: ['homelab-users'], picture: 'https://avatars.e2e.test/gone.png' });
+    const failed = page.waitForResponse('https://avatars.e2e.test/gone.png');
+    await page.locator('[data-sidebar=footer]').getByRole('button', { name: 'Sign in' }).click();
+    await expect(account).toContainText('pat', { timeout: 15_000 });
+    await failed;
+    await expect(account.locator('[data-slot=avatar-fallback]')).toHaveText('P');
+    await expect(account.locator('img')).toHaveCount(0);
+    await nextSignIn(request);
+  });
+
   test('G then a letter goes to a page', async ({ page }) => {
     await page.goto('/overview');
     await expect(page.locator('[data-page-header]')).toBeVisible();
