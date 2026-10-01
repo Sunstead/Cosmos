@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { contrast, distance, over, parseColor, Rgba } from '@/test/color';
-import { DEFAULT_PAIR, DEFAULT_THEME, THEMES, themeById } from '@/lib/themes';
+import { DEFAULT_PAIR, DEFAULT_THEME, normalizeSlot, techThemes, THEMES, themeById, themesOf } from '@/lib/themes';
 
 // Read from disk: vitest stubs CSS imports, `?raw` included.
 const files = readdirSync(__dirname)
@@ -79,6 +79,20 @@ describe('themes', () => {
     expect(themeById(DEFAULT_THEME)?.scheme).toBe('dark');
     expect(themeById(DEFAULT_PAIR.dark)?.scheme).toBe('dark');
     expect(themeById(DEFAULT_PAIR.light)?.scheme).toBe('light');
+    // Follow system pairs rounded themes only.
+    expect(themeById(DEFAULT_PAIR.dark)?.style).toBe('rounded');
+    expect(themeById(DEFAULT_PAIR.light)?.style).toBe('rounded');
+  });
+
+  it('splits rounded from tech, and only pairs rounded themes', () => {
+    expect(techThemes().map((t) => t.id)).toEqual(['hologram', 'terminal', 'red-alert', 'blueprint']);
+    for (const scheme of ['dark', 'light'] as const) {
+      expect(themesOf(scheme).every((t) => t.style === 'rounded' && t.scheme === scheme)).toBe(true);
+    }
+    // A tech theme left in a Follow system slot falls back to the default pair.
+    expect(normalizeSlot('dark', 'hologram')).toBe(DEFAULT_PAIR.dark);
+    expect(normalizeSlot('light', 'blueprint')).toBe(DEFAULT_PAIR.light);
+    expect(normalizeSlot('dark', 'nebula')).toBe('nebula');
   });
 
   it('Cosmos Dark carries the core and hologram tokens', () => {
@@ -88,9 +102,9 @@ describe('themes', () => {
   it('index.html paints the same themes before any script', () => {
     const html = readFileSync(path.resolve(__dirname, '../../index.html'), 'utf8');
     const map = /var themes = \{([^}]*)\}/.exec(html)?.[1] ?? '';
-    const entries = [...map.matchAll(/'?([\w-]+)'?:\s*'(dark|light)'/g)].map((m) => [m[1], m[2]]);
-    expect(Object.fromEntries(entries)).toEqual(Object.fromEntries(THEMES.map((t) => [t.id, t.scheme])));
-    expect(html).toContain(`data-theme="${DEFAULT_THEME}"`);
+    const entries = [...map.matchAll(/'?([\w-]+)'?:\s*'(dark|light) (rounded|tech)'/g)].map((m) => [m[1], `${m[2]} ${m[3]}`]);
+    expect(Object.fromEntries(entries)).toEqual(Object.fromEntries(THEMES.map((t) => [t.id, `${t.scheme} ${t.style}`])));
+    expect(html).toContain(`data-theme="${DEFAULT_THEME}" data-style="${themeById(DEFAULT_THEME)!.style}"`);
   });
 
   describe.each(THEMES.map((t) => [t.name, t] as const))('%s', (_, theme) => {

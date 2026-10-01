@@ -15,11 +15,16 @@
 @import './themes/solar.css';
 @import './themes/lunar.css';
 @import './themes/comet.css';
+@import './themes/hologram.css';
+@import './themes/terminal.css';
+@import './themes/red-alert.css';
+@import './themes/blueprint.css';
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-heading: var(--font-sans);
+  /* Card, dialog and sheet titles; tech themes switch it to mono at runtime. */
+  --font-heading: var(--heading-family);
   --font-sans: 'Inter Variable', sans-serif;
   --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
 
@@ -85,6 +90,14 @@
   --titlebar-inset: 0px;
   --control-h: 2rem;
   --radius: 0.45rem;
+  --heading-family: 'Inter Variable', sans-serif;
+}
+
+/* Tech themes (data-style='tech', see lib/themes.ts) are square. Every
+   rounded-* utility derives from --radius; rounded-full stays round. */
+[data-style='tech'] {
+  --radius: 0px;
+  --heading-family: 'JetBrains Mono Variable', ui-monospace, monospace;
 }
 
 html[data-platform='macos'] {
@@ -187,6 +200,60 @@ html[data-platform='macos'] {
     border-bottom-width: 1px;
   }
 
+  /* Constellation panels (HUD, legend) in rounded themes: a context menu
+     (glass, popover colours, ring, shadow). The hologram variables the
+     panel's contents use are pointed at the app's own tokens. */
+  .sky-panel {
+    --holo-text: var(--popover-foreground);
+    --holo-dim: var(--muted-foreground);
+    --holo-primary: var(--primary);
+    --holo-ok: var(--success);
+    --holo-warn: var(--warning);
+    --holo-err: var(--error);
+    color: var(--popover-foreground);
+  }
+
+  /* Labels over the constellation. Rounded: the app's type, a soft shadow so
+     names read over orbit lines. Tech: mono small caps with a glow. */
+  .sky-label {
+    font-weight: 500;
+    text-shadow: 0 1px 2px var(--holo-space);
+  }
+
+  .sky-sub {
+    font-weight: 400;
+    color: color-mix(in oklab, var(--holo-text) 72%, transparent);
+    font-variant-numeric: tabular-nums;
+  }
+
+  [data-sky-style='tech'] .sky-label {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    letter-spacing: 0.08em;
+    text-shadow:
+      0 0 6px var(--holo-halo),
+      0 0 2px var(--holo-space);
+  }
+
+  [data-sky-style='tech'] .sky-label[data-kind='node'] {
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    font-size: 0.6875rem;
+  }
+
+  [data-sky-style='tech'] .sky-sub {
+    letter-spacing: 0.1em;
+    color: color-mix(in oklab, var(--holo-text) 80%, transparent);
+  }
+
+  /* Tech themes: fine, still scanlines over the constellation. */
+  .holo-scanlines {
+    background-image: repeating-linear-gradient(
+      to bottom,
+      color-mix(in oklab, var(--holo-primary) 5%, transparent) 0 1px,
+      transparent 1px 3px
+    );
+  }
+
   /* A vignette over the constellation, darkening its edges. */
   .holo-vignette {
     background-image: radial-gradient(
@@ -209,5 +276,52 @@ html[data-platform='macos'] {
 @layer utilities {
   .glow-success {
     box-shadow: 0 0 8px color-mix(in srgb, var(--success) 55%, transparent);
+  }
+
+  /* Tech themes: cards, menus and dialogs are bracketed panels. The corners
+     are background gradients, not ::before/::after, so they stay put while a
+     menu scrolls; the glass tint is kept underneath. In the utilities layer,
+     and more specific, so it beats ring-* and shadow-* on the same element. */
+  [data-style='tech']
+    :is(
+      [data-slot='card'],
+      [data-slot='popover-content'],
+      [data-slot='dropdown-menu-content'],
+      [data-slot='dropdown-menu-sub-content'],
+      [data-slot='select-content'],
+      [data-slot='dialog-content'],
+      [data-slot='hover-card-content']
+    ),
+  [data-style='tech'] .bracketed {
+    --bracket: var(--primary);
+    --bracket-size: 0.75rem;
+    background-image:
+      linear-gradient(var(--bracket), var(--bracket)),
+      linear-gradient(var(--bracket), var(--bracket)),
+      linear-gradient(var(--bracket), var(--bracket)),
+      linear-gradient(var(--bracket), var(--bracket)),
+      linear-gradient(var(--glass-tint), var(--glass-tint));
+    background-position:
+      top left,
+      top left,
+      bottom right,
+      bottom right,
+      0 0;
+    background-size:
+      var(--bracket-size) 1px,
+      1px var(--bracket-size),
+      var(--bracket-size) 1px,
+      1px var(--bracket-size),
+      100% 100%;
+    background-repeat: no-repeat;
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, var(--primary) 24%, transparent),
+      0 0 28px -12px color-mix(in oklab, var(--primary) 45%, transparent),
+      inset 0 0 22px -14px color-mix(in oklab, var(--primary) 45%, transparent);
+  }
+
+  /* Tech themes: mono for headings, labels and numbers; body copy stays Inter. */
+  [data-style='tech'] :is(.label-hud, .tabular-nums) {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
   }
 }
