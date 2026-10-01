@@ -6,7 +6,6 @@ import {
   Copy,
   Info,
   Logs,
-  Moon,
   PanelLeft,
   Play,
   Power,
@@ -27,7 +26,6 @@ import {
   CommandShortcut,
 } from '@/components/ui/command';
 import { useSidebar } from '@/components/ui/resizable-sidebar';
-import { useTheme } from '@/hooks/use-theme';
 import { useUiStore } from '@/stores/ui';
 import { nodeDisplayName, useNodeStore } from '@/stores/nodes';
 import { useContainersStore } from '@/stores/containers';
@@ -107,7 +105,6 @@ export function CommandPalette() {
   const setAddNodeOpen = useUiStore((s) => s.setAddNodeOpen);
   const navigate = useNavigate();
   const { toggleSidebar } = useSidebar();
-  const { toggleTheme } = useTheme();
 
   const nodes = useNodeStore((s) => s.nodes);
   const meta = useNodeStore((s) => s.meta);
@@ -200,12 +197,6 @@ export function CommandPalette() {
               <CommandGroup heading='Actions'>
                 <CommandItem value='add node connect' onSelect={go(() => setAddNodeOpen(true))}>
                   <Plus /> Add node
-                </CommandItem>
-                <CommandItem value='toggle theme dark light' onSelect={go(toggleTheme)}>
-                  <Moon /> Toggle theme
-                  <CommandShortcut>
-                    <ShortcutKeys id='theme' />
-                  </CommandShortcut>
                 </CommandItem>
                 <CommandItem value='toggle sidebar' onSelect={go(toggleSidebar)}>
                   <PanelLeft /> Toggle sidebar

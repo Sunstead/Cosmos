@@ -9,11 +9,11 @@ import {
 import { useTheme } from '@/hooks/use-theme';
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { resolvedTheme } = useTheme();
+  const { resolved } = useTheme();
 
   return (
     <Sonner
-      theme={resolvedTheme}
+      theme={resolved.scheme}
       className='toaster group'
       icons={{
         success: <CircleCheckIcon className='size-4 text-success' />,

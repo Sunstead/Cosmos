@@ -165,26 +165,34 @@ describe('frame scheduler', () => {
 describe('theme tokens', () => {
   afterEach(() => {
     document.documentElement.className = '';
+    document.documentElement.removeAttribute('data-theme');
     document.documentElement.style.cssText = '';
   });
 
   it('reads CSS variables and refreshes on theme change', async () => {
-    document.documentElement.style.setProperty('--orbit', 'red');
-    document.documentElement.style.setProperty('--planet-light', '70');
+    const root = document.documentElement;
+    root.dataset.theme = 'cosmos-dark';
+    root.style.setProperty('--orbit', 'red');
+    root.style.setProperty('--planet-light', '70');
+    root.style.setProperty('--holo-primary', '#7cc4ff');
+    root.style.setProperty('--holo-glow', '0.8');
     const first = canvasTokens();
     expect(first.orbit).toBe('red');
     expect(first.planetLight).toBe(70);
+    expect(first.holoPrimary).toBe('#7cc4ff');
+    expect(first.holoGlow).toBe(0.8);
     expect(canvasTokens()).toBe(first);
 
     const changed = vi.fn();
     const stop = onThemeChange(changed);
-    document.documentElement.style.setProperty('--orbit', 'blue');
-    document.documentElement.classList.add('light');
+    root.style.setProperty('--orbit', 'blue');
+    // Two dark themes: same scheme class, different id.
+    root.dataset.theme = 'nebula';
     await Promise.resolve();
 
     expect(changed).toHaveBeenCalledOnce();
     expect(canvasTokens().orbit).toBe('blue');
-    expect(canvasTokens().theme).toBe('light');
+    expect(canvasTokens().theme).toBe('nebula');
     stop();
   });
 });

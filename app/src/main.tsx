@@ -28,7 +28,7 @@ const queryClient = new QueryClient({
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <ThemeProvider defaultTheme='dark'>
+    <ThemeProvider>
       <TooltipProvider delayDuration={300}>
         <QueryClientProvider client={queryClient}>
           <RouterProvider router={router} />
