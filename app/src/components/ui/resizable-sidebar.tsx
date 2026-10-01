@@ -403,12 +403,14 @@ const SidebarRail = React.forwardRef<
 });
 SidebarRail.displayName = 'SidebarRail';
 
+// Cosmos: a div, not shadcn's <main>. The layout puts its own <main> around
+// the page inside it, and two main landmarks confuse screen readers.
 const SidebarInset = React.forwardRef<
   HTMLDivElement,
-  React.ComponentProps<'main'>
+  React.ComponentProps<'div'>
 >(({ className, ...props }, ref) => {
   return (
-    <main
+    <div
       ref={ref}
       className={cn(
         'relative flex min-h-full flex-1 flex-col bg-background overflow-hidden',

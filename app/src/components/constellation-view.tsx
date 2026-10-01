@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { Crosshair, Maximize2, Minimize2, Minus, Plus } from 'lucide-react';
+import { Crosshair, Maximize2, Minus, Plus } from 'lucide-react';
 import type { HostInfo } from '@/generated/HostInfo';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -50,8 +50,6 @@ interface Props {
   onOpen: (body: Body) => void;
   /** Shows an expand button; gets the focused node's id. */
   onExpand?: (nodeId: string | null) => void;
-  /** Shows a button leaving the full view. */
-  onCollapse?: () => void;
   /** WebGL went away or never came. */
   onUnsupported: () => void;
 }
@@ -68,7 +66,6 @@ export function ConstellationView({
   initialNode,
   onOpen,
   onExpand,
-  onCollapse,
   onUnsupported,
 }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -177,18 +174,6 @@ export function ConstellationView({
             }}
           >
             <Maximize2 />
-          </Button>
-        )}
-        {onCollapse && (
-          <Button
-            variant='ghost'
-            size='icon'
-            className={HOLO_BUTTON}
-            aria-label='Leave full view'
-            title='Leave full view'
-            onClick={onCollapse}
-          >
-            <Minimize2 />
           </Button>
         )}
       </div>

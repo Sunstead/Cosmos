@@ -177,7 +177,7 @@ test.describe('with a node', () => {
     await nextSignIn(request);
 
     await page.goto('/settings');
-    const main = page.locator('main').last();
+    const main = page.locator('main');
     await expect(main.getByText('guest')).toBeVisible();
     await expect(main.getByText('Viewer')).toBeVisible();
     // And at the foot of the sidebar.
@@ -715,10 +715,11 @@ test.describe('with a node', () => {
     await page.getByRole('link', { name: 'Constellation' }).click();
     await expect(page).toHaveURL(/\/constellation$/);
     await expect(page.locator('[data-page-header]')).toHaveCount(0);
+    // One main landmark: the sidebar inset is a div, not shadcn's <main>.
+    await expect(page.getByRole('main')).toHaveCount(1);
     await expect(page.getByRole('heading', { name: 'Constellation', level: 1 })).toBeAttached();
     const view = (await page.locator('[data-constellation]').boundingBox())!;
-    // The layout's <main>, inside the sidebar inset's own.
-    const main = await page.locator('main main').evaluate((el) => {
+    const main = await page.locator('main').evaluate((el) => {
       const r = el.getBoundingClientRect();
       const s = getComputedStyle(el);
       // Inside main's own border.
@@ -740,16 +741,6 @@ test.describe('with a node', () => {
     await page.keyboard.press('x');
     await expect(page).toHaveURL(/\/constellation$/);
     await expect(page.locator('[data-constellation]')).toBeVisible();
-  });
-
-  test('the full view leaves back to where it was opened', async ({ page }) => {
-    await addNodeOnline(page);
-    await page.goto('/overview');
-    await page.getByRole('button', { name: 'Open full view' }).click();
-    await expect(page).toHaveURL(/\/constellation/);
-    await page.getByRole('button', { name: 'Leave full view' }).click();
-    await expect(page).toHaveURL(/\/overview$/);
-    await expect(page.locator('[data-constellation-canvas]')).toHaveCount(1);
   });
 
   test('logs deep link selects node and container', async ({ page, request }) => {
@@ -789,7 +780,7 @@ test.describe('with a node', () => {
       await page.goto(path);
       await expect(page.locator('main [data-slot=skeleton]').first(), path).toBeVisible();
       // The layout nests the scrolling <main> inside the sidebar inset's.
-      await expect(page.locator('main').last(), path).not.toContainText(falseEmpty);
+      await expect(page.locator('main'), path).not.toContainText(falseEmpty);
       await page.screenshot({ path: info.outputPath(`loading${path.replaceAll('/', '-')}.png`) });
     }
   });
