@@ -1,14 +1,17 @@
 import { Link, useLocation } from '@tanstack/react-router';
-import { LogIn, LogOut, Monitor, Moon, Settings, Sun, SunMoon, UserRound } from 'lucide-react';
-import { Theme, useTheme } from '@/hooks/use-theme';
+import { LogIn, LogOut, Settings, SunMoon, UserRound } from 'lucide-react';
+import { useTheme } from '@/hooks/use-theme';
+import { themesOf } from '@/lib/themes';
 import { Avatar, AvatarBadge, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuPortal,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
@@ -26,6 +29,7 @@ import { plural } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useNodeStore } from '@/stores/nodes';
 import { Hint, ShortcutKeys } from './hint';
+import { ThemeSwatch } from './theme-picker';
 
 interface Identity {
   name: string;
@@ -129,12 +133,6 @@ function AccountHeader({ account, showProvider }: { account: Account; showProvid
   );
 }
 
-const THEMES: { value: Theme; label: string; icon: typeof Sun }[] = [
-  { value: 'dark', label: 'Dark', icon: Moon },
-  { value: 'light', label: 'Light', icon: Sun },
-  { value: 'system', label: 'System', icon: Monitor },
-];
-
 /**
  * The sidebar footer: who you are, and the way to settings, theme and
  * signing in or out. Modelled on Discord's user panel. Collapsed, it's just
@@ -145,7 +143,7 @@ export function AccountMenu() {
   const open = useNodeStore((s) => openPrincipal(s.meta));
   const nodeCount = useNodeStore((s) => s.nodes.length);
   const { state, isMobile, setOpenMobile } = useSidebar();
-  const { theme, setTheme } = useTheme();
+  const { themeId, setThemeId, followSystem, setFollowSystem } = useTheme();
   const { pathname } = useLocation();
   const { start, busy } = useSignIn();
 
@@ -203,15 +201,28 @@ export function AccountMenu() {
               <DropdownMenuSubTrigger>
                 <SunMoon /> Theme
               </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent>
-                <DropdownMenuRadioGroup value={theme} onValueChange={(v) => setTheme(v as Theme)}>
-                  {THEMES.map((t) => (
-                    <DropdownMenuRadioItem key={t.value} value={t.value}>
-                      <t.icon /> {t.label}
-                    </DropdownMenuRadioItem>
-                  ))}
-                </DropdownMenuRadioGroup>
-              </DropdownMenuSubContent>
+              {/* Portaled: inside the menu's glass it was clipped out of sight. */}
+              <DropdownMenuPortal>
+                <DropdownMenuSubContent className='w-48'>
+                  <DropdownMenuRadioGroup value={followSystem ? '' : themeId} onValueChange={setThemeId}>
+                    {(['dark', 'light'] as const).map((scheme) => (
+                      <DropdownMenuGroup key={scheme}>
+                        {scheme === 'light' && <DropdownMenuSeparator />}
+                        <DropdownMenuLabel className='text-xs'>{scheme === 'dark' ? 'Dark' : 'Light'}</DropdownMenuLabel>
+                        {themesOf(scheme).map((t) => (
+                          <DropdownMenuRadioItem key={t.id} value={t.id}>
+                            <ThemeSwatch id={t.id} /> {t.name}
+                          </DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuGroup>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuCheckboxItem checked={followSystem} onCheckedChange={setFollowSystem}>
+                    Follow system
+                  </DropdownMenuCheckboxItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuPortal>
             </DropdownMenuSub>
             {signedIn.length > 0 && <DropdownMenuSeparator />}
             {signedIn.map((a) => (
