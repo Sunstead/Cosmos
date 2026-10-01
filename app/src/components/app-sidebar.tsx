@@ -34,8 +34,8 @@ export function AppSidebar() {
         {NAV_GROUPS.map((group, i) => (
           <SidebarGroup key={group.label ?? i} className='px-2 py-1.5'>
             {group.label && (
-              // Lined up with the item labels, not their icons.
-              <SidebarGroupLabel className='label-hud h-7 pl-9.5 text-2xs text-sidebar-foreground/60 group-data-[collapsible=icon]:-mt-7'>
+              // Lined up with the item icons (the buttons' px-3).
+              <SidebarGroupLabel className='label-hud h-7 pl-3 text-2xs text-sidebar-foreground/60 group-data-[collapsible=icon]:-mt-7'>
                 {group.label}
               </SidebarGroupLabel>
             )}

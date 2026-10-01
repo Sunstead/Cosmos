@@ -322,6 +322,7 @@ export class ConstellationScene {
   private nodes = new Map<string, NodeView>();
   private moons = new Map<string, MoonView>();
   private probes = new Map<string, ProbeView>();
+  private probeWorld = new Vector3();
   private stars: Points<BufferGeometry, ShaderMaterial>;
   private grid: Mesh<PlaneGeometry, ShaderMaterial>;
   private gridDrop = 3;
@@ -550,7 +551,7 @@ export class ConstellationScene {
     this.invalidate();
   }
 
-  /** Focuses a node (or home, for null), e.g. from a link. */
+  /** Focuses a node or device (or home, for null), e.g. from a link. */
   select(key: string | null, instant = false) {
     if (!this.layout || (key && !this.layout.byKey.has(key))) {
       this.pendingSelect = key;
@@ -591,6 +592,12 @@ export class ConstellationScene {
 
   focusLabel(key: string) {
     this.labels.focus(key);
+  }
+
+  /** The scanlines on bodies (Settings); the overlay's are CSS. */
+  setScanlines(on: boolean) {
+    this.shared.uScan.value = on ? 1 : 0;
+    this.invalidate();
   }
 
   stats(): SceneStats {
@@ -676,9 +683,9 @@ export class ConstellationScene {
 
     const core = new Mesh(this.geo.sphere, coreMaterial({ space: p.space, tint: p.primary }));
     core.scale.setScalar(0.985);
-    const shell = new Mesh(this.geo.sphere, shellMaterial(this.shared, { color: p.primary, fill: 0.03, seed, lines: 11 }));
+    const shell = new Mesh(this.geo.sphere, shellMaterial(this.shared, { color: p.primary, fill: 0.03, lines: 11 }));
     const wireGeo = style.kind === 'rocky' ? this.geo.geodesic : style.kind === 'ice' ? this.geo.graticuleIce : this.geo.graticuleGas;
-    const wire = new LineSegments(wireGeo, wireMaterial(this.shared, { color: p.primary, opacity: 0.32, seed }));
+    const wire = new LineSegments(wireGeo, wireMaterial(this.shared, { color: p.primary, opacity: 0.32 }));
     // Gas giants spin on a tilted axis; the lines show it.
     wire.rotation.z = (seed - 0.5) * 0.5;
     group.add(core, shell, wire);
@@ -687,7 +694,7 @@ export class ConstellationScene {
     if (style.ring) {
       rings = new LineSegments(
         ringLines(style.ring.inner, style.ring.outer, 5),
-        wireMaterial(this.shared, { color: p.primary, opacity: 0.4, seed }),
+        wireMaterial(this.shared, { color: p.primary, opacity: 0.4 }),
       );
       rings.rotation.set(Math.PI / 2 + style.ring.tilt * 0.5 - Math.PI / 2, 0, style.ring.tilt * 0.6);
       group.add(rings);
@@ -704,13 +711,13 @@ export class ConstellationScene {
     orbit.mesh.rotation.x = Math.PI / 2;
     const dropGeo = new BufferGeometry();
     dropGeo.setAttribute('position', new BufferAttribute(new Float32Array(6), 3));
-    const drop = new LineSegments(dropGeo, wireMaterial(this.shared, { color: p.primary, opacity: 0.28, seed, dashed: true }));
+    const drop = new LineSegments(dropGeo, wireMaterial(this.shared, { color: p.primary, opacity: 0.28, dashed: true }));
     drop.frustumCulled = false;
     const foot = this.makeRing(p.primary, 1, 0.05, 0.45, { dashes: 24 });
     foot.mesh.rotation.x = Math.PI / 2;
     const linkGeo = new BufferGeometry();
     linkGeo.setAttribute('position', new BufferAttribute(new Float32Array(6), 3));
-    const link = new Line(linkGeo, wireMaterial(this.shared, { color: p.primary, opacity: 0.12, seed }));
+    const link = new Line(linkGeo, wireMaterial(this.shared, { color: p.primary, opacity: 0.12 }));
     link.frustumCulled = false;
     this.world.add(group, orbit.mesh, drop, foot.mesh, link);
 
@@ -780,7 +787,7 @@ export class ConstellationScene {
   private addMoon(body: MoonBody) {
     const mesh = new Mesh(
       this.geo.moon,
-      shellMaterial(this.shared, { color: this.palette.secondary, fill: 0.32, seed: hashString(body.key), lines: 3 }),
+      shellMaterial(this.shared, { color: this.palette.secondary, fill: 0.32, lines: 3 }),
     );
     this.world.add(mesh);
     const view: MoonView = { body, mesh, halo: null, slot: body.slot, size: 0.2 };
@@ -792,8 +799,8 @@ export class ConstellationScene {
     const { solid, edges } = this.geo.probe(body.shape);
     const seed = hashString(body.id);
     const group = new Group();
-    const edgeLines = new LineSegments(edges, wireMaterial(this.shared, { color: this.palette.probe, opacity: 0.9, seed }));
-    const fill = new Mesh(solid, shellMaterial(this.shared, { color: this.palette.probe, fill: 0.06, seed, lines: 2 }));
+    const edgeLines = new LineSegments(edges, wireMaterial(this.shared, { color: this.palette.probe, opacity: 0.9 }));
+    const fill = new Mesh(solid, shellMaterial(this.shared, { color: this.palette.probe, fill: 0.06, lines: 2 }));
     group.add(edgeLines, fill);
     group.scale.setScalar(PROBE_SIZE);
     group.rotation.set(seed * TAU, seed * 3.1, 0);
@@ -1087,10 +1094,18 @@ export class ConstellationScene {
     this.startFlight(() => ({ target: home, offset }), FLIGHT_MS);
   }
 
-  /** The selected node's position, which the camera follows. */
+  /** The selected body's position, which the camera follows. */
   private focusTarget(): Vector3 | null {
     const key = this.focusState.selected;
-    return (key && this.nodes.get(key)?.group.position) || null;
+    return key ? this.positionOf(key) : null;
+  }
+
+  /** Where a node or device is now, in world space. A device's is recomputed, since it rides the tilted ring. */
+  private positionOf(key: string): Vector3 | null {
+    const node = this.nodes.get(key);
+    if (node) return node.group.position;
+    const probe = this.probes.get(key);
+    return probe ? probe.group.getWorldPosition(this.probeWorld) : null;
   }
 
   /** How far from a node to frame it with its moons spread out. */
@@ -1102,24 +1117,33 @@ export class ConstellationScene {
     return reach / (Math.min(tanV, tanV * aspect) * 0.92);
   }
 
+  /** How far from a device to frame it and its label. */
+  private probeDistance(): number {
+    const tanV = Math.tan(((FOV / 2) * Math.PI) / 180);
+    const aspect = this.width > 0 && this.height > 0 ? this.width / this.height : 2;
+    return (PROBE_SIZE * 5 + 1.2) / (Math.min(tanV, tanV * aspect) * 0.92);
+  }
+
   private flyTo(key: string | null, instant = false, canonical = false) {
     if (!key) {
       this.goHome(instant, canonical);
       return;
     }
-    const view = this.nodes.get(key);
-    if (!view) return;
+    const node = this.nodes.get(key);
+    const distance = node ? this.nodeDistance(node) : this.probes.has(key) ? this.probeDistance() : null;
+    if (distance === null) return;
+    const where = () => this.positionOf(key) ?? this.controls.target;
     this.atHome = false;
     this.lastInput = performance.now();
     const to = () => {
-      const target = view.group.position;
+      const target = where();
       // Keep looking from the side we're on, at a comfortable elevation.
       const offset = this.camera.position.clone().sub(this.controls.target);
       if (offset.lengthSq() < 1e-6) offset.copy(this.homeOffset());
       const flat = Math.hypot(offset.x, offset.z) || 1;
       const elevation = Math.min(Math.max(Math.atan2(offset.y, flat), 0.3), 0.75);
       const azimuth = Math.atan2(offset.x, offset.z);
-      const d = this.nodeDistance(view);
+      const d = distance;
       return {
         target,
         offset: new Vector3(
@@ -1141,9 +1165,9 @@ export class ConstellationScene {
       return;
     }
     // The viewing angle is fixed when the flight starts; the target keeps
-    // moving with the node.
+    // moving with the body.
     const { offset } = to();
-    this.startFlight(() => ({ target: view.group.position, offset }), FLIGHT_MS);
+    this.startFlight(() => ({ target: where(), offset }), FLIGHT_MS);
   }
 
   private startFlight(to: Flight['to'], duration: number) {
@@ -1489,7 +1513,8 @@ export class ConstellationScene {
       }
     }
 
-    this.probeAngle += motion * 0.012;
+    // A focused device slows its ring, as a focused node slows its orbit.
+    this.probeAngle += motion * 0.012 * (selected && this.probes.has(selected) ? 0.35 : 1);
     const probeR = this.layout!.probeRadius;
     for (const view of this.probes.values()) {
       view.slot = snap ? view.body.slot : approachTurn(view.slot, view.body.slot, 2, dt);

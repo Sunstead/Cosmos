@@ -269,7 +269,12 @@ services are moons (calm when fine, warning or error colours with a halo when
 not), tailnet devices are spinning wireframe probes on a tilted outer ring
 (shape by OS, waking pulses). It's the Overview card and the `/constellation`
 page (`fill`, not in the sidebar; `G then X`, the palette, or the card's
-expand button, which carries the focused node as `?node=`). Pieces:
+expand button, which carries the focused node as `?node=`; its collapse
+button goes back, or to Overview). Clicking a node or a device focuses it
+(the camera follows it), and a second click opens it; a moon opens at once.
+Nothing flickers or sweeps: bodies hold steady, and scanlines (the CSS
+overlay and the still lines on bodies, `uScan`) are a switch in Settings,
+`usePreferencesStore().scanlines`. Pieces:
 `model.ts` is pure and tested (reconcile a `Snapshot` into a `Layout` keeping
 phases, moon shells, focus order, the focus-then-open `interact` reducer,
 screen-space `pick`); `source.ts` builds snapshots from the stores and only
@@ -286,7 +291,7 @@ context lost on purpose can't be re-made, which StrictMode would do);
 resizing draws inside the ResizeObserver callback so the canvas never shows
 blank; frames are on demand (30 fps for orbits, full rate while the camera
 moves, nothing off-screen or hidden, only on change under reduced motion,
-which also stops flicker, auto-rotate and flights); `dispose()` releases the
+which also stops twinkle, auto-rotate and flights); `dispose()` releases the
 context with `forceContextLoss()`.
 
 **Platforms.** Tauri builds the window in Rust (`src-tauri/src/window.rs`),

@@ -187,8 +187,17 @@ html[data-platform='macos'] {
     border-bottom-width: 1px;
   }
 
-  /* Scanlines and a vignette over the constellation, with a slow sweep. */
+  /* A vignette over the constellation, plus still scanlines unless they're
+     turned off in Settings (data-scanlines on the viewport). */
   .holo-scanlines {
+    background-image: radial-gradient(
+      ellipse at center,
+      transparent 55%,
+      color-mix(in oklab, var(--holo-space) 80%, transparent)
+    );
+  }
+
+  [data-scanlines='on'] > .holo-scanlines {
     background-image:
       repeating-linear-gradient(
         to bottom,
@@ -196,37 +205,6 @@ html[data-platform='macos'] {
         transparent 1px 3px
       ),
       radial-gradient(ellipse at center, transparent 55%, color-mix(in oklab, var(--holo-space) 80%, transparent));
-  }
-
-  .holo-scanlines::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-      to bottom,
-      transparent 0%,
-      color-mix(in oklab, var(--holo-primary) 5%, transparent) 50%,
-      transparent 100%
-    );
-    background-size: 100% 30%;
-    background-repeat: no-repeat;
-    animation: holo-sweep 9s linear infinite;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .holo-scanlines::after {
-      animation: none;
-      opacity: 0;
-    }
-  }
-
-  @keyframes holo-sweep {
-    from {
-      background-position: 0 -40%;
-    }
-    to {
-      background-position: 0 140%;
-    }
   }
 
   .titlebar-inset {
