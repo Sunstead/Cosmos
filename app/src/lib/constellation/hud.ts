@@ -45,18 +45,21 @@ const KIND_CLASS: Record<Body['kind'], string> = {
 };
 
 /**
- * Where a label sits relative to its body's screen point, in whole pixels.
- * Not `translate(-50%)`: half a pixel off the grid is what blurred the CPU
- * line under a node.
+ * Where a label sits relative to its body's screen point, from its measured
+ * size; the total is snapped to device pixels in `place`. Not
+ * `translate(-50%)`: half a pixel off the grid is what blurred the CPU line
+ * under a node.
  */
 const ANCHOR: Record<Body['kind'], (w: number, h: number) => [number, number]> = {
-  node: (w) => [-Math.round(w / 2), 0],
-  moon: (_, h) => [10, -Math.round(h / 2)],
-  probe: (w) => [-Math.round(w / 2), 8],
+  node: (w) => [-w / 2, 0],
+  moon: (_, h) => [10, -h / 2],
+  probe: (w) => [-w / 2, 8],
 };
 
 export class LabelLayer {
   private labels = new Map<string, Label>();
+  /** Device pixels per CSS pixel: labels land on the screen's own grid. */
+  private dpr = 1;
   private order = '';
   private disposed = false;
 
@@ -120,6 +123,12 @@ export class LabelLayer {
     label.size = null;
   }
 
+  setPixelRatio(dpr: number) {
+    if (dpr === this.dpr) return;
+    this.dpr = dpr;
+    for (const label of this.labels.values()) label.x = NaN;
+  }
+
   /** Shows a label at a screen point; `z` orders overlapping labels nearest first. */
   place(key: string, x: number, y: number, z: number) {
     const label = this.labels.get(key);
@@ -134,9 +143,12 @@ export class LabelLayer {
       label.size = { w: label.el.offsetWidth, h: label.el.offsetHeight };
       moved = true;
     }
+    // Snapped to device pixels, not CSS ones: crisp text that still moves
+    // in the screen's finest steps (whole CSS pixels jumped 2-3 at a time).
     const [dx, dy] = ANCHOR[label.kind](label.size.w, label.size.h);
-    const px = Math.round(x) + dx;
-    const py = Math.round(y) + dy;
+    const snap = (v: number) => Math.round(v * this.dpr) / this.dpr;
+    const px = snap(x + dx);
+    const py = snap(y + dy);
     if (moved || px !== label.x || py !== label.y) {
       label.x = px;
       label.y = py;

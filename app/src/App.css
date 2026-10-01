@@ -170,8 +170,8 @@ html[data-platform='macos'] {
     background: color-mix(in oklab, var(--holo-space) 74%, transparent);
     border: 1px solid color-mix(in oklab, var(--holo-primary) 26%, transparent);
     box-shadow:
-      0 0 28px -10px color-mix(in oklab, var(--holo-primary) 55%, transparent),
-      inset 0 0 22px -12px color-mix(in oklab, var(--holo-primary) 60%, transparent);
+      0 0 24px -12px color-mix(in oklab, var(--holo-primary) 28%, transparent),
+      inset 0 0 20px -14px color-mix(in oklab, var(--holo-primary) 30%, transparent);
     -webkit-backdrop-filter: blur(8px);
     backdrop-filter: blur(8px);
   }
@@ -316,8 +316,8 @@ html[data-platform='macos'] {
     background-repeat: no-repeat;
     box-shadow:
       0 0 0 1px color-mix(in oklab, var(--primary) 24%, transparent),
-      0 0 28px -12px color-mix(in oklab, var(--primary) 45%, transparent),
-      inset 0 0 22px -14px color-mix(in oklab, var(--primary) 45%, transparent);
+      0 0 24px -12px color-mix(in oklab, var(--primary) 22%, transparent),
+      inset 0 0 20px -14px color-mix(in oklab, var(--primary) 24%, transparent);
   }
 
   /* Tech themes: mono for headings, labels and numbers; body copy stays Inter. */

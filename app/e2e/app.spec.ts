@@ -934,6 +934,32 @@ test.describe('constellation preview', () => {
     });
   }
 
+  test('draws at the refresh rate and the screen density', async ({ browser }) => {
+    const context = await browser.newContext({ deviceScaleFactor: 2, viewport: { width: 1200, height: 800 } });
+    const page = await context.newPage();
+    await page.goto('/e2e/constellation.html');
+    await expect(page.locator('[data-kind=node]').first()).toBeVisible();
+    // Idle, nobody touching it: orbits still move every frame, not every other one.
+    await page.waitForTimeout(1_500);
+    const fps = await page.evaluate(
+      () => (window as unknown as { __constellation: { stats(): { fps: number } } }).__constellation.stats().fps,
+    );
+    expect(fps).toBeGreaterThan(45);
+    // The buffer is at the screen's density, and labels sit on its pixel grid.
+    const canvas = await page.locator('[data-constellation-canvas]').evaluate((c: HTMLCanvasElement) => ({
+      ratio: c.width / c.clientWidth,
+    }));
+    expect(canvas.ratio).toBeCloseTo(2, 1);
+    const offGrid = await page.evaluate(() =>
+      [...document.querySelectorAll<HTMLElement>('[data-kind]')]
+        .filter((el) => !el.hidden)
+        .flatMap((el) => [...el.style.transform.matchAll(/(-?[\d.]+)px/g)].map((m) => Number(m[1])))
+        .filter((v) => Math.abs(v * 2 - Math.round(v * 2)) > 1e-6),
+    );
+    expect(offGrid).toEqual([]);
+    await context.close();
+  });
+
   test('labels never paint over the HUD panel', async ({ page }) => {
     await page.goto('/e2e/constellation.html');
     await page.locator('[data-kind=node]').first().click();

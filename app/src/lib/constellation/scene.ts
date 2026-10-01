@@ -3,10 +3,11 @@
  * animation loop and the labels over it. React mounts it and feeds it
  * snapshots and host samples; nothing here goes through React state.
  *
- * Rendering is on demand. Orbits move at 30 fps, the camera at the display's
- * rate while it is being moved or flown, and under reduced motion a frame is
- * drawn only when data, input or the size changes. Resizing renders inside
- * the ResizeObserver callback, so the resized canvas is never shown blank.
+ * Rendering is on demand: while anything moves, every frame at the display's
+ * refresh rate, at its full pixel density (followed when the window moves to
+ * another screen); under reduced motion a frame is drawn only when data,
+ * input or the size changes. Resizing renders inside the ResizeObserver
+ * callback, so the resized canvas is never shown blank.
  */
 import {
   BoxGeometry,
@@ -115,9 +116,8 @@ export interface SceneStats {
 }
 
 const TAU = Math.PI * 2;
-/** Idle frame interval: orbits are slow, 30 fps is plenty. */
-const IDLE_FRAME_MS = 1000 / 30;
-const MAX_DPR = 2;
+/** Past 3x the eye can't tell, and the fill cost keeps growing. */
+const MAX_DPR = 3;
 const FOV = 38;
 /** Camera elevation over the orbital plane at home, radians. */
 const HOME_ELEVATION = 0.52;
@@ -506,6 +506,22 @@ export class ConstellationScene {
     });
     ro.observe(wrapper);
     this.stops.push(() => ro.disconnect());
+
+    // A window dragged to a screen of another density changes no size, so
+    // the observer above never hears of it. A resolution query does; each
+    // one matches a single density, so it is re-armed after every change.
+    let stopDpr = () => {};
+    const watchDpr = () => {
+      const query = matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+      const onChange = () => {
+        this.resize(this.width, this.height);
+        watchDpr();
+      };
+      query.addEventListener('change', onChange, { once: true });
+      stopDpr = () => query.removeEventListener('change', onChange);
+    };
+    watchDpr();
+    this.stops.push(() => stopDpr());
 
     const io = new IntersectionObserver(([entry]) => {
       this.onScreen = entry.isIntersecting;
@@ -1390,7 +1406,7 @@ export class ConstellationScene {
       if (s) out.push({ key, x: s.x, y: s.y, r: radius * s.scale, depth: s.depth });
     };
     for (const v of this.nodes.values()) add(v.body.key, v.group.position, v.radius * 1.15);
-    for (const v of this.moons.values()) if (v.mesh.visible) add(v.body.key, v.mesh.position, v.size * 1.6);
+    for (const v of this.moons.values()) add(v.body.key, v.mesh.position, v.size * 1.6);
     for (const v of this.probes.values()) add(v.body.key, v.group.getWorldPosition(this.tmp2), PROBE_SIZE * 1.6);
     return out;
   }
@@ -1422,6 +1438,7 @@ export class ConstellationScene {
     this.height = h;
     this.renderer.setPixelRatio(dpr);
     this.shared.uPixelRatio.value = dpr;
+    this.labels.setPixelRatio(window.devicePixelRatio || 1);
     // false: CSS sizes the canvas (absolute, inset 0); only the buffer changes.
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
@@ -1461,10 +1478,7 @@ export class ConstellationScene {
     if (this.paused || this.disposed) return;
     const busy = this.cameraBusy(now);
     const continuous = !this.opts.reducedMotion || busy;
-    if (!this.dirty && !busy && now - this.lastFrame < IDLE_FRAME_MS - 1) {
-      if (continuous) this.raf = requestAnimationFrame(this.tick);
-      return;
-    }
+    if (!this.dirty && !continuous) return;
     this.renderFrame(now);
     if (continuous) this.raf = requestAnimationFrame(this.tick);
   };

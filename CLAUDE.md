@@ -310,9 +310,11 @@ so three.js is its own chunk. Rules it keeps: data reaches meshes from
 subscriptions, never React renders; the scene makes its own canvas (a
 context lost on purpose can't be re-made, which StrictMode would do);
 resizing draws inside the ResizeObserver callback so the canvas never shows
-blank; frames are on demand (30 fps for orbits, full rate while the camera
-moves, nothing off-screen or hidden, only on change under reduced motion,
-which also stops twinkle, auto-rotate and flights); `dispose()` releases the
+blank; frames go at the display's refresh rate while anything moves (nothing
+off-screen or hidden, only on change under reduced motion, which also stops
+twinkle, auto-rotate and flights), at the screen's pixel density (up to 3x,
+re-read by a resolution media query when the window changes screens), and
+labels snap to device pixels, not CSS ones; `dispose()` releases the
 context with `forceContextLoss()`.
 
 **Platforms.** Tauri builds the window in Rust (`src-tauri/src/window.rs`),
