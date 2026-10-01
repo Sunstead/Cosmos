@@ -10,6 +10,7 @@ import PortainerIcon from '@/assets/icons/portainer-dark.svg?react';
 import TailscaleIcon from '@/assets/icons/tailscale-light.svg?react';
 import WatchtowerIcon from '@/assets/icons/watchtower.svg?react';
 import AuthentikIcon from '@/assets/icons/authentik.svg?react';
+import OpencloudIcon from '@/assets/icons/opencloud.svg?react';
 
 type SvgComponent = ComponentType<SVGProps<SVGSVGElement>>;
 
@@ -24,6 +25,7 @@ const ICONS: Record<string, SvgComponent> = {
   tailscale: TailscaleIcon,
   watchtower: WatchtowerIcon,
   authentik: AuthentikIcon,
+  opencloud: OpencloudIcon,
 };
 
 interface ServiceIconProps extends SVGProps<SVGSVGElement> {
