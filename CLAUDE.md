@@ -272,9 +272,8 @@ not), tailnet devices are spinning wireframe probes on a tilted outer ring
 page, under Overview in the sidebar (`bleed`: a window into space filling the
 content area, with no header or border, and an `sr-only` h1; also `G then X`,
 the palette, or the card's expand button, which carries the focused node as
-`?node=`; its collapse button goes back, or to Overview). Clicking a node or a
-device focuses it (the camera follows it), and a second click opens it; a
-moon opens at once. Nothing flickers, sweeps or scans: bodies hold steady.
+`?node=`). Clicking a node or a device focuses it (the camera follows it),
+and a second click opens it; a moon opens at once. Nothing flickers, sweeps or scans: bodies hold steady.
 Pieces:
 `model.ts` is pure and tested (reconcile a `Snapshot` into a `Layout` keeping
 phases, moon shells, focus order, the focus-then-open `interact` reducer,
