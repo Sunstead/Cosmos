@@ -40,14 +40,17 @@ impl From<&HostSample> for Row {
             swap_used: s.swap_used_bytes as i64,
             net_rx_bps: s.net_rx_bps,
             net_tx_bps: s.net_tx_bps,
-            // Host-level disk IO is the sum across reported filesystems. The
-            // per-disk breakdown stays in the live sample only.
+            // Host-level disk IO is the sum across reported filesystems that
+            // have counters. The per-disk breakdown stays in the live sample
+            // only.
             disk_read_bps: s.disk
                 .iter()
+                .filter(|d| d.io_available)
                 .map(|d| d.read_bps)
                 .sum(),
             disk_write_bps: s.disk
                 .iter()
+                .filter(|d| d.io_available)
                 .map(|d| d.write_bps)
                 .sum(),
             load1: s.load1,
@@ -425,6 +428,38 @@ mod tests {
     fn explicit_step_is_honoured_regardless_of_span() {
         assert_eq!(resolve_step(MetricStep::OneSec, 86_400, 10), 1);
         assert_eq!(resolve_step(MetricStep::FiveMin, 60, 10_000), 300);
+    }
+
+    #[test]
+    fn disk_io_sums_only_disks_with_counters() {
+        use cosmos_common::types::{ DiskInfo, DiskKind };
+        let disk = |read_bps: f64, io_available: bool| DiskInfo {
+            mount: "/".into(),
+            label: "/".into(),
+            used_bytes: 0,
+            total_bytes: 1,
+            read_bps,
+            write_bps: read_bps * 2.0,
+            io_available,
+            kind: DiskKind::Ssd,
+        };
+        let sample = HostSample {
+            cpu_pct: 0.0,
+            cpu_per_core: vec![],
+            mem_used_bytes: 0,
+            swap_used_bytes: 0,
+            load1: 0.0,
+            load5: 0.0,
+            load15: 0.0,
+            disk: vec![disk(100.0, true), disk(7.0, false), disk(10.0, true)],
+            nets: vec![],
+            net_rx_bps: 0.0,
+            net_tx_bps: 0.0,
+            uptime_secs: 0,
+            sampled_at: 0,
+        };
+        let row = Row::from(&sample);
+        assert_eq!((row.disk_read_bps, row.disk_write_bps), (110.0, 220.0));
     }
 
     #[test]

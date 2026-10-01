@@ -3,9 +3,8 @@ import { Link } from '@tanstack/react-router';
 import { useHostInfo, useNodeMeta } from '@/api/queries';
 import { useNodeName } from '@/stores/nodes';
 import {
+  formatDiskReadWrite,
   getCpuPct,
-  getDiskReadMbps,
-  getDiskWriteMbps,
   getMemUsagePct,
   getNetRxMbps,
   getNetTxMbps,
@@ -81,7 +80,7 @@ export const NodeTableRow = memo(function NodeTableRow({ nodeId }: { nodeId: str
             <LiveValue nodeId={nodeId} format={(h) => `${getNetTxMbps(h)} / ${getNetRxMbps(h)} Mbps`} />
           </TableCell>
           <TableCell className='text-xs tabular-nums text-muted-foreground'>
-            <LiveValue nodeId={nodeId} format={(h) => `${getDiskReadMbps(h)} / ${getDiskWriteMbps(h)} MB/s`} />
+            <LiveValue nodeId={nodeId} format={formatDiskReadWrite} />
           </TableCell>
           <TableCell className='tabular-nums text-muted-foreground'>
             <LiveValue nodeId={nodeId} format={(h) => secondsToDuration(h.uptime_secs)} />
