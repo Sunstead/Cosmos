@@ -294,7 +294,7 @@ export function stepFocus(order: string[], current: string | null, delta: 1 | -1
 }
 
 export interface FocusState {
-  /** The node the camera is on, if any. */
+  /** The node or device the camera is on, if any. */
   selected: string | null;
 }
 
@@ -309,8 +309,8 @@ export type Intent =
 export type Effect = { type: 'none' } | { type: 'fly'; to: string | null } | { type: 'open'; key: string };
 
 /**
- * Focus, then open: the first activation of a node flies to it, the second
- * opens it. Moons and devices open at once (a moon is only big enough to aim
+ * Focus, then open: the first activation of a node or a device flies to it,
+ * the second opens it. Moons open at once (a moon is only big enough to aim
  * at once its node is in focus anyway). Back and empty space fly home.
  */
 export function interact(state: FocusState, layout: Layout, intent: Intent): { state: FocusState; effect: Effect } {
@@ -322,7 +322,7 @@ export function interact(state: FocusState, layout: Layout, intent: Intent): { s
     case 'activate': {
       const body = layout.byKey.get(intent.key);
       if (!body) return none;
-      if (body.kind === 'node' && state.selected !== body.key) {
+      if (body.kind !== 'moon' && state.selected !== body.key) {
         return { state: { selected: body.key }, effect: { type: 'fly', to: body.key } };
       }
       return { state, effect: { type: 'open', key: body.key } };

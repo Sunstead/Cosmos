@@ -194,14 +194,20 @@ describe('interact', () => {
     expect(other.effect).toEqual({ type: 'fly', to: nodeKey('b') });
   });
 
-  it('opens moons and devices straight away', () => {
+  it('opens moons straight away', () => {
     expect(interact({ selected: null }, layout, { type: 'activate', key: moonKey('a', 'web') }).effect).toEqual({
       type: 'open',
       key: moonKey('a', 'web'),
     });
-    expect(interact({ selected: nodeKey('a') }, layout, { type: 'activate', key: probeKey('p') }).effect.type).toBe(
-      'open',
-    );
+  });
+
+  it('focuses a device first, then opens it', () => {
+    const first = interact({ selected: nodeKey('a') }, layout, { type: 'activate', key: probeKey('p') });
+    expect(first).toEqual({ state: { selected: probeKey('p') }, effect: { type: 'fly', to: probeKey('p') } });
+    expect(interact(first.state, layout, { type: 'activate', key: probeKey('p') }).effect).toEqual({
+      type: 'open',
+      key: probeKey('p'),
+    });
   });
 
   it('flies home on escape or empty space, and does nothing when already home', () => {
