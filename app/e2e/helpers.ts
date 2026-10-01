@@ -20,6 +20,9 @@ export const PAGES = [
   '/settings',
 ] as const;
 
+/** Pages with no visible header once there are nodes: the constellation runs edge to edge. */
+export const HEADERLESS: readonly string[] = ['/constellation'];
+
 const issuer = () => process.env.E2E_OIDC_ISSUER!;
 const mockOrigin = () => new URL(issuer()).origin;
 

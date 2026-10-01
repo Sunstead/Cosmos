@@ -68,11 +68,11 @@ const overviewRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages/overview-page'), 'OverviewPage'),
 });
 
-/** The full-page constellation. Not in the sidebar; reached from the Overview card. */
+/** The constellation filling the content area, edge to edge. */
 const constellationRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/constellation',
-  staticData: { layout: 'fill' },
+  staticData: { layout: 'bleed' },
   validateSearch: (s: Record<string, unknown>): ConstellationSearch => ({
     node: typeof s.node === 'string' ? s.node : undefined,
   }),
