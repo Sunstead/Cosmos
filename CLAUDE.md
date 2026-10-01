@@ -181,6 +181,11 @@ The sidebar's foot is `AccountMenu`: who you are (initials on
 `--sidebar-primary`, or an https `picture` claim), role, a gear for Settings
 (which isn't in the nav list) and a menu with settings, theme and sign in or
 out. Title bar controls are all ghost `Button`s so they match.
+Nav items (`app-sidebar.tsx`) are default-size `h-8` buttons, rounded all
+round and inset from the edges; the current page is a fill
+(`sidebar-accent`), never an edge bar, and the rest are `muted-foreground`
+so the fill reads in light themes too. Collapsed, each icon is centred in
+the 4rem rail, under the title bar's toggle and over the avatar.
 Routes are lazy (`lazyRouteComponent`) and pick a layout through
 `staticData.layout`: `scroll` (default) or `fill` (logs). The body never
 scrolls; `<main>` does. Content is a `@container`, so layouts use container
