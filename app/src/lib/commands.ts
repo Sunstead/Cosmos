@@ -7,8 +7,6 @@ export function menuToCommand(menuId: string): string {
       return 'palette';
     case 'view.toggle-sidebar':
       return 'sidebar';
-    case 'view.toggle-theme':
-      return 'theme';
     case 'view.reload':
       return 'reload';
     default:
