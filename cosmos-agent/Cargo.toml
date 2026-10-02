@@ -2,6 +2,7 @@
 name = "cosmos-agent"
 version = "0.10.0"
 edition = "2021"
+license = "MIT"
 
 [dependencies]
 cosmos-common = { path = "../cosmos-common" }
