@@ -187,10 +187,8 @@ sign in or out. `UserAvatar` (also in Settings) shows the access token's `pictur
 only if it is `https://` (`setSession`), else initials on the neutral
 `--sidebar-accent` with a `--sidebar-border` ring, never the primary colour.
 Radix swaps the image in only once it has loaded, so a 404 or an offline
-provider never shows a broken image. On Jupiter the picture is the Authentik
-user's `avatar` attribute, a URL Caddy serves from Authentik's media volume
-(Jupiter's `docs/AVATARS.md`): Authentik 2026.8 only serves its own media with
-a 15-minute signed token. Title bar controls are all ghost `Button`s so they match.
+provider never shows a broken image. Jupiter sets no picture, so it shows
+initials. Title bar controls are all ghost `Button`s so they match.
 Nav items (`app-sidebar.tsx`) are default-size `h-8` buttons, rounded all
 round and inset from the edges; the current page is a fill
 (`sidebar-accent`), never an edge bar, and the rest are `muted-foreground`
