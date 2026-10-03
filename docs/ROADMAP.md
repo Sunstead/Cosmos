@@ -121,7 +121,7 @@ Cosmos runs things: nodes, containers, deploys, updates, backups, health,
 routing, secrets, logs and notifications. Only admins can act; `homelab-users`
 can view at most.
 
-### Layer 2: Homepage (front door for users; name undecided)
+### Layer 2: Homepage (Sunstead Atlas, the front door for users)
 Quick launching of apps and services, unified search across services, an AI
 assistant that can query and act across services, and an index of service
 content.
@@ -253,10 +253,14 @@ generates `scripts/restore.sh` commands.*
 - **Automated restore drills:** periodically restore into a throwaway container
   and verify.
 
-### E. Homepage (Horizon, working name)
-*Next. The server was prepared for it on 2026-09-29/30: originals sit under
-`/srv/storage/data`, one folder per app and user, so indexing can read them
-directly (section 4).*
+### E. Homepage (Sunstead Atlas)
+*In progress in its own repo (`Atlas`), 2026-10-02: scaffold, and Authentik
+sign-in with per-user connections, are built. The server was prepared for it
+on 2026-09-29/30: originals sit under `/srv/storage/data`, one folder per app
+and user, so indexing can read them directly (section 4).*
+- MVP sources: OpenCloud files (indexed from disk, the API for links,
+  thumbnails and shared spaces) and Immich photos (its own smart search, at
+  query time). Notes wait for Solstice Sync; calendar and contacts come later.
 - App launcher built on `cosmos.service` label discovery.
 - Unified search: full-text (Tantivy) plus embeddings later. Off-the-shelf apps
   indexed through their APIs or on-disk files.
@@ -301,7 +305,7 @@ volumes on the NVMe; derived data stays on the HDD (the NVMe has limited free
 space), excluded from backups.
 ```
 /srv/storage/
-  data/                      # originals: backed up, and what Horizon indexes
+  data/                      # originals: backed up, and what Atlas indexes
     photos/                  # Immich's upload location (library/<user>/ inside)
     files/users/<user>/      # OpenCloud personal spaces (PosixFS, watched)
     files/projects/<id>/     # OpenCloud shared spaces
@@ -383,11 +387,13 @@ moving its folders is a planned migration, never an `mv`.
 | 2026-09-29 | Files move to OpenCloud with PosixFS (plain files, watched), keeping its default `users/` and `projects/` folders; one Authentik client for all its apps. |
 | 2026-09-29 | Uptime Kuma and Portainer retired; Cosmos covers both. |
 | 2026-09-30 | Nextcloud retired, files only (no calendars or contacts were in use); a `nextcloud-final` snapshot is kept in both repositories. Radicale waits until calendars are needed. |
+| 2026-10-02 | Homepage name: Sunstead Atlas (was Horizon). |
+| 2026-10-02 | Homepage repo: its own (`Atlas`), with the shared UI package (`packages/sunstead-ui`, themes from Cosmos) starting inside it until a second app adopts it. |
+| 2026-10-02 | Atlas signs in as a confidential OIDC client with a server-side session cookie, unlike Cosmos's public client and bearer tokens, so links and address-bar searches work through sign-in. Users paste per-service API keys, sealed at rest. |
+| 2026-10-02 | Solstice Sync comes before Atlas indexes notes; Atlas creates notes through it rather than writing vault files. |
 
 ### Open
 - **Starbook name:** Sunstead Kin (current favorite), Tether, Folk.
-- **Homepage repo:** inside the Cosmos workspace or its own repo with a shared UI
-  package.
 - **Infra repos per node:** one repo per server (like `Jupiter`) or one repo with
   a directory per node. Matters once Saturn exists, and for 3C.
 - **Filesystem:** ZFS vs. btrfs when a second drive is added.
