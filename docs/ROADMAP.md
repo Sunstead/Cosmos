@@ -359,12 +359,13 @@ moving its folders is a planned migration, never an `mv`.
   folder is the source of truth. Export albums and faces via the API.
 - **Starbook** joins the suite as a custom Sunstead app (renamed).
 - **Solstice sync:** a dedicated CRDT sync service, enabling iOS Solstice
-  (decided 2026-10-03). Solstice becomes a monorepo: `apps/desktop` (today's
-  Tauri app), `apps/sync` (the server), and shared Rust crates. Proposed: Yjs
+  (decided 2026-10-03). Solstice is now a monorepo: `apps/desktop` (the
+  Tauri app), `apps/sync` (the server, to come), and shared Rust crates. Yjs
   via `yrs`, one document per note over its raw markdown, so the `.md` files
   under `data/notes/<user>/<vault>` stay the truth and Atlas indexes them from
-  disk. A vault manifest gives notes stable ids across renames. A short spike
-  against Automerge settles the library.
+  disk. A vault manifest gives notes stable ids across renames. Overlapping
+  offline edits are merged, flagged and offered for review. Design and the
+  Automerge comparison: `Solstice/docs/sync.md`.
 - **Service migration** between nodes and idle auto-sleep for nodes (building on
   Wake-on-LAN).
 
@@ -403,6 +404,7 @@ moving its folders is a planned migration, never an `mv`.
 | 2026-10-03 | Solstice Sync is CRDT-based, and lives in a Solstice monorepo next to the desktop app. |
 | 2026-10-03 | `sunstead-ui` moves to its own repo (`Sunstead/sunstead-ui`, 0.2.0) and standardises on Base UI; Cosmos and Atlas move off Radix, Solstice already uses it. |
 | 2026-10-03 | Every repo lives in the `Sunstead` GitHub organization (Solstice and Jupiter moved from `InventorPWB`). Cosmos's update token is now owned by the organization. |
+| 2026-10-03 | Solstice Sync uses Yjs (`yrs`), keeping history so overlapping offline edits can be flagged and reviewed. |
 
 ### Open
 - **Starbook name:** Sunstead Kin (current favorite), Tether, Folk.
