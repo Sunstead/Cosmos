@@ -113,7 +113,7 @@ Background samplers publish to `tokio::sync::watch` channels; handlers hand out 
 
 ## Deployment
 
-Production is the Jupiter repo (`InventorPWB/Jupiter`, usually checked out
+Production is the Jupiter repo (`Sunstead/Jupiter`, usually checked out
 beside this one), where a push to `main` deploys. It pins the agent to a
 semver tag, bumped by hand in a PR (`compose/cosmos.yml`) once a `v*` tag has
 published; Renovate is gone.
