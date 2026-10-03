@@ -85,6 +85,9 @@ jobs:
       - name: Smoke test
         run: |
           set -euo pipefail
+          # Under pipefail, `cmd | grep -q` fails at random: grep exits on the
+          # first match and cmd dies writing the rest (SIGPIPE, 141). Piped
+          # checks read everything with `grep ... >/dev/null` instead.
           # The data dir must be owned by the agent's uid, or a fresh named
           # volume comes up root-owned and history can't be written.
           cid=$(docker create cosmos-agent:test)
@@ -98,11 +101,11 @@ jobs:
             -v smoke_data:/var/lib/cosmos-agent cosmos-agent:test
           for i in $(seq 30); do curl -fsS localhost:7700/healthz >/dev/null && break; sleep 1; done
 
-          curl -fsS localhost:7700/ | grep -q 'id="root"'
-          curl -fsS localhost:7700/nodes/anything | grep -q 'id="root"'
+          curl -fsS localhost:7700/ | grep 'id="root"' >/dev/null
+          curl -fsS localhost:7700/nodes/anything | grep 'id="root"' >/dev/null
           test "$(curl -s -o /dev/null -w '%{http_code}' localhost:7700/v1/host)" = 401
-          curl -fsS localhost:7700/v1/info | grep -q '"metrics_history":true'
-          curl -fsS localhost:7700/v1/info | grep -q '"kind":"oidc"'
+          curl -fsS localhost:7700/v1/info | grep '"metrics_history":true' >/dev/null
+          curl -fsS localhost:7700/v1/info | grep '"kind":"oidc"' >/dev/null
 
           docker logs smoke 2>&1 | tee agent.log
           grep -q 'metrics history enabled' agent.log
