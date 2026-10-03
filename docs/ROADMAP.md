@@ -254,10 +254,13 @@ generates `scripts/restore.sh` commands.*
   and verify.
 
 ### E. Homepage (Sunstead Atlas)
-*In progress in its own repo (`Atlas`), 2026-10-02: scaffold, and Authentik
-sign-in with per-user connections, are built. The server was prepared for it
-on 2026-09-29/30: originals sit under `/srv/storage/data`, one folder per app
-and user, so indexing can read them directly (section 4).*
+*Live on Jupiter in its own repo (`Atlas`): 0.1.2, 2026-10-03. M0 to M5 are
+done: Authentik sign-in, per-user connections, OpenCloud files from disk with
+deep links and thumbnails, Immich, browser search, suggestions, the launcher
+and keyboard. Features are frozen while it is integrated with the other
+services; next is notes (M6) once Solstice Sync exists, then shared project
+spaces once any exist. Originals sit under `/srv/storage/data`, one folder per
+app and user, so indexing reads them directly (section 4).*
 - MVP sources: OpenCloud files (indexed from disk, the API for links,
   thumbnails and shared spaces) and Immich photos (its own smart search, at
   query time). Notes wait for Solstice Sync; calendar and contacts come later.
@@ -355,8 +358,13 @@ moving its folders is a planned migration, never an `mv`.
 - **Immich readability:** XMP sidecars, maybe an external library so a plain
   folder is the source of truth. Export albums and faces via the API.
 - **Starbook** joins the suite as a custom Sunstead app (renamed).
-- **Solstice sync:** a dedicated sync service, likely CRDT-based (Automerge or
-  Yjs), enabling iOS Solstice.
+- **Solstice sync:** a dedicated CRDT sync service, enabling iOS Solstice
+  (decided 2026-10-03). Solstice becomes a monorepo: `apps/desktop` (today's
+  Tauri app), `apps/sync` (the server), and shared Rust crates. Proposed: Yjs
+  via `yrs`, one document per note over its raw markdown, so the `.md` files
+  under `data/notes/<user>/<vault>` stay the truth and Atlas indexes them from
+  disk. A vault manifest gives notes stable ids across renames. A short spike
+  against Automerge settles the library.
 - **Service migration** between nodes and idle auto-sleep for nodes (building on
   Wake-on-LAN).
 
@@ -391,6 +399,9 @@ moving its folders is a planned migration, never an `mv`.
 | 2026-10-02 | Homepage repo: its own (`Atlas`), with the shared UI package (`packages/sunstead-ui`, themes from Cosmos) starting inside it until a second app adopts it. |
 | 2026-10-02 | Atlas signs in as a confidential OIDC client with a server-side session cookie, unlike Cosmos's public client and bearer tokens, so links and address-bar searches work through sign-in. Users paste per-service API keys, sealed at rest. |
 | 2026-10-02 | Solstice Sync comes before Atlas indexes notes; Atlas creates notes through it rather than writing vault files. |
+| 2026-10-03 | Atlas features are frozen while it is integrated with the other services (notes, shared UI). |
+| 2026-10-03 | Solstice Sync is CRDT-based, and lives in a Solstice monorepo next to the desktop app. |
+| 2026-10-03 | `sunstead-ui` moves to its own repo and standardises on Base UI; Cosmos and Atlas move off Radix, Solstice already uses it. |
 
 ### Open
 - **Starbook name:** Sunstead Kin (current favorite), Tether, Folk.
