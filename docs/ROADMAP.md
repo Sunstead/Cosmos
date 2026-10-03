@@ -170,7 +170,7 @@ request mechanism, and a broken update is noticed by the health checks. One
 release per stage: 0.6 health checks, 0.7 backup controls, 0.8 updates.
 
 ### 0. Backup safety (Jupiter only; no new hardware)
-*In progress: InventorPWB/Jupiter#15, with the Cosmos Backups page showing the
+*In progress: Sunstead/Jupiter#15, with the Cosmos Backups page showing the
 new steps.* Get the data into a shape where a new drive or an offsite target is
 a config change, and close what can be closed with two disks:
 - Stop backing up derived data (Immich `thumbs/`, `encoded-video/`).
@@ -401,7 +401,8 @@ moving its folders is a planned migration, never an `mv`.
 | 2026-10-02 | Solstice Sync comes before Atlas indexes notes; Atlas creates notes through it rather than writing vault files. |
 | 2026-10-03 | Atlas features are frozen while it is integrated with the other services (notes, shared UI). |
 | 2026-10-03 | Solstice Sync is CRDT-based, and lives in a Solstice monorepo next to the desktop app. |
-| 2026-10-03 | `sunstead-ui` moves to its own repo and standardises on Base UI; Cosmos and Atlas move off Radix, Solstice already uses it. |
+| 2026-10-03 | `sunstead-ui` moves to its own repo (`Sunstead/sunstead-ui`, 0.2.0) and standardises on Base UI; Cosmos and Atlas move off Radix, Solstice already uses it. |
+| 2026-10-03 | Every repo lives in the `Sunstead` GitHub organization (Solstice and Jupiter moved from `InventorPWB`). Cosmos's update token is now owned by the organization. |
 
 ### Open
 - **Starbook name:** Sunstead Kin (current favorite), Tether, Folk.

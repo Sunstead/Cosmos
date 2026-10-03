@@ -739,9 +739,9 @@ mod tests {
     #[test]
     fn parses_update_settings_and_hides_the_token() {
         let parse = |s: &str| toml::from_str::<Config>(s).unwrap();
-        let mut cfg = parse("[updates]\nrepo = \"InventorPWB/Jupiter\"\nref = \"main\"\nmin_age_days = 5");
+        let mut cfg = parse("[updates]\nrepo = \"Sunstead/Jupiter\"\nref = \"main\"\nmin_age_days = 5");
         assert!(cfg.validate().is_ok());
-        assert_eq!(cfg.updates.repo.as_deref(), Some("InventorPWB/Jupiter"));
+        assert_eq!(cfg.updates.repo.as_deref(), Some("Sunstead/Jupiter"));
         assert_eq!(cfg.updates.min_age_days, 5);
         assert!(parse("[updates]\nrepo = \"Jupiter\"").validate().is_err());
         assert!(toml::from_str::<Config>("[updates]\ntoken = \"x\"").is_err(), "never from the file");
