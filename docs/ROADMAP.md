@@ -254,16 +254,17 @@ generates `scripts/restore.sh` commands.*
   and verify.
 
 ### E. Homepage (Sunstead Atlas)
-*Live on Jupiter in its own repo (`Atlas`): 0.1.2, 2026-10-03. M0 to M5 are
+*Live on Jupiter in its own repo (`Atlas`): 0.1.4, 2026-10-04. M0 to M6 are
 done: Authentik sign-in, per-user connections, OpenCloud files from disk with
 deep links and thumbnails, Immich, browser search, suggestions, the launcher
-and keyboard. Features are frozen while it is integrated with the other
-services; next is notes (M6) once Solstice Sync exists, then shared project
-spaces once any exist. Originals sit under `/srv/storage/data`, one folder per
+and keyboard, and Solstice notes (read from Solstice Sync's vaults on disk,
+opened in the desktop app with `solstice://` links). Features are frozen
+while it is integrated with the other services; next is shared project
+spaces once any exist, and creating notes through Solstice Sync's API. Originals sit under `/srv/storage/data`, one folder per
 app and user, so indexing reads them directly (section 4).*
 - MVP sources: OpenCloud files (indexed from disk, the API for links,
   thumbnails and shared spaces) and Immich photos (its own smart search, at
-  query time). Notes wait for Solstice Sync; calendar and contacts come later.
+  query time). Solstice notes since 0.1.4; calendar and contacts come later.
 - App launcher built on `cosmos.service` label discovery.
 - Unified search: full-text (Tantivy) plus embeddings later. Off-the-shelf apps
   indexed through their APIs or on-disk files.
@@ -312,7 +313,7 @@ space), excluded from backups.
     photos/                  # Immich's upload location (library/<user>/ inside)
     files/users/<user>/      # OpenCloud personal spaces (PosixFS, watched)
     files/projects/<id>/     # OpenCloud shared spaces
-    notes/<user>/            # Solstice (when it syncs)
+    notes/<user>/<vault>/    # Solstice Sync's vaults (plain files)
     dav/<user>/              # calendars and contacts (when Radicale arrives)
     kin/<user>/              # contacts app (Starbook, renamed)
   apps/                      # app state on the HDD: gitea/, immich/backups/
@@ -359,8 +360,9 @@ moving its folders is a planned migration, never an `mv`.
   folder is the source of truth. Export albums and faces via the API.
 - **Starbook** joins the suite as a custom Sunstead app (renamed).
 - **Solstice sync:** a dedicated CRDT sync service, enabling iOS Solstice
-  (decided 2026-10-03). Solstice is now a monorepo: `apps/desktop` (the
-  Tauri app), `apps/sync` (the server, to come), and shared Rust crates. Yjs
+  (decided 2026-10-03; live at `solstice.jupiter.sunstead.net` since
+  2026-10-04, desktop app first). Solstice is a monorepo: `apps/desktop` (the
+  Tauri app), `apps/sync` (the server), and shared Rust crates. Yjs
   via `yrs`, one document per note over its raw markdown, so the `.md` files
   under `data/notes/<user>/<vault>` stay the truth and Atlas indexes them from
   disk. A vault manifest gives notes stable ids across renames. Overlapping
@@ -405,6 +407,7 @@ moving its folders is a planned migration, never an `mv`.
 | 2026-10-03 | `sunstead-ui` moves to its own repo (`Sunstead/sunstead-ui`, 0.2.0) and standardises on Base UI; Cosmos and Atlas move off Radix, Solstice already uses it. |
 | 2026-10-03 | Every repo lives in the `Sunstead` GitHub organization (Solstice and Jupiter moved from `InventorPWB`). Cosmos's update token is now owned by the organization. |
 | 2026-10-03 | Solstice Sync uses Yjs (`yrs`), keeping history so overlapping offline edits can be flagged and reviewed. |
+| 2026-10-04 | Solstice Sync is live on Jupiter (public OIDC client, 10-minute tokens; a sync connection closes when its token expires). Solstice is public under MIT. Atlas 0.1.4 searches notes from the vaults on disk. |
 
 ### Open
 - **Starbook name:** Sunstead Kin (current favorite), Tether, Folk.
