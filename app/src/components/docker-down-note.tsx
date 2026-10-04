@@ -1,5 +1,5 @@
 import { TriangleAlert } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle } from '@sunstead/ui/components/alert';
 import { useContainersStore } from '@/stores/containers';
 import { nodeDisplayName, useNodeStore } from '@/stores/nodes';
 

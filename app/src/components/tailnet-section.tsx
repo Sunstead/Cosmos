@@ -12,7 +12,7 @@ import { TableSkeleton } from '@/components/skeletons';
 import { SETUP } from '@/lib/setup';
 import { WakeButton } from '@/components/wol-section';
 import { Dot } from '@/components/dot';
-import { Badge } from '@/components/ui/badge';
+import { Badge } from '@sunstead/ui/components/badge';
 import {
   Table,
   TableBody,
@@ -20,7 +20,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
+} from '@sunstead/ui/components/table';
 
 function Presence({ device }: { device: Device }) {
   if (device.online) {
@@ -120,10 +120,12 @@ export const TailnetSection = memo(function TailnetSection({
                 <div className='flex items-center gap-2'>
                   <span className='truncate font-medium'>{d.name}</span>
                   {d.nodeId && (
-                    <Badge variant='secondary' className='text-2xs' asChild>
-                      <Link to='/nodes/$nodeId' params={{ nodeId: d.nodeId }}>
-                        Node
-                      </Link>
+                    <Badge
+                      variant='secondary'
+                      className='text-2xs'
+                      render={<Link to='/nodes/$nodeId' params={{ nodeId: d.nodeId }} />}
+                    >
+                      Node
                     </Badge>
                   )}
                   {d.exit_node && (

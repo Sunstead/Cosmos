@@ -6,17 +6,17 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
+} from '@sunstead/ui/components/dialog';
+import { Field, FieldDescription, FieldGroup, FieldLabel } from '@sunstead/ui/components/field';
+import { Input } from '@sunstead/ui/components/input';
+import { Button } from '@sunstead/ui/components/button';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from '@sunstead/ui/components/select';
 import { SegmentedControl } from '@/components/segmented-control';
 import { BackupDatabase } from '@/generated/BackupDatabase';
 import { BackupSnapshotInfo } from '@/generated/BackupSnapshotInfo';
@@ -167,7 +167,7 @@ function GuideBody({
         {what === 'database' && (
           <Field>
             <FieldLabel htmlFor='restore-db'>Database</FieldLabel>
-            <Select value={dbName} onValueChange={setDbName}>
+            <Select value={dbName} onValueChange={(v) => v && setDbName(v)}>
               <SelectTrigger id='restore-db'>
                 <SelectValue />
               </SelectTrigger>

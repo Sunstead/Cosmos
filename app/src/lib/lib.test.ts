@@ -171,7 +171,7 @@ describe('theme tokens', () => {
 
   it('reads CSS variables and refreshes on theme change', async () => {
     const root = document.documentElement;
-    root.dataset.theme = 'cosmos-dark';
+    root.dataset.theme = 'sunstead-dark';
     root.style.setProperty('--orbit', 'red');
     root.style.setProperty('--planet-light', '70');
     root.style.setProperty('--holo-primary', '#7cc4ff');

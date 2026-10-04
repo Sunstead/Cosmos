@@ -1,6 +1,6 @@
-import { Card } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
+import { Card } from '@sunstead/ui/components/card';
+import { Skeleton } from '@sunstead/ui/components/skeleton';
+import { Table, TableBody, TableCell, TableRow } from '@sunstead/ui/components/table';
 import { cn } from '@/lib/utils';
 
 /**

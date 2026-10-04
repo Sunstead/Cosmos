@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Bell, CircleCheck } from 'lucide-react';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@sunstead/ui/components/popover';
 import { useEventsStore } from '@/stores/events';
 import { useNodeStore } from '@/stores/nodes';
 import { useNotificationPrefs } from '@/stores/notifications';
 import { mergeEvents, mergeProblems } from '@/lib/events';
 import { cn } from '@/lib/utils';
-import { Button } from './ui/button';
+import { Button } from '@sunstead/ui/components/button';
 import { EventItem, ProblemItem } from './event-item';
 import { Hint } from './hint';
 
@@ -43,48 +43,61 @@ export function EventsBell() {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <Hint label={label}>
-        <PopoverTrigger asChild>
-          <Button
-            variant='ghost'
-            size={problems.length > 0 ? 'default' : 'icon'}
-            aria-label={label}
-            className={cn(
-              'relative text-xs tabular-nums',
-              worst === 'error'
-                ? 'text-error hover:text-error'
-                : worst === 'warning'
-                  ? 'text-warning hover:text-warning'
-                  : 'text-muted-foreground',
-            )}
-          >
-            <Bell />
-            {problems.length > 0 && problems.length}
-            {unseen && (
-              <span
-                data-unseen
-                className='absolute top-1.5 right-1.5 size-1.5 rounded-full bg-primary'
-                aria-hidden='true'
-              />
-            )}
-          </Button>
+        <PopoverTrigger
+          render={
+            <Button
+              variant='ghost'
+              size={problems.length > 0 ? 'default' : 'icon'}
+              aria-label={label}
+              className={cn(
+                'relative text-xs tabular-nums',
+                worst === 'error'
+                  ? 'text-error hover:text-error'
+                  : worst === 'warning'
+                    ? 'text-warning hover:text-warning'
+                    : 'text-muted-foreground',
+              )}
+            />
+          }
+        >
+          <Bell />
+          {problems.length > 0 && problems.length}
+          {unseen && (
+            <span
+              data-unseen
+              className='absolute top-1.5 right-1.5 size-1.5 rounded-full bg-primary'
+              aria-hidden='true'
+            />
+          )}
         </PopoverTrigger>
       </Hint>
       <PopoverContent align='end' className='w-96 gap-0 p-0'>
         <div className='max-h-[60vh] divide-y overflow-y-auto'>
-          <h2 className='label-hud px-4 py-2 text-2xs text-muted-foreground'>Open problems</h2>
+          <h2 className='label-hud px-4 py-2 text-2xs text-muted-foreground'>
+            Open problems
+          </h2>
           {problems.length === 0 ? (
             <div className='flex items-center gap-2 px-4 py-2.5 text-sm text-muted-foreground'>
               <CircleCheck className='size-4 text-success' />
               Nothing needs attention.
             </div>
           ) : (
-            problems.map((p) => <ProblemItem key={`${p.nodeId}:${p.key}`} problem={p} showNode={showNode} />)
+            problems.map((p) => (
+              <ProblemItem key={`${p.nodeId}:${p.key}`} problem={p} showNode={showNode} />
+            ))
           )}
           {recent.length > 0 && (
             <>
-              <h2 className='label-hud px-4 py-2 text-2xs text-muted-foreground'>Recent</h2>
+              <h2 className='label-hud px-4 py-2 text-2xs text-muted-foreground'>
+                Recent
+              </h2>
               {recent.map((e) => (
-                <EventItem key={`${e.nodeId}:${e.id}`} event={e} showNode={showNode} relative />
+                <EventItem
+                  key={`${e.nodeId}:${e.id}`}
+                  event={e}
+                  showNode={showNode}
+                  relative
+                />
               ))}
             </>
           )}

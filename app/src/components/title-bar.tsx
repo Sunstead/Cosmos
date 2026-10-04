@@ -1,8 +1,8 @@
 import { memo } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Copy, Minus, PanelLeft, Search, Square, X } from 'lucide-react';
-import { Button, buttonVariants } from '@/components/ui/button';
-import { useSidebar } from '@/components/ui/resizable-sidebar';
+import { Button, buttonVariants } from '@sunstead/ui/components/button';
+import { useSidebar } from '@sunstead/ui/components/resizable-sidebar';
 import { useNodeStore } from '@/stores/nodes';
 import { useUiStore } from '@/stores/ui';
 import { getPlatform } from '@/lib/platform';

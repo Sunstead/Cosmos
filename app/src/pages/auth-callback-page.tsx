@@ -6,7 +6,7 @@ import { completeSignIn } from '@/stores/auth';
 import { useNodeStore } from '@/stores/nodes';
 import { PageHeader } from '@/components/page-header';
 import { EmptyState } from '@/components/empty-state';
-import { Button } from '@/components/ui/button';
+import { Button } from '@sunstead/ui/components/button';
 
 /**
  * Where the identity provider sends the browser back. Finishes the code

@@ -20,7 +20,7 @@ import { StatCard, StatRow } from '@/components/stat-card';
 import { TableSkeleton } from '@/components/skeletons';
 import { useAwaiting } from '@/hooks/use-awaiting';
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
+import { Button } from '@sunstead/ui/components/button';
 import {
   Table,
   TableBody,
@@ -28,7 +28,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
+} from '@sunstead/ui/components/table';
 
 interface PortRow {
   key: string;

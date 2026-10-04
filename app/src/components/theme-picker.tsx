@@ -1,11 +1,11 @@
 import { Moon, Sun } from 'lucide-react';
-import { useTheme } from '@/hooks/use-theme';
-import { Scheme, techThemes, ThemeDef, themeById, themesOf } from '@/lib/themes';
+import { useTheme } from '@sunstead/ui/use-theme';
+import { Scheme, ThemeDef, themeById, themesOf } from '@sunstead/ui/themes';
 import { cn } from '@/lib/utils';
-import { Label } from '@/components/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
+import { Label } from '@sunstead/ui/components/label';
+import { RadioGroup, RadioGroupItem } from '@sunstead/ui/components/radio-group';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@sunstead/ui/components/select';
+import { Switch } from '@sunstead/ui/components/switch';
 
 const SCHEMES: { scheme: Scheme; label: string; icon: typeof Moon }[] = [
   { scheme: 'dark', label: 'Dark', icon: Moon },
@@ -101,9 +101,9 @@ function ThemeCard({ theme, badge }: { theme: ThemeDef; badge?: Scheme }) {
 }
 
 /**
- * Settings > Appearance: every theme as a card, grouped Dark, Light and
- * Tech, one radio group so arrow keys move through them all. Below, Follow
- * system and the (rounded) theme it uses for each OS scheme.
+ * Settings > Appearance: every theme as a card, grouped Dark and Light (tech
+ * themes included), one radio group so arrow keys move through them all.
+ * Below, Follow system and the theme it uses for each OS scheme.
  */
 export function ThemeSettings() {
   const { themeId, setThemeId, followSystem, setFollowSystem, pair, setPair } = useTheme();
@@ -126,14 +126,6 @@ export function ThemeSettings() {
             </div>
           </div>
         ))}
-        <div role='group' aria-label='Tech' className='flex flex-col gap-2'>
-          <h3 className='label-hud text-2xs text-muted-foreground'>Tech</h3>
-          <div className='grid grid-cols-2 gap-2 @xl:grid-cols-3 @4xl:grid-cols-4'>
-            {techThemes().map((t) => (
-              <ThemeCard key={t.id} theme={t} />
-            ))}
-          </div>
-        </div>
       </RadioGroup>
 
       <div className='flex flex-col gap-3 border-t pt-4'>
@@ -153,7 +145,18 @@ export function ThemeSettings() {
                 <Label htmlFor={`pair-${scheme}`} className='w-14 font-normal text-muted-foreground'>
                   <Icon className='size-4' /> {label}
                 </Label>
-                <Select value={pair[scheme]} onValueChange={(id) => setPair(scheme, id)}>
+                <Select
+                  value={pair[scheme]}
+                  onValueChange={(id) => id && setPair(scheme, id)}
+                  items={themesOf(scheme).map((t) => ({
+                    value: t.id,
+                    label: (
+                      <>
+                        <ThemeSwatch id={t.id} /> {t.name}
+                      </>
+                    ),
+                  }))}
+                >
                   <SelectTrigger id={`pair-${scheme}`} className='w-44'>
                     <SelectValue />
                   </SelectTrigger>

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { TooltipProvider } from '@sunstead/ui/components/tooltip';
 import { useUiStore } from '@/stores/ui';
 import { DEFAULT_META, useNodeStore } from '@/stores/nodes';
 import { useContainersStore } from '@/stores/containers';
@@ -25,7 +25,7 @@ vi.mock('@tanstack/react-router', () => ({
     </a>
   ),
 }));
-vi.mock('@/components/ui/resizable-sidebar', () => ({ useSidebar: () => ({ toggleSidebar }) }));
+vi.mock('@sunstead/ui/components/resizable-sidebar', () => ({ useSidebar: () => ({ toggleSidebar }) }));
 vi.mock('@/api/queries', () => ({
   useContainerActions: () => ({ run, runMany: vi.fn(), pending: false }),
   useWol: () => ({ items: wolItems, networks: {}, nodes: ['n1'], loading: false, error: null }),

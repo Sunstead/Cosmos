@@ -27,10 +27,10 @@ import { Section } from '@/components/section';
 import { EmptyState, NoNodesState } from '@/components/empty-state';
 import { NodeUnavailable } from '@/components/sign-in';
 import { SETUP } from '@/lib/setup';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@sunstead/ui/components/alert';
+import { Badge } from '@sunstead/ui/components/badge';
+import { Skeleton } from '@sunstead/ui/components/skeleton';
+import { Button } from '@sunstead/ui/components/button';
 import {
   BackUpNowButton,
   RequestsSection,
@@ -45,7 +45,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
+} from '@sunstead/ui/components/table';
 
 function HealthAlert({ status }: { status: BackupsStatus }) {
   const health = backupHealth(status);

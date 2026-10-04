@@ -10,7 +10,7 @@ import {
   getNetTxMbps,
 } from '@/lib/node-metrics';
 import { secondsToDuration } from '@/lib/time';
-import { TableCell, TableHead, TableHeader, TableRow } from './ui/table';
+import { TableCell, TableHead, TableHeader, TableRow } from '@sunstead/ui/components/table';
 import { LiveValue } from './live-value';
 import NodeOptionsDropdown from './node-options-dropdown';
 import { NodeAvatar } from './node-planet';

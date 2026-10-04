@@ -2,14 +2,14 @@ import { memo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Info, LogIn, MoreHorizontal, PencilLine, RefreshCw, Trash } from 'lucide-react';
 import { useNodeStore, useNodeName } from '@/stores/nodes';
-import { Button } from './ui/button';
+import { Button } from '@sunstead/ui/components/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from './ui/dropdown-menu';
+} from '@sunstead/ui/components/dropdown-menu';
 import { ConfirmDialog } from './confirm-dialog';
 import { useNodeSignIn, useSignIn } from '@/lib/sign-in';
 import { RenameNodeDialog } from './rename-node-dialog';
@@ -32,32 +32,32 @@ export const NodeOptionsDropdown = memo(function NodeOptionsDropdown({
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant='ghost' size='icon' aria-label={`Options for ${name}`}>
-            <MoreHorizontal />
-          </Button>
+        <DropdownMenuTrigger
+          render={
+            <Button variant='ghost' size='icon' aria-label={`Options for ${name}`} />
+          }
+        >
+          <MoreHorizontal />
         </DropdownMenuTrigger>
         <DropdownMenuContent align='end' className='w-48'>
           {showDetails && (
-            <DropdownMenuItem asChild>
-              <Link to='/nodes/$nodeId' params={{ nodeId }}>
-                <Info /> Details
-              </Link>
+            <DropdownMenuItem render={<Link to='/nodes/$nodeId' params={{ nodeId }} />}>
+              <Info /> Details
             </DropdownMenuItem>
           )}
-          <DropdownMenuItem onSelect={() => setDialog('rename')}>
+          <DropdownMenuItem onClick={() => setDialog('rename')}>
             <PencilLine /> Rename
           </DropdownMenuItem>
           {needsSignIn && (
-            <DropdownMenuItem onSelect={() => void start(needsSignIn)}>
+            <DropdownMenuItem onClick={() => void start(needsSignIn)}>
               <LogIn /> Sign in
             </DropdownMenuItem>
           )}
-          <DropdownMenuItem onSelect={() => reconnect(nodeId)}>
+          <DropdownMenuItem onClick={() => reconnect(nodeId)}>
             <RefreshCw /> Reconnect
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem variant='destructive' onSelect={() => setDialog('remove')}>
+          <DropdownMenuItem variant='destructive' onClick={() => setDialog('remove')}>
             <Trash /> Remove
           </DropdownMenuItem>
         </DropdownMenuContent>

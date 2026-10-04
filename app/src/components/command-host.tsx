@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { useSidebar } from '@/components/ui/resizable-sidebar';
+import { useSidebar } from '@sunstead/ui/components/resizable-sidebar';
 import { useUiStore } from '@/stores/ui';
 import { PAGES } from '@/lib/navigation';
 import { getPlatform } from '@/lib/platform';

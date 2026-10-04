@@ -24,8 +24,8 @@ import {
   CommandList,
   CommandSeparator,
   CommandShortcut,
-} from '@/components/ui/command';
-import { useSidebar } from '@/components/ui/resizable-sidebar';
+} from '@sunstead/ui/components/command';
+import { useSidebar } from '@sunstead/ui/components/resizable-sidebar';
 import { useUiStore } from '@/stores/ui';
 import { nodeDisplayName, useNodeStore } from '@/stores/nodes';
 import { useContainersStore } from '@/stores/containers';

@@ -3,9 +3,9 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { cssToRgba, ensureLightness, parseCssColor, rgbaToHex, rgbToOklab } from './colors';
 
-// Every stylesheet, wherever the theme blocks live. Read from disk: vitest
-// runs with `css: false`, which empties `?raw` CSS imports.
-const SRC = path.resolve(__dirname, '../..');
+// Every theme, from @sunstead/ui. Read from disk: vitest runs with
+// `css: false`, which empties `?raw` CSS imports.
+const SRC = path.resolve(__dirname, '../../../node_modules/@sunstead/ui/src/themes');
 // Only the theme blocks: those are what the scene reads. Elsewhere (the
 // rounded HUD panel) the hologram variables are pointed at other tokens for
 // DOM content, which WebGL never sees.

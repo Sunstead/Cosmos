@@ -15,8 +15,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
-import { Card } from './ui/card';
+} from '@sunstead/ui/components/table';
+import { Card } from '@sunstead/ui/components/card';
 import { SkeletonRows } from './skeletons';
 import { cn } from '@/lib/utils';
 

@@ -40,14 +40,14 @@ import { NodeName } from '@/components/node-name';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { UptimeBar } from '@/components/uptime-bar';
 import { UptimeCheckDialog } from '@/components/uptime-check-dialog';
-import { Button } from '@/components/ui/button';
+import { Button } from '@sunstead/ui/components/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+} from '@sunstead/ui/components/dropdown-menu';
 
 type Filter = 'all' | 'down' | 'custom';
 
@@ -110,23 +110,25 @@ function RowMenu({ item, nodes }: { item: UptimeItem; nodes: string[] }) {
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant='ghost'
-            size='icon'
-            aria-label={`Options for ${item.check.name}`}
-          >
-            <MoreHorizontal />
-          </Button>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              variant='ghost'
+              size='icon'
+              aria-label={`Options for ${item.check.name}`}
+            />
+          }
+        >
+          <MoreHorizontal />
         </DropdownMenuTrigger>
         <DropdownMenuContent align='end'>
-          <DropdownMenuItem onSelect={() => setEditing(true)}>
+          <DropdownMenuItem onClick={() => setEditing(true)}>
             <Pencil /> Edit
           </DropdownMenuItem>
           {custom && (
             <>
               <DropdownMenuSeparator />
-              <DropdownMenuItem variant='destructive' onSelect={() => setRemoving(true)}>
+              <DropdownMenuItem variant='destructive' onClick={() => setRemoving(true)}>
                 <Trash /> Remove
               </DropdownMenuItem>
             </>

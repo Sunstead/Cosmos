@@ -3,7 +3,7 @@
  * on the Vite dev server. Not part of the build (only index.html is an
  * entry). Used to judge the look with a full sky and to measure frame time.
  *
- * Query: `theme=<id>` (or `light`/`dark` for the Cosmos themes), `nodes`,
+ * Query: `theme=<id>` (or `light`/`dark` for the Sunstead pair), `nodes`,
  * `moons`, `probes`, `variant=card|full`.
  */
 import ReactDOM from 'react-dom/client';
@@ -11,14 +11,14 @@ import { hostInfo } from '@/test/fixtures';
 import { ConstellationView } from '@/components/constellation-view';
 import { HostHub, ConstellationSource } from '@/lib/constellation/source';
 import { MoonInput, NodeInput, ProbeInput, Snapshot } from '@/lib/constellation/model';
-import { applyTheme, DEFAULT_THEME, themeById } from '@/lib/themes';
+import { applyTheme, DEFAULT_THEME, themeById } from '@sunstead/ui/themes';
 import '@/App.css';
 
 const q = new URLSearchParams(location.search);
 const themeParam = q.get('theme');
 applyTheme(
   themeById(
-    themeParam === 'light' || themeParam === 'dark' ? `cosmos-${themeParam}` : themeParam,
+    themeParam === 'light' || themeParam === 'dark' ? `sunstead-${themeParam}` : themeParam,
   ) ?? themeById(DEFAULT_THEME)!,
 );
 const nodeCount = Number(q.get('nodes') ?? 5);

@@ -13,7 +13,7 @@ import { NodeUnavailable } from '@/components/sign-in';
 import { SETUP } from '@/lib/setup';
 import { MetricChart } from '@/components/metric-chart';
 import { toRows } from '@/lib/metric-series';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Skeleton } from '@sunstead/ui/components/skeleton';
 
 const RANGES = {
   '1h': 3_600,

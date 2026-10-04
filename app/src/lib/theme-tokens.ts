@@ -2,7 +2,7 @@
  * CSS tokens for canvas drawing. Canvas can't resolve `var(--x)`, so values
  * are read from the computed style and cached per theme id.
  */
-import type { ThemeStyle } from './themes';
+import type { ThemeStyle } from '@sunstead/ui/themes';
 
 export interface CanvasTokens {
   /** The theme id the values were read under. */

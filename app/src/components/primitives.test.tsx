@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Cpu, Grid2x2, List, ServerOff } from 'lucide-react';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { TooltipProvider } from '@sunstead/ui/components/tooltip';
 import { PageHeader } from './page-header';
 import { StatCard } from './stat-card';
 import { EmptyState, NoNodesState } from './empty-state';
@@ -86,28 +86,28 @@ describe('SegmentedControl', () => {
 
   it('marks the active option and switches on click', async () => {
     wrap(<Harness />);
-    const grid = screen.getByRole('radio', { name: 'Grid' });
-    const list = screen.getByRole('radio', { name: 'List' });
-    expect(grid).toHaveAttribute('aria-checked', 'true');
+    const grid = screen.getByRole('button', { name: 'Grid' });
+    const list = screen.getByRole('button', { name: 'List' });
+    expect(grid).toHaveAttribute('aria-pressed', 'true');
 
     await userEvent.click(list);
-    expect(list).toHaveAttribute('aria-checked', 'true');
-    expect(grid).toHaveAttribute('aria-checked', 'false');
+    expect(list).toHaveAttribute('aria-pressed', 'true');
+    expect(grid).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('cannot be deselected', async () => {
     const onChange = vi.fn();
     wrap(<Harness onChange={onChange} />);
-    await userEvent.click(screen.getByRole('radio', { name: 'Grid' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Grid' }));
     expect(onChange).not.toHaveBeenCalled();
-    expect(screen.getByRole('radio', { name: 'Grid' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('button', { name: 'Grid' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('moves between options with arrow keys', async () => {
     wrap(<Harness />);
-    screen.getByRole('radio', { name: 'Grid' }).focus();
+    screen.getByRole('button', { name: 'Grid' }).focus();
     await userEvent.keyboard('{ArrowRight}');
-    expect(screen.getByRole('radio', { name: 'List' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'List' })).toHaveFocus();
   });
 });
 

@@ -8,18 +8,18 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
+} from '@sunstead/ui/components/dialog';
+import { Field, FieldDescription, FieldGroup, FieldLabel } from '@sunstead/ui/components/field';
+import { Input } from '@sunstead/ui/components/input';
+import { Button } from '@sunstead/ui/components/button';
+import { Checkbox } from '@sunstead/ui/components/checkbox';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from '@sunstead/ui/components/select';
 import { SegmentedControl } from '@/components/segmented-control';
 import { useUptimeActions } from '@/api/queries';
 import { nodeDisplayName, useNodeStore } from '@/stores/nodes';
@@ -148,7 +148,14 @@ function CustomForm({
           {!fixedNode && nodes.length > 1 && (
             <Field>
               <FieldLabel htmlFor='uptime-node'>Node</FieldLabel>
-              <Select value={nodeId} onValueChange={setNodeId}>
+              <Select
+                value={nodeId}
+                onValueChange={(v) => v && setNodeId(v)}
+                items={nodes.map((id) => {
+                  const node = allNodes.find((n) => n.id === id);
+                  return { value: id, label: node ? nodeDisplayName(node) : id };
+                })}
+              >
                 <SelectTrigger id='uptime-node'>
                   <SelectValue />
                 </SelectTrigger>
@@ -223,7 +230,11 @@ function CustomForm({
 
           <Field>
             <FieldLabel htmlFor='uptime-interval'>Every</FieldLabel>
-            <Select value={interval} onValueChange={setInterval}>
+            <Select
+              value={interval}
+              onValueChange={(v) => v && setInterval(v)}
+              items={intervals.map((i) => ({ value: String(i.value), label: i.label }))}
+            >
               <SelectTrigger id='uptime-interval'>
                 <SelectValue />
               </SelectTrigger>
@@ -256,9 +267,7 @@ function CustomForm({
       </form>
 
       <DialogFooter>
-        <DialogClose asChild>
-          <Button variant='outline'>Cancel</Button>
-        </DialogClose>
+        <DialogClose render={<Button variant='outline' />}>Cancel</DialogClose>
         <Button form='uptime-check' type='submit' disabled={busy || !nodeId}>
           {busy ? 'Checking' : check ? 'Save' : 'Add'}
         </Button>
@@ -360,9 +369,7 @@ function ServiceForm({
       </form>
 
       <DialogFooter>
-        <DialogClose asChild>
-          <Button variant='outline'>Cancel</Button>
-        </DialogClose>
+        <DialogClose render={<Button variant='outline' />}>Cancel</DialogClose>
         <Button form='uptime-service' type='submit' disabled={busy}>
           {busy ? 'Checking' : 'Save'}
         </Button>

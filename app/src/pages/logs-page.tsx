@@ -17,19 +17,19 @@ import { SETUP } from '@/lib/setup';
 import { Hint } from '@/components/hint';
 import { Dot } from '@/components/dot';
 import { containerStateVariant } from '@/components/container-columns';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Card } from '@sunstead/ui/components/card';
+import { Button } from '@sunstead/ui/components/button';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from '@sunstead/ui/components/select';
 import { stripAnsi } from '@/lib/ansi';
 import { LogRow } from '@/components/log-row';
 import { LogSkeleton } from '@/components/skeletons';
-import { SelectSeparator } from '@/components/ui/select';
+import { SelectSeparator } from '@sunstead/ui/components/select';
 
 type Stream = 'all' | 'stdout' | 'stderr';
 
@@ -209,7 +209,22 @@ export function LogsPage() {
           containers.length > 0 && (
             <>
               <NodeSelect value={nodeId} onChange={selectNode} />
-              <Select value={containerId ?? ''} onValueChange={selectContainer}>
+              <Select
+                value={containerId}
+                onValueChange={(id) => id && selectContainer(id)}
+                items={[
+                  { value: ALL_CONTAINERS, label: 'All containers' },
+                  ...containers.map((c) => ({
+                    value: c.id,
+                    label: (
+                      <>
+                        <Dot variant={containerStateVariant(c.state)} />
+                        {c.name}
+                      </>
+                    ),
+                  })),
+                ]}
+              >
                 <SelectTrigger className='w-52' aria-label='Container'>
                   <SelectValue placeholder='Container' />
                 </SelectTrigger>

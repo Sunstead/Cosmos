@@ -4,9 +4,10 @@ import { RouterProvider } from '@tanstack/react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { router } from './router';
 import { applyPlatform, isDesktop } from './lib/platform';
-import { ThemeProvider } from './components/theme-provider';
-import { TooltipProvider } from './components/ui/tooltip';
-import { Toaster } from './components/ui/sonner';
+import { ThemeProvider } from '@sunstead/ui/theme-provider';
+import { THEME_ALIASES } from './lib/theme-aliases';
+import { TooltipProvider } from '@sunstead/ui/components/tooltip';
+import { Toaster } from '@sunstead/ui/components/sonner';
 import './App.css';
 
 // Before render, so platform-specific CSS applies to the first frame.
@@ -28,8 +29,8 @@ const queryClient = new QueryClient({
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <ThemeProvider>
-      <TooltipProvider delayDuration={300}>
+    <ThemeProvider app='cosmos' aliases={THEME_ALIASES}>
+      <TooltipProvider delay={300}>
         <QueryClientProvider client={queryClient}>
           <RouterProvider router={router} />
         </QueryClientProvider>

@@ -5,15 +5,16 @@ import { ServiceInfo } from '@/lib/services';
 import { serviceHref } from '@/lib/agent-url';
 import { openExternal } from '@/lib/open-external';
 import { useContainerActions, useNodeMeta } from '@/api/queries';
-import { Button } from './ui/button';
+import { Button } from '@sunstead/ui/components/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from './ui/dropdown-menu';
+} from '@sunstead/ui/components/dropdown-menu';
 import { ReadOnlyNote } from './read-only-note';
 
 /** Actions applied to every container in a service at once. */
@@ -31,40 +32,53 @@ export const ServiceActionsMenu = memo(function ServiceActionsMenu({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant='ghost' size='icon' aria-label={`Actions for ${service.name}`}>
-          <MoreHorizontal />
-        </Button>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant='ghost'
+            size='icon'
+            aria-label={`Actions for ${service.name}`}
+          />
+        }
+      >
+        <MoreHorizontal />
       </DropdownMenuTrigger>
       <DropdownMenuContent align='end' className='w-52'>
-        <DropdownMenuLabel className='truncate'>{service.name}</DropdownMenuLabel>
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className='truncate'>{service.name}</DropdownMenuLabel>
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
         {href && (
-          <DropdownMenuItem onSelect={() => void openExternal(href)}>
+          <DropdownMenuItem onClick={() => void openExternal(href)}>
             <ExternalLink /> Open
           </DropdownMenuItem>
         )}
-        <DropdownMenuItem asChild>
-          <Link to='/logs' search={{ node: service.nodeId, container: firstContainer }}>
-            <Logs /> View logs
-          </Link>
+        <DropdownMenuItem
+          render={
+            <Link
+              to='/logs'
+              search={{ node: service.nodeId, container: firstContainer }}
+            />
+          }
+        >
+          <Logs /> View logs
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           disabled={!canAct || !!pending || service.running === service.total}
-          onSelect={() => void runMany(ids, 'start', service.name)}
+          onClick={() => void runMany(ids, 'start', service.name)}
         >
           <Play /> Start
         </DropdownMenuItem>
         <DropdownMenuItem
           disabled={!canAct || !!pending || service.running === 0}
-          onSelect={() => void runMany(ids, 'restart', service.name)}
+          onClick={() => void runMany(ids, 'restart', service.name)}
         >
           <RotateCcw /> Restart
         </DropdownMenuItem>
         <DropdownMenuItem
           disabled={!canAct || !!pending || service.running === 0}
-          onSelect={() => void runMany(ids, 'stop', service.name)}
+          onClick={() => void runMany(ids, 'stop', service.name)}
         >
           <Square /> Stop
         </DropdownMenuItem>

@@ -1,7 +1,7 @@
 import { ReactNode } from 'react';
 import { LucideIcon } from 'lucide-react';
-import { Card } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Card } from '@sunstead/ui/components/card';
+import { Skeleton } from '@sunstead/ui/components/skeleton';
 import { cn } from '@/lib/utils';
 
 export type Tone = 'default' | 'success' | 'warning' | 'error';

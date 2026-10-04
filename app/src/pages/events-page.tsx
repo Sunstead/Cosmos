@@ -16,7 +16,7 @@ import { EmptyState, NoNodesState } from '@/components/empty-state';
 import { TableSkeleton } from '@/components/skeletons';
 import { SETUP } from '@/lib/setup';
 import { EventItem, ProblemItem } from '@/components/event-item';
-import { Button } from '@/components/ui/button';
+import { Button } from '@sunstead/ui/components/button';
 
 type Filter = 'all' | 'problems' | 'actions';
 

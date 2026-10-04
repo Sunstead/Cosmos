@@ -7,10 +7,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Field, FieldLabel } from './ui/field';
-import { Input } from './ui/input';
-import { Button } from './ui/button';
+} from '@sunstead/ui/components/dialog';
+import { Field, FieldLabel } from '@sunstead/ui/components/field';
+import { Input } from '@sunstead/ui/components/input';
+import { Button } from '@sunstead/ui/components/button';
 import { useNodeStore } from '@/stores/nodes';
 
 export function RenameNodeDialog({
@@ -78,9 +78,7 @@ function RenameForm({
         </Field>
       </form>
       <DialogFooter>
-        <DialogClose asChild>
-          <Button variant='outline'>Cancel</Button>
-        </DialogClose>
+        <DialogClose render={<Button variant='outline' />}>Cancel</DialogClose>
         <Button form='rename-node' type='submit'>
           Save
         </Button>
