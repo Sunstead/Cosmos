@@ -3,7 +3,7 @@ import { act, render, screen } from '@testing-library/react';
 import { UserAvatar } from './user-avatar';
 
 /**
- * jsdom never loads images, so stand in for the off-screen `Image` Radix
+ * jsdom never loads images, so stand in for the off-screen `Image` Base UI
  * loads the picture with: URLs containing "ok" load, anything else fails.
  */
 class FakeImage extends EventTarget {
@@ -11,6 +11,8 @@ class FakeImage extends EventTarget {
   naturalWidth = 0;
   referrerPolicy = '';
   crossOrigin: string | null = null;
+  onload: (() => void) | null = null;
+  onerror: (() => void) | null = null;
   #src = '';
   get src() {
     return this.#src;
@@ -22,8 +24,10 @@ class FakeImage extends EventTarget {
       if (value.includes('ok')) {
         this.naturalWidth = 64;
         this.dispatchEvent(new Event('load'));
+        this.onload?.();
       } else {
         this.dispatchEvent(new Event('error'));
+        this.onerror?.();
       }
     }, 10);
   }

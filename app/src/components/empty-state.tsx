@@ -7,8 +7,8 @@ import {
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from '@/components/ui/empty';
-import { Button } from '@/components/ui/button';
+} from '@sunstead/ui/components/empty';
+import { Button } from '@sunstead/ui/components/button';
 import { useUiStore } from '@/stores/ui';
 import { cn } from '@/lib/utils';
 import { SetupHint } from './setup-hint';

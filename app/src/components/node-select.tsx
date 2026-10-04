@@ -5,7 +5,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from '@sunstead/ui/components/select';
 import { Dot } from './dot';
 
 /** Hidden when there's only one node to choose from. */
@@ -21,7 +21,19 @@ export function NodeSelect({
   if (nodes.length < 2) return null;
 
   return (
-    <Select value={value ?? ''} onValueChange={onChange}>
+    <Select
+      value={value}
+      onValueChange={(id) => id && onChange(id)}
+      items={nodes.map((n) => ({
+        value: n.id,
+        label: (
+          <>
+            <Dot variant={meta[n.id]?.status === 'online' ? 'success' : 'disabled'} />
+            {nodeDisplayName(n)}
+          </>
+        ),
+      }))}
+    >
       <SelectTrigger className='w-44' aria-label='Node'>
         <SelectValue placeholder='Select node' />
       </SelectTrigger>

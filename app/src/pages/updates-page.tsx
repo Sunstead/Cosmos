@@ -46,15 +46,15 @@ import { SetupHint } from '@/components/setup-hint';
 import { SETUP } from '@/lib/setup';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { NodeName } from '@/components/node-name';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@sunstead/ui/components/alert';
+import { Button } from '@sunstead/ui/components/button';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from '@sunstead/ui/components/select';
 
 type Filter = 'all' | 'available' | 'automatic';
 
@@ -217,6 +217,7 @@ function PolicySelect({ item }: { item: UpdateItem }) {
   return (
     <Select
       value={item.policy}
+      items={POLICY}
       onValueChange={(v) =>
         void actions.policy(item.nodeId, item, v as UpdatePolicy).catch(() => {})
       }

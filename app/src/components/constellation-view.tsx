@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Crosshair, Maximize2, Minus, Plus } from 'lucide-react';
 import type { HostInfo } from '@/generated/HostInfo';
-import { Button } from '@/components/ui/button';
+import { Button } from '@sunstead/ui/components/button';
 import { cn } from '@/lib/utils';
 import { cancelDraw, requestDraw } from '@/lib/frame-scheduler';
 import { displayHost } from '@/lib/agent-url';
@@ -18,7 +18,7 @@ import {
   reconcile,
 } from '@/lib/constellation/model';
 import { toneOf } from '@/lib/constellation/hud';
-import type { ThemeStyle } from '@/lib/themes';
+import type { ThemeStyle } from '@sunstead/ui/themes';
 import { useThemeStyle } from '@/hooks/use-theme-style';
 
 /** Ghost buttons in hologram colours, since the viewport is dark in every theme. */

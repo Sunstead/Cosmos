@@ -4,8 +4,8 @@ import {
   InputGroupAddon,
   InputGroupButton,
   InputGroupInput,
-} from '@/components/ui/input-group';
-import { Kbd } from '@/components/ui/kbd';
+} from '@sunstead/ui/components/input-group';
+import { Kbd } from '@sunstead/ui/components/kbd';
 import { cn } from '@/lib/utils';
 
 /**

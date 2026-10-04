@@ -11,6 +11,14 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(async () => ({
   plugins: [react(), tailwindcss(), svgr()],
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
+  // @sunstead/ui is source: pre-bundling would give each of its entry points
+  // its own copy of shared modules (two theme contexts, two sidebars).
+  optimizeDeps: {
+    exclude: ['@sunstead/ui'],
+    // Base UI, reached only through it, imports this CommonJS shim; it has
+    // to be pre-bundled or the browser can't load it in dev.
+    include: ['use-sync-external-store/shim', 'use-sync-external-store/shim/with-selector'],
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

@@ -1,6 +1,6 @@
 import { Copy, HelpCircle } from 'lucide-react';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@sunstead/ui/components/popover';
+import { Button } from '@sunstead/ui/components/button';
 import { copyText } from '@/lib/clipboard';
 import { SetupInfo } from '@/lib/setup';
 
@@ -8,10 +8,17 @@ import { SetupInfo } from '@/lib/setup';
 export function SetupHint({ info, label = 'How to enable' }: { info: SetupInfo; label?: string }) {
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        <Button variant='ghost' size='icon-xs' aria-label={label} className='text-muted-foreground'>
-          <HelpCircle />
-        </Button>
+      <PopoverTrigger
+        render={
+          <Button
+            variant='ghost'
+            size='icon-xs'
+            aria-label={label}
+            className='text-muted-foreground'
+          />
+        }
+      >
+        <HelpCircle />
       </PopoverTrigger>
       <PopoverContent className='w-80 space-y-3 text-sm'>
         <p>{info.summary}</p>

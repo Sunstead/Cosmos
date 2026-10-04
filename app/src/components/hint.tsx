@@ -1,6 +1,6 @@
 import { ReactElement } from 'react';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Kbd, KbdGroup } from '@/components/ui/kbd';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@sunstead/ui/components/tooltip';
+import { Kbd, KbdGroup } from '@sunstead/ui/components/kbd';
 import { chordKeys, isSequence, SHORTCUTS, ShortcutId } from '@/lib/shortcuts';
 
 /** Key caps for a registered shortcut: `⌘ K`, or `G then O` for a sequence. */
@@ -46,7 +46,7 @@ export function Hint({
 }) {
   return (
     <Tooltip>
-      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipTrigger render={children} />
       <TooltipContent side={side} className='flex items-center gap-2'>
         {label}
         {shortcut && <ShortcutKeys id={shortcut} />}

@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { onThemeChange } from '@/lib/theme-tokens';
-import type { ThemeStyle } from '@/lib/themes';
+import type { ThemeStyle } from '@sunstead/ui/themes';
 
 const read = (): ThemeStyle => (document.documentElement.dataset.style === 'tech' ? 'tech' : 'rounded');
 

@@ -5,7 +5,7 @@ import { createServer } from 'node:http';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { addNode, addNodeOnline, agentUrl, apiToken, HEADERLESS, nextSignIn, overflowing, PAGES, section } from './helpers';
-import { THEMES } from '../src/lib/themes';
+import { THEMES } from '@sunstead/ui/themes';
 
 test.describe('empty app', () => {
   test('every page keeps its header with no nodes', async ({ page }) => {
@@ -54,7 +54,7 @@ test.describe('empty app', () => {
     });
     await page.goto('/settings');
     const html = page.locator('html');
-    await expect(html).toHaveAttribute('data-theme', 'cosmos-dark');
+    await expect(html).toHaveAttribute('data-theme', 'sunstead-dark');
     await expect(html).toHaveClass(/dark/);
     await page.getByRole('radio', { name: 'Solar' }).click();
     await expect(html).toHaveAttribute('data-theme', 'solar');
@@ -78,7 +78,7 @@ test.describe('empty app', () => {
     await page.goto('/settings');
     const html = page.locator('html');
     await expect(html).toHaveAttribute('data-style', 'rounded');
-    await page.getByRole('group', { name: 'Tech' }).getByRole('radio', { name: 'Blueprint' }).click();
+    await page.getByRole('group', { name: 'Light' }).getByRole('radio', { name: 'Blueprint' }).click();
     await expect(html).toHaveAttribute('data-theme', 'blueprint');
     await expect(html).toHaveAttribute('data-style', 'tech');
     await expect(html).toHaveClass(/light/);
@@ -96,12 +96,19 @@ test.describe('empty app', () => {
     expect(font).toContain('JetBrains Mono');
   });
 
-  test('a pre-0.10 light choice becomes Cosmos Light', async ({ page }) => {
+  test('a pre-0.10 light choice becomes Sunstead Light', async ({ page }) => {
     await page.goto('/overview');
     await page.evaluate(() => localStorage.setItem('cosmos-theme', 'light'));
     await page.reload();
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'cosmos-light');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'sunstead-light');
     await expect(page.locator('html')).toHaveClass(/light/);
+  });
+
+  test('Cosmos Dark, from before the shared themes, becomes Sunstead Dark', async ({ page }) => {
+    await page.goto('/overview');
+    await page.evaluate(() => localStorage.setItem('cosmos-theme', 'cosmos-dark'));
+    await page.reload();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'sunstead-dark');
   });
 
   test('follow system tracks the OS with the chosen themes', async ({ page }) => {
@@ -109,14 +116,14 @@ test.describe('empty app', () => {
     await page.goto('/settings');
     const html = page.locator('html');
     await page.getByRole('switch', { name: 'Follow system' }).click();
-    await expect(html).toHaveAttribute('data-theme', 'cosmos-dark');
+    await expect(html).toHaveAttribute('data-theme', 'sunstead-dark');
     await page.getByRole('combobox', { name: 'Dark' }).click();
     await page.getByRole('option', { name: 'Aurora' }).click();
     await expect(html).toHaveAttribute('data-theme', 'aurora');
     await page.emulateMedia({ colorScheme: 'light' });
-    await expect(html).toHaveAttribute('data-theme', 'cosmos-light');
+    await expect(html).toHaveAttribute('data-theme', 'sunstead-light');
     await page.reload();
-    await expect(html).toHaveAttribute('data-theme', 'cosmos-light');
+    await expect(html).toHaveAttribute('data-theme', 'sunstead-light');
     await page.emulateMedia({ colorScheme: 'dark' });
     await expect(html).toHaveAttribute('data-theme', 'aurora');
     // Turning it off keeps what is showing.
@@ -816,13 +823,13 @@ test.describe('with a node', () => {
     }
   });
 
-  test('screenshots of every page in both Cosmos themes, and Overview in every theme', async ({ page }, info) => {
+  test('screenshots of every page in both base themes, and Overview in every theme', async ({ page }, info) => {
     // Every page twice: well past the default 30 s once earlier specs have
     // given the agent something to show.
     test.setTimeout(180_000);
     await addNodeOnline(page);
     const detail = new URL(page.url()).pathname;
-    for (const theme of ['cosmos-dark', 'cosmos-light']) {
+    for (const theme of ['sunstead-dark', 'sunstead-light']) {
       await page.evaluate((t) => localStorage.setItem('cosmos-theme', t), theme);
       for (const path of [...PAGES, detail]) {
         await page.goto(path);
@@ -909,7 +916,7 @@ test.describe('logs', () => {
 test.describe('constellation preview', () => {
   // Fixture data on the dev server (src/dev/constellation-preview.tsx):
   // 5 nodes, 50 services and 15 devices, so the look can be judged without Docker.
-  // Cosmos Dark and Light (rounded), and Hologram (tech).
+  // Sunstead Dark and Light (rounded), and Hologram (tech).
   for (const theme of ['dark', 'light', 'hologram']) {
     test(`a full sky in ${theme}`, async ({ page }, info) => {
       await page.goto(`/e2e/constellation.html?theme=${theme}`);

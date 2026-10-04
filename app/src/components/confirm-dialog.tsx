@@ -1,4 +1,4 @@
-import { ReactNode, useState } from 'react';
+import { ReactElement, ReactNode, useState } from 'react';
 import {
   Dialog,
   DialogClose,
@@ -8,8 +8,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/dialog';
-import { Button } from './ui/button';
+} from '@sunstead/ui/components/dialog';
+import { Button } from '@sunstead/ui/components/button';
 
 interface Props {
   title: string;
@@ -18,7 +18,7 @@ interface Props {
   destructive?: boolean;
   onConfirm: () => void | Promise<void>;
   /** Uncontrolled: renders its own trigger. */
-  trigger?: ReactNode;
+  trigger?: ReactElement;
   /** Controlled: for opening from a menu item that unmounts on select. */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -61,18 +61,16 @@ export function ConfirmDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
+      {trigger && <DialogTrigger render={trigger} />}
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription asChild>
-            <div className='text-sm text-muted-foreground'>{description}</div>
+          <DialogDescription render={<div className='text-sm text-muted-foreground' />}>
+            {description}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <DialogClose asChild>
-            <Button variant='outline'>Cancel</Button>
-          </DialogClose>
+          <DialogClose render={<Button variant='outline' />}>Cancel</DialogClose>
           <Button
             variant={destructive ? 'destructive' : 'default'}
             onClick={confirm}

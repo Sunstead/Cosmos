@@ -5,15 +5,16 @@ import { VolumeRow } from './volume-columns';
 import { useNodeMeta } from '@/api/queries';
 import { getConnection } from '@/stores/nodes';
 import { copyText } from '@/lib/clipboard';
-import { Button } from './ui/button';
+import { Button } from '@sunstead/ui/components/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from './ui/dropdown-menu';
+} from '@sunstead/ui/components/dropdown-menu';
 import { ConfirmDialog } from './confirm-dialog';
 import { ReadOnlyNote } from './read-only-note';
 
@@ -43,19 +44,29 @@ export const VolumeActionsCell = memo(function VolumeActionsCell({
   return (
     <div className='flex justify-end'>
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant='ghost' size='icon' aria-label={`Actions for ${volume.name}`}>
-            <MoreHorizontal />
-          </Button>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              variant='ghost'
+              size='icon'
+              aria-label={`Actions for ${volume.name}`}
+            />
+          }
+        >
+          <MoreHorizontal />
         </DropdownMenuTrigger>
         <DropdownMenuContent align='end' className='w-52'>
-          <DropdownMenuLabel className='truncate'>{volume.name}</DropdownMenuLabel>
+          <DropdownMenuGroup>
+            <DropdownMenuLabel className='truncate'>{volume.name}</DropdownMenuLabel>
+          </DropdownMenuGroup>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => void copyText(volume.name, 'Volume name copied')}>
+          <DropdownMenuItem
+            onClick={() => void copyText(volume.name, 'Volume name copied')}
+          >
             <Copy /> Copy name
           </DropdownMenuItem>
           <DropdownMenuItem
-            onSelect={() => void copyText(volume.mountpoint, 'Mountpoint copied')}
+            onClick={() => void copyText(volume.mountpoint, 'Mountpoint copied')}
           >
             <Copy /> Copy mountpoint
           </DropdownMenuItem>
@@ -63,15 +74,14 @@ export const VolumeActionsCell = memo(function VolumeActionsCell({
           <DropdownMenuItem
             variant='destructive'
             disabled={inUse || !canAct}
-            onSelect={(e) => {
-              e.preventDefault();
-              setRemoving(true);
-            }}
+            onClick={() => setRemoving(true)}
           >
             <Trash /> Delete
           </DropdownMenuItem>
           {inUse && canAct && (
-            <p className='px-2 py-1 text-xs text-muted-foreground'>In use, can't delete</p>
+            <p className='px-2 py-1 text-xs text-muted-foreground'>
+              In use, can't delete
+            </p>
           )}
           {!canAct && <ReadOnlyNote />}
         </DropdownMenuContent>

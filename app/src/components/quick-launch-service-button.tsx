@@ -4,7 +4,7 @@ import { ServiceIcon } from '@/lib/service-icons';
 import { serviceHref } from '@/lib/agent-url';
 import { openExternal } from '@/lib/open-external';
 import { getServiceStatusDisplay } from '@/lib/service-utils';
-import { Button } from './ui/button';
+import { Button } from '@sunstead/ui/components/button';
 import { Dot } from './dot';
 
 export const QuickLaunchServiceButton = memo(function QuickLaunchServiceButton({

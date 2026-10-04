@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { Card } from '@/components/ui/card';
+import { Card } from '@sunstead/ui/components/card';
 import { cn } from '@/lib/utils';
 
 /**

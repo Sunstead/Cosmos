@@ -8,17 +8,17 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
+} from '@sunstead/ui/components/dialog';
+import { Field, FieldDescription, FieldGroup, FieldLabel } from '@sunstead/ui/components/field';
+import { Input } from '@sunstead/ui/components/input';
+import { Button } from '@sunstead/ui/components/button';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from '@sunstead/ui/components/select';
 import { useTailnet, useWol, useWolActionNodes, useWolActions } from '@/api/queries';
 import { getConnection, nodeDisplayName, useNodeStore } from '@/stores/nodes';
 import { WolTarget } from '@/generated/WolTarget';
@@ -134,9 +134,12 @@ function TargetForm({
   return (
     <DialogContent>
       <DialogHeader>
-        <DialogTitle>{target ? `Edit ${target.name}` : 'Add a machine to wake'}</DialogTitle>
+        <DialogTitle>
+          {target ? `Edit ${target.name}` : 'Add a machine to wake'}
+        </DialogTitle>
         <DialogDescription>
-          The node sends the magic packet on its own network, so pick the one on the same LAN.
+          The node sends the magic packet on its own network, so pick the one on the same
+          LAN.
         </DialogDescription>
       </DialogHeader>
 
@@ -145,7 +148,14 @@ function TargetForm({
           {!fixedNode && actionNodes.length > 1 && (
             <Field>
               <FieldLabel htmlFor='wol-node'>Node</FieldLabel>
-              <Select value={nodeId} onValueChange={setNodeId}>
+              <Select
+                value={nodeId}
+                onValueChange={(v) => v && setNodeId(v)}
+                items={actionNodes.map((id) => {
+                  const node = nodes.find((n) => n.id === id);
+                  return { value: id, label: node ? nodeDisplayName(node) : id };
+                })}
+              >
                 <SelectTrigger id='wol-node'>
                   <SelectValue />
                 </SelectTrigger>
@@ -186,15 +196,20 @@ function TargetForm({
               required
             />
             {(neighbors.data?.neighbors.length ?? 0) > 0 && (
-              <Select value='' onValueChange={setMac}>
-                <SelectTrigger aria-label='Pick a recently seen machine' className='w-full'>
+              <Select value={null} onValueChange={(v) => v && setMac(v)}>
+                <SelectTrigger
+                  aria-label='Pick a recently seen machine'
+                  className='w-full'
+                >
                   <SelectValue placeholder='Or pick a machine the node has seen' />
                 </SelectTrigger>
                 <SelectContent>
                   {neighbors.data!.neighbors.map((n) => (
                     <SelectItem key={`${n.interface}:${n.mac}`} value={n.mac}>
                       <span className='font-mono text-xs'>{n.ip}</span>
-                      <span className='font-mono text-xs text-muted-foreground'>{n.mac}</span>
+                      <span className='font-mono text-xs text-muted-foreground'>
+                        {n.mac}
+                      </span>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -204,7 +219,14 @@ function TargetForm({
 
           <Field>
             <FieldLabel htmlFor='wol-device'>Tailnet device</FieldLabel>
-            <Select value={device} onValueChange={setDevice}>
+            <Select
+              value={device}
+              onValueChange={(v) => v && setDevice(v)}
+              items={[
+                { value: NONE, label: 'Not on the tailnet' },
+                ...devices.map((d) => ({ value: d.id, label: d.name })),
+              ]}
+            >
               <SelectTrigger id='wol-device'>
                 <SelectValue />
               </SelectTrigger>
@@ -224,7 +246,17 @@ function TargetForm({
           <div className='grid grid-cols-[minmax(0,1fr)_6rem] gap-3'>
             <Field>
               <FieldLabel htmlFor='wol-broadcast'>Send to</FieldLabel>
-              <Select value={broadcast} onValueChange={setBroadcast}>
+              <Select
+                value={broadcast}
+                onValueChange={(v) => v && setBroadcast(v)}
+                items={[
+                  { value: NONE, label: 'Every network (255.255.255.255)' },
+                  ...broadcastOptions.map((n) => ({
+                    value: n.broadcast,
+                    label: n.broadcast,
+                  })),
+                ]}
+              >
                 <SelectTrigger id='wol-broadcast'>
                   <SelectValue />
                 </SelectTrigger>
@@ -262,7 +294,9 @@ function TargetForm({
               onChange={(e) => setProbe(e.target.value)}
               className='font-mono'
             />
-            <FieldDescription>For machines not on the tailnet. Any answer on this port counts as awake.</FieldDescription>
+            <FieldDescription>
+              For machines not on the tailnet. Any answer on this port counts as awake.
+            </FieldDescription>
           </Field>
 
           {error && (
@@ -274,9 +308,7 @@ function TargetForm({
       </form>
 
       <DialogFooter>
-        <DialogClose asChild>
-          <Button variant='outline'>Cancel</Button>
-        </DialogClose>
+        <DialogClose render={<Button variant='outline' />}>Cancel</DialogClose>
         <Button form='wol-target' type='submit' disabled={busy || !nodeId}>
           {target ? 'Save' : 'Add'}
         </Button>

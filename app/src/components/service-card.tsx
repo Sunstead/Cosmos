@@ -15,7 +15,7 @@ import { openExternal } from '@/lib/open-external';
 import { useNow } from '@/api/queries';
 import { UptimeEntry } from '@/generated/UptimeEntry';
 import { ServiceCheckChip } from './uptime-bar';
-import { Card } from './ui/card';
+import { Card } from '@sunstead/ui/components/card';
 import { Dot } from './dot';
 import { ServiceActionsMenu } from './service-actions-menu';
 import { NodeName } from './node-name';

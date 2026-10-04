@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useState } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { Orbit } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@sunstead/ui/components/button';
 import { EmptyState } from '@/components/empty-state';
 import { useConstellationSource } from '@/hooks/use-constellation-source';
 import { serviceHref } from '@/lib/agent-url';
@@ -59,9 +59,9 @@ export function Constellation({
           title='The 3D view needs WebGL'
           description='This browser has it turned off or unavailable. Your nodes are all on the Nodes page.'
           action={
-            <Button variant='outline' size='sm' asChild>
-              <Link to='/nodes'>Show nodes</Link>
-            </Button>
+            <Link to='/nodes' className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+              Show nodes
+            </Link>
           }
         />
       </div>

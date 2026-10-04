@@ -28,10 +28,11 @@ import { NodeRecoveryButton } from '@/components/sign-in';
 import { DataTable } from '@/components/data-table';
 import { DockerDownNote } from '@/components/docker-down-note';
 import { containerColumns, ContainerRow } from '@/components/container-columns';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@sunstead/ui/components/button';
+import { cn } from '@/lib/utils';
 import { Hint } from '@/components/hint';
-import { Progress } from '@/components/ui/progress';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Progress } from '@sunstead/ui/components/progress';
+import { Skeleton } from '@sunstead/ui/components/skeleton';
 
 function Spec({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -60,7 +61,13 @@ function CoreGrid({ nodeId }: { nodeId: string }) {
   );
 }
 
-const usageTone = (pct: number) => (pct > 90 ? 'bg-error' : pct > 75 ? 'bg-warning' : 'bg-success');
+/** The bar's colour by how full the disk is (classes for the progress indicator inside). */
+const usageTone = (pct: number) =>
+  pct > 90
+    ? '[&_[data-slot=progress-indicator]]:bg-error'
+    : pct > 75
+      ? '[&_[data-slot=progress-indicator]]:bg-warning'
+      : '[&_[data-slot=progress-indicator]]:bg-success';
 
 export function NodeDetailPage({ nodeId }: { nodeId: string }) {
   const exists = useNodeStore((s) => s.nodes.some((n) => n.id === nodeId));
@@ -84,9 +91,9 @@ export function NodeDetailPage({ nodeId }: { nodeId: string }) {
           icon={ServerOff}
           title='Node not found'
           action={
-            <Button asChild variant='outline'>
-              <Link to='/nodes'>All nodes</Link>
-            </Button>
+            <Link to='/nodes' className={buttonVariants({ variant: 'outline' })}>
+              All nodes
+            </Link>
           }
         />
       </>
@@ -99,11 +106,9 @@ export function NodeDetailPage({ nodeId }: { nodeId: string }) {
         title={name ?? 'Node'}
         leading={
           <Hint label='All nodes'>
-            <Button asChild variant='ghost' size='icon' className='-ml-2' aria-label='All nodes'>
-              <Link to='/nodes'>
-                <ChevronLeft />
-              </Link>
-            </Button>
+            <Link to='/nodes' aria-label='All nodes' className={buttonVariants({ variant: 'ghost', size: 'icon', className: '-ml-2' })}>
+              <ChevronLeft />
+            </Link>
           </Hint>
         }
         actions={<NodeOptionsDropdown nodeId={nodeId} showDetails={false} />}
@@ -193,7 +198,7 @@ export function NodeDetailPage({ nodeId }: { nodeId: string }) {
                     <span className='selectable truncate font-mono text-xs'>{d.label}</span>
                     <span className='label-hud text-2xs text-muted-foreground'>{d.kind}</span>
                   </div>
-                  <Progress value={pct} indicatorClassName={usageTone(pct)} className='col-span-2 h-1.5 @2xl:col-span-1' />
+                  <Progress value={pct} className={cn('col-span-2 @2xl:col-span-1', usageTone(pct))} />
                   <span className='row-start-1 text-right text-xs tabular-nums text-muted-foreground @2xl:row-start-auto'>
                     {formatBytes(d.used_bytes)} of {formatBytes(d.total_bytes)}
                   </span>

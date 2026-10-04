@@ -40,7 +40,7 @@ import {
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { HostInfo } from '@/generated/HostInfo';
 import { canvasTokens, onThemeChange } from '@/lib/theme-tokens';
-import type { ThemeStyle } from '@/lib/themes';
+import type { ThemeStyle } from '@sunstead/ui/themes';
 import { planetStyle } from '@/lib/planet';
 import { planetSprite } from '@/lib/planet-render';
 import { cssToRgba, ensureLightness, Rgba, rgbaToHex } from './colors';

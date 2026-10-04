@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils';
 import { Section } from '@/components/section';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { EmptyState } from '@/components/empty-state';
-import { Button } from '@/components/ui/button';
+import { Button } from '@sunstead/ui/components/button';
 
 const KIND: Record<BackupRequestKind, string> = {
   backup: 'Backup',

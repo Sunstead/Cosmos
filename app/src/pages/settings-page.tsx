@@ -12,9 +12,9 @@ import { tokenStorageNote, useNodeSignIn } from '@/lib/sign-in';
 import { RenameNodeDialog } from '@/components/rename-node-dialog';
 import { AddNodeButton, EmptyState } from '@/components/empty-state';
 import { Hint, ShortcutKeys } from '@/components/hint';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Button } from '@sunstead/ui/components/button';
+import { Badge } from '@sunstead/ui/components/badge';
+import { Popover, PopoverContent, PopoverTrigger } from '@sunstead/ui/components/popover';
 import { PAGES } from '@/lib/navigation';
 import { ShortcutId } from '@/lib/shortcuts';
 import { getPlatform } from '@/lib/platform';
@@ -105,10 +105,12 @@ function NodeRow({ nodeId }: { nodeId: string }) {
 function SignInStorageInfo() {
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        <Button variant='ghost' size='icon-xs' aria-label='About sign-in storage'>
-          <Info />
-        </Button>
+      <PopoverTrigger
+        render={
+          <Button variant='ghost' size='icon-xs' aria-label='About sign-in storage' />
+        }
+      >
+        <Info />
       </PopoverTrigger>
       <PopoverContent className='w-72 text-sm'>{tokenStorageNote()}</PopoverContent>
     </Popover>

@@ -8,12 +8,12 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
+} from '@sunstead/ui/components/dialog';
+import { Field, FieldDescription, FieldGroup, FieldLabel } from '@sunstead/ui/components/field';
+import { Input } from '@sunstead/ui/components/input';
+import { Button } from '@sunstead/ui/components/button';
+import { Badge } from '@sunstead/ui/components/badge';
+import { Checkbox } from '@sunstead/ui/components/checkbox';
 import { useNodeMeta, useNotify, useNotifyActions } from '@/api/queries';
 import { nodeDisplayName, useNodeStore } from '@/stores/nodes';
 import { DeviceLevel, useNotificationPrefs } from '@/stores/notifications';
@@ -298,7 +298,9 @@ function ChannelForm({
   return (
     <DialogContent>
       <DialogHeader>
-        <DialogTitle>{channel ? `Edit ${channel.name}` : 'Add a notification channel'}</DialogTitle>
+        <DialogTitle>
+          {channel ? `Edit ${channel.name}` : 'Add a notification channel'}
+        </DialogTitle>
         <DialogDescription>
           The node sends these itself, so they arrive even when this app is closed.
         </DialogDescription>
@@ -308,7 +310,14 @@ function ChannelForm({
         <FieldGroup>
           <Field>
             <FieldLabel htmlFor='channel-name'>Name</FieldLabel>
-            <Input id='channel-name' value={name} placeholder='phone' onChange={(e) => setName(e.target.value)} autoFocus required />
+            <Input
+              id='channel-name'
+              value={name}
+              placeholder='phone'
+              onChange={(e) => setName(e.target.value)}
+              autoFocus
+              required
+            />
           </Field>
 
           <Field>
@@ -325,16 +334,22 @@ function ChannelForm({
           </Field>
 
           <Field>
-            <FieldLabel htmlFor='channel-url'>{kind === 'ntfy' ? 'Server' : 'URL'}</FieldLabel>
+            <FieldLabel htmlFor='channel-url'>
+              {kind === 'ntfy' ? 'Server' : 'URL'}
+            </FieldLabel>
             <Input
               id='channel-url'
               value={url}
-              placeholder={kind === 'ntfy' ? 'https://ntfy.example.com' : 'https://example.com/hook'}
+              placeholder={
+                kind === 'ntfy' ? 'https://ntfy.example.com' : 'https://example.com/hook'
+              }
               onChange={(e) => setUrl(e.target.value)}
               className='font-mono'
               required
             />
-            {kind === 'webhook' && <FieldDescription>Each event is POSTed to it as JSON.</FieldDescription>}
+            {kind === 'webhook' && (
+              <FieldDescription>Each event is POSTed to it as JSON.</FieldDescription>
+            )}
           </Field>
 
           {kind === 'ntfy' && (
@@ -348,7 +363,9 @@ function ChannelForm({
                 className='font-mono'
                 required
               />
-              <FieldDescription>Subscribe to the same topic in the ntfy app.</FieldDescription>
+              <FieldDescription>
+                Subscribe to the same topic in the ntfy app.
+              </FieldDescription>
             </Field>
           )}
 
@@ -359,13 +376,20 @@ function ChannelForm({
               type='password'
               autoComplete='off'
               value={secret}
-              placeholder={channel?.has_secret && !clearSecret ? 'Saved. Type to replace it.' : 'Optional'}
+              placeholder={
+                channel?.has_secret && !clearSecret
+                  ? 'Saved. Type to replace it.'
+                  : 'Optional'
+              }
               onChange={(e) => setSecret(e.target.value)}
               className='font-mono'
             />
             {channel?.has_secret && !secret && (
               <label className='flex items-center gap-2 text-xs text-muted-foreground'>
-                <Checkbox checked={clearSecret} onCheckedChange={(v) => setClearSecret(v === true)} />
+                <Checkbox
+                  checked={clearSecret}
+                  onCheckedChange={(v) => setClearSecret(v === true)}
+                />
                 Remove the saved token
               </label>
             )}
@@ -384,7 +408,10 @@ function ChannelForm({
               ]}
             />
             <label className='flex items-center gap-2 text-sm'>
-              <Checkbox checked={recoveries} onCheckedChange={(v) => setRecoveries(v === true)} />
+              <Checkbox
+                checked={recoveries}
+                onCheckedChange={(v) => setRecoveries(v === true)}
+              />
               Also say when a problem clears
             </label>
           </Field>
@@ -394,7 +421,10 @@ function ChannelForm({
             <div className='grid grid-cols-2 gap-2'>
               {CATEGORIES.map((c) => (
                 <label key={c} className='flex items-center gap-2 text-sm'>
-                  <Checkbox checked={categories.includes(c)} onCheckedChange={(v) => toggleCategory(c, v === true)} />
+                  <Checkbox
+                    checked={categories.includes(c)}
+                    onCheckedChange={(v) => toggleCategory(c, v === true)}
+                  />
                   {CATEGORY[c].label}
                 </label>
               ))}
@@ -412,9 +442,7 @@ function ChannelForm({
       </form>
 
       <DialogFooter>
-        <DialogClose asChild>
-          <Button variant='outline'>Cancel</Button>
-        </DialogClose>
+        <DialogClose render={<Button variant='outline' />}>Cancel</DialogClose>
         <Button type='submit' form='notify-channel' disabled={busy}>
           {channel ? 'Save' : 'Add'}
         </Button>

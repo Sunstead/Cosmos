@@ -10,10 +10,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Field, FieldLabel } from './ui/field';
+} from '@sunstead/ui/components/dialog';
+import { Button } from '@sunstead/ui/components/button';
+import { Input } from '@sunstead/ui/components/input';
+import { Field, FieldLabel } from '@sunstead/ui/components/field';
 import { useNodeStore } from '@/stores/nodes';
 import { useUiStore } from '@/stores/ui';
 import { signIn } from '@/stores/auth';
@@ -107,9 +107,15 @@ function AddNodeForm({ initialUrl, onDone }: { initialUrl: string; onDone: () =>
         {needsSignIn && (
           <div className='flex items-center justify-between gap-3 rounded-md border p-3 text-sm'>
             <span>
-              This node signs in with <span className='font-medium'>{providerHost(needsSignIn.issuer)}</span>.
+              This node signs in with{' '}
+              <span className='font-medium'>{providerHost(needsSignIn.issuer)}</span>.
             </span>
-            <Button type='button' size='sm' disabled={busy} onClick={() => void startSignIn(needsSignIn)}>
+            <Button
+              type='button'
+              size='sm'
+              disabled={busy}
+              onClick={() => void startSignIn(needsSignIn)}
+            >
               <LogIn /> Sign in
             </Button>
           </div>
@@ -123,10 +129,13 @@ function AddNodeForm({ initialUrl, onDone }: { initialUrl: string; onDone: () =>
       </form>
 
       <DialogFooter>
-        <DialogClose asChild>
-          <Button variant='outline'>Cancel</Button>
-        </DialogClose>
-        <Button form='add-node' type='submit' className='min-w-24' disabled={busy || !url.trim() || !!needsSignIn}>
+        <DialogClose render={<Button variant='outline' />}>Cancel</DialogClose>
+        <Button
+          form='add-node'
+          type='submit'
+          className='min-w-24'
+          disabled={busy || !url.trim() || !!needsSignIn}
+        >
           {busy ? 'Connecting' : 'Add'}
         </Button>
       </DialogFooter>

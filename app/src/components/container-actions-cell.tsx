@@ -4,15 +4,16 @@ import { Copy, Logs, MoreHorizontal, Play, RotateCcw, Square, Trash } from 'luci
 import { ContainerRow } from './container-columns';
 import { useContainerActions, useNodeMeta } from '@/api/queries';
 import { copyText } from '@/lib/clipboard';
-import { Button } from './ui/button';
+import { Button } from '@sunstead/ui/components/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from './ui/dropdown-menu';
+} from '@sunstead/ui/components/dropdown-menu';
 import { ConfirmDialog } from './confirm-dialog';
 import { ReadOnlyNote } from './read-only-note';
 
@@ -32,38 +33,53 @@ export const ContainerActionsCell = memo(function ContainerActionsCell({
   return (
     <div className='flex justify-end'>
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant='ghost' size='icon' aria-label={`Actions for ${container.name}`}>
-            <MoreHorizontal />
-          </Button>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              variant='ghost'
+              size='icon'
+              aria-label={`Actions for ${container.name}`}
+            />
+          }
+        >
+          <MoreHorizontal />
         </DropdownMenuTrigger>
         <DropdownMenuContent align='end' className='w-52'>
-          <DropdownMenuLabel className='truncate'>{container.name}</DropdownMenuLabel>
+          <DropdownMenuGroup>
+            <DropdownMenuLabel className='truncate'>{container.name}</DropdownMenuLabel>
+          </DropdownMenuGroup>
           <DropdownMenuSeparator />
-          <DropdownMenuItem asChild>
-            <Link to='/logs' search={{ node: container.nodeId, container: container.id }}>
-              <Logs /> View logs
-            </Link>
+          <DropdownMenuItem
+            render={
+              <Link
+                to='/logs'
+                search={{ node: container.nodeId, container: container.id }}
+              />
+            }
+          >
+            <Logs /> View logs
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => void copyText(container.id, 'Container ID copied')}>
+          <DropdownMenuItem
+            onClick={() => void copyText(container.id, 'Container ID copied')}
+          >
             <Copy /> Copy ID
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
             disabled={!canAct || busy || running}
-            onSelect={() => void run(container.id, 'start', container.name)}
+            onClick={() => void run(container.id, 'start', container.name)}
           >
             <Play /> Start
           </DropdownMenuItem>
           <DropdownMenuItem
             disabled={!canAct || busy || !running}
-            onSelect={() => void run(container.id, 'restart', container.name)}
+            onClick={() => void run(container.id, 'restart', container.name)}
           >
             <RotateCcw /> Restart
           </DropdownMenuItem>
           <DropdownMenuItem
             disabled={!canAct || busy || !running}
-            onSelect={() => void run(container.id, 'stop', container.name)}
+            onClick={() => void run(container.id, 'stop', container.name)}
           >
             <Square /> Stop
           </DropdownMenuItem>
@@ -71,10 +87,7 @@ export const ContainerActionsCell = memo(function ContainerActionsCell({
           <DropdownMenuItem
             variant='destructive'
             disabled={!canAct || busy}
-            onSelect={(e) => {
-              e.preventDefault();
-              setRemoving(true);
-            }}
+            onClick={() => setRemoving(true)}
           >
             <Trash /> Remove
           </DropdownMenuItem>

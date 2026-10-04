@@ -6,8 +6,8 @@ import { useAccounts } from '@/hooks/use-accounts';
 import { providerHost, roleLabel } from '@/lib/accounts';
 import { plural } from '@/lib/format';
 import { signOutAndSay, useNodeSignIn, useSignIn } from '@/lib/sign-in';
-import { Button } from './ui/button';
-import { Badge } from './ui/badge';
+import { Button } from '@sunstead/ui/components/button';
+import { Badge } from '@sunstead/ui/components/badge';
 import { EmptyState } from './empty-state';
 import { UserAvatar } from './user-avatar';
 

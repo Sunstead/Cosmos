@@ -13,14 +13,14 @@ import { Dot, DotVariant } from '@/components/dot';
 import { NodeName } from '@/components/node-name';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { WolTargetDialog } from '@/components/wol-target-dialog';
-import { Button } from '@/components/ui/button';
+import { Button } from '@sunstead/ui/components/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+} from '@sunstead/ui/components/dropdown-menu';
 import {
   Table,
   TableBody,
@@ -28,7 +28,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
+} from '@sunstead/ui/components/table';
 
 const STATE: Record<WolState, { label: string; dot: DotVariant }> = {
   awake: { label: 'Awake', dot: 'success' },
@@ -100,22 +100,33 @@ function RowMenu({ item }: { item: WolItem }) {
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant='ghost' size='icon' aria-label={`Options for ${item.target.name}`}>
-            <MoreHorizontal />
-          </Button>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              variant='ghost'
+              size='icon'
+              aria-label={`Options for ${item.target.name}`}
+            />
+          }
+        >
+          <MoreHorizontal />
         </DropdownMenuTrigger>
         <DropdownMenuContent align='end'>
-          <DropdownMenuItem onSelect={() => setEditing(true)}>
+          <DropdownMenuItem onClick={() => setEditing(true)}>
             <Pencil /> Edit
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem variant='destructive' onSelect={() => setRemoving(true)}>
+          <DropdownMenuItem variant='destructive' onClick={() => setRemoving(true)}>
             <Trash /> Remove
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <WolTargetDialog open={editing} onOpenChange={setEditing} nodeId={item.nodeId} target={item.target} />
+      <WolTargetDialog
+        open={editing}
+        onOpenChange={setEditing}
+        nodeId={item.nodeId}
+        target={item.target}
+      />
       <ConfirmDialog
         open={removing}
         onOpenChange={setRemoving}

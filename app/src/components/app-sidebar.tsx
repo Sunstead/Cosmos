@@ -11,7 +11,7 @@ import {
   SidebarMenuItem,
   SidebarRail,
   useSidebar,
-} from '@/components/ui/resizable-sidebar';
+} from '@sunstead/ui/components/resizable-sidebar';
 import { NAV_GROUPS, PAGES, pageFor } from '@/lib/navigation';
 import { ShortcutKeys } from './hint';
 import { AccountMenu } from './account-menu';
@@ -47,7 +47,7 @@ export function AppSidebar() {
                   return (
                     <SidebarMenuItem key={path}>
                       <SidebarMenuButton
-                        asChild
+                        render={<Link to={path} onClick={followed} />}
                         isActive={active === path}
                         tooltip={{
                           children: (
@@ -59,10 +59,8 @@ export function AppSidebar() {
                         }}
                         className={ITEM}
                       >
-                        <Link to={path} onClick={followed}>
-                          <Icon />
-                          <span>{page.label}</span>
-                        </Link>
+                        <Icon />
+                        <span>{page.label}</span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   );
@@ -75,7 +73,7 @@ export function AppSidebar() {
       <SidebarFooter>
         <AccountMenu />
       </SidebarFooter>
-      <SidebarRail className='mt-3' />
+      <SidebarRail className='mt-3' maxWidth='28rem' />
     </Sidebar>
   );
 }

@@ -15,8 +15,8 @@ import {
   getTotalDiskGb,
 } from '@/lib/node-metrics';
 import { secondsToDuration } from '@/lib/time';
-import { Card } from '@/components/ui/card';
-import { Skeleton } from './ui/skeleton';
+import { Card } from '@sunstead/ui/components/card';
+import { Skeleton } from '@sunstead/ui/components/skeleton';
 import DualStatDisplay from './dual-stat-display';
 import HardwareStatDisplay from './hardware-stat-display';
 import { LiveValue } from './live-value';

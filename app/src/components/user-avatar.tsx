@@ -1,5 +1,5 @@
 import { UserRound } from 'lucide-react';
-import { Avatar, AvatarBadge, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarBadge, AvatarFallback, AvatarImage } from '@sunstead/ui/components/avatar';
 import { initials } from '@/lib/accounts';
 import { cn } from '@/lib/utils';
 
@@ -16,7 +16,7 @@ export interface AvatarIdentity {
 /**
  * Who you are, at a glance: the provider's picture, or initials on a
  * neutral disc that follows the theme. The image only replaces the
- * initials once it has loaded (Radix loads it off-screen first), so a
+ * initials once it has loaded (Base UI loads it off-screen first), so a
  * picture that 404s or a provider that's offline never shows as a broken
  * image.
  */

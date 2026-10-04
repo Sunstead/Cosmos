@@ -1,6 +1,6 @@
 import { LucideIcon } from 'lucide-react';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { ToggleGroup, ToggleGroupItem } from '@sunstead/ui/components/toggle-group';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@sunstead/ui/components/tooltip';
 
 export interface SegmentOption<T extends string> {
   value: T;
@@ -25,12 +25,12 @@ export function SegmentedControl<T extends string>({
 }) {
   return (
     <ToggleGroup
-      type='single'
       variant='outline'
       spacing={0}
-      value={value}
-      // Radix allows deselecting the active item; a segmented control can't.
-      onValueChange={(v) => v && onChange(v as T)}
+      value={[value]}
+      // Pressing the active item again empties the group; a segmented control
+      // always has one, so that change is ignored.
+      onValueChange={(v) => v[0] && onChange(v[0] as T)}
       aria-label={label}
     >
       {options.map((o) => {
@@ -40,8 +40,7 @@ export function SegmentedControl<T extends string>({
             key={o.value}
             value={o.value}
             aria-label={o.hint ?? o.label}
-            // A tooltip trigger overrides data-state, so style on aria-checked.
-            className='text-xs aria-checked:bg-muted aria-checked:text-foreground'
+            className='text-xs data-pressed:bg-muted data-pressed:text-foreground'
           >
             {Icon && <Icon />}
             {o.label}
@@ -50,7 +49,7 @@ export function SegmentedControl<T extends string>({
         if (!o.hint) return item;
         return (
           <Tooltip key={o.value}>
-            <TooltipTrigger asChild>{item}</TooltipTrigger>
+            <TooltipTrigger render={item} />
             <TooltipContent>{o.hint}</TooltipContent>
           </Tooltip>
         );
