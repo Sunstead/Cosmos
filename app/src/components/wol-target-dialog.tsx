@@ -72,7 +72,9 @@ function TargetForm({
   const actionNodes = useWolActionNodes();
   const { save } = useWolActions();
 
-  const [nodeId, setNodeId] = useState(fixedNode ?? actionNodes[0] ?? '');
+  // A packet only wakes machines on the sender's own LAN, so with several
+  // nodes the sender is picked, not assumed.
+  const [nodeId, setNodeId] = useState(fixedNode ?? (actionNodes.length === 1 ? actionNodes[0] : ''));
   const [name, setName] = useState(target?.name ?? '');
   const [mac, setMac] = useState(target?.mac ?? '');
   const [broadcast, setBroadcast] = useState(target?.broadcast ?? NONE);
@@ -147,7 +149,7 @@ function TargetForm({
         <FieldGroup>
           {!fixedNode && actionNodes.length > 1 && (
             <Field>
-              <FieldLabel htmlFor='wol-node'>Node</FieldLabel>
+              <FieldLabel htmlFor='wol-node'>Sent from</FieldLabel>
               <Select
                 value={nodeId}
                 onValueChange={(v) => v && setNodeId(v)}
@@ -157,7 +159,7 @@ function TargetForm({
                 })}
               >
                 <SelectTrigger id='wol-node'>
-                  <SelectValue />
+                  <SelectValue placeholder='Pick a node on the same network' />
                 </SelectTrigger>
                 <SelectContent>
                   {actionNodes.map((id) => {

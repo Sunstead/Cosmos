@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { autoNote, compareUnits, isRunning, runText } from './updates';
+import { autoNote, compareUnits, groupUnits, isRunning, runText } from './updates';
 import { UpdateRun } from '@/generated/UpdateRun';
 import { UpdateUnit } from '@/generated/UpdateUnit';
 
@@ -109,5 +109,27 @@ describe('updates', () => {
     expect(
       autoNote(unit('a', { policy: 'patch', available: minor }), 3, 4 * DAY),
     ).toBeNull();
+  });
+});
+
+describe('groupUnits', () => {
+  it('puts the same image on two nodes in one group, in the order given', () => {
+    const groups = groupUnits([
+      { ...unit('cosmos-agent'), nodeId: 'jupiter' },
+      { ...unit('immich'), nodeId: 'jupiter' },
+      { ...unit('cosmos-agent'), nodeId: 'pluto' },
+    ]);
+    expect(groups.map((g) => [g.id, g.items.map((i) => i.nodeId)])).toEqual([
+      ['cosmos-agent', ['jupiter', 'pluto']],
+      ['immich', ['jupiter']],
+    ]);
+  });
+
+  it('takes release notes from whichever node has them', () => {
+    const [g] = groupUnits([
+      { ...unit('caddy'), nodeId: 'jupiter' },
+      { ...unit('caddy', { notes_url: 'https://example.test/notes' }), nodeId: 'pluto' },
+    ]);
+    expect(g.notes_url).toBe('https://example.test/notes');
   });
 });

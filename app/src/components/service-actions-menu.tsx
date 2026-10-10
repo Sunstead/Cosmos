@@ -16,14 +16,19 @@ import {
   DropdownMenuTrigger,
 } from '@sunstead/ui/components/dropdown-menu';
 import { ReadOnlyNote } from './read-only-note';
+import { useNodeName, useNodeStore } from '@/stores/nodes';
 
 /** Actions applied to every container in a service at once. */
 export const ServiceActionsMenu = memo(function ServiceActionsMenu({
   service,
+  size = 'icon',
 }: {
   service: ServiceInfo;
+  size?: 'icon' | 'icon-xs';
 }) {
   const meta = useNodeMeta(service.nodeId);
+  const name = useNodeName(service.nodeId);
+  const nodeName = useNodeStore((s) => s.nodes.length > 1) ? name : null;
   const { runMany, pending } = useContainerActions(service.nodeId);
   const canAct = meta?.capabilities.container_actions ?? false;
   const href = serviceHref(service.url);
@@ -36,7 +41,7 @@ export const ServiceActionsMenu = memo(function ServiceActionsMenu({
         render={
           <Button
             variant='ghost'
-            size='icon'
+            size={size}
             aria-label={`Actions for ${service.name}`}
           />
         }
@@ -45,7 +50,10 @@ export const ServiceActionsMenu = memo(function ServiceActionsMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent align='end' className='w-52'>
         <DropdownMenuGroup>
-          <DropdownMenuLabel className='truncate'>{service.name}</DropdownMenuLabel>
+          <DropdownMenuLabel className='truncate'>
+            {service.name}
+            {nodeName && <span className='font-normal text-muted-foreground'> on {nodeName}</span>}
+          </DropdownMenuLabel>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         {href && (

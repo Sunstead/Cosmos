@@ -19,10 +19,11 @@ import {
   useUpdates,
   UpdateItem,
 } from '@/api/queries';
-import { useNodeStore } from '@/stores/nodes';
+import { nodeDisplayName, useNodeStore } from '@/stores/nodes';
 import { UpdateCandidate } from '@/generated/UpdateCandidate';
 import { UpdatePolicy } from '@/generated/UpdatePolicy';
 import { UpdateRun } from '@/generated/UpdateRun';
+import { UpdatesResponse } from '@/generated/UpdatesResponse';
 import { matchesQuery } from '@/lib/format';
 import { relativeTime } from '@/lib/time';
 import { openExternal } from '@/lib/open-external';
@@ -30,6 +31,8 @@ import {
   autoNote,
   CHANGE,
   compareUnits,
+  groupUnits,
+  UnitGroup,
   isRunning,
   POLICY,
   RUN_STATE,
@@ -240,52 +243,47 @@ function PolicySelect({ item }: { item: UpdateItem }) {
   );
 }
 
-const UnitRow = memo(function UnitRow({
+function ReleaseNotes({ url }: { url: string | null }) {
+  if (!url) return null;
+  return (
+    <button
+      type='button'
+      onClick={() => void openExternal(url)}
+      className='flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground'
+    >
+      Release notes <ArrowUpRight className='size-3' />
+    </button>
+  );
+}
+
+/** Where a unit stands on one node, and what can be done there. */
+function UnitState({
   item,
-  showNode,
-  minAgeDays,
+  response,
   now,
+  showNode,
 }: {
   item: UpdateItem;
-  showNode: boolean;
-  minAgeDays: number;
+  response: UpdatesResponse | undefined;
   now: number;
+  showNode: boolean;
 }) {
   const meta = useNodeMeta(item.nodeId);
   const canAct = meta?.capabilities.update_actions ?? false;
   const change = item.available ? CHANGE[item.available.change] : null;
-  const note = autoNote(item, minAgeDays, now / 1000);
+  const note = autoNote(item, response?.min_age_days ?? 3, now / 1000);
+  // Some nodes list updates without applying them (no deploy workflow).
+  const listOnly = response ? !response.can_apply : false;
 
   return (
-    <div
-      data-update
-      className='flex flex-col gap-2 px-4 py-3 @3xl:flex-row @3xl:items-center @3xl:gap-4'
-    >
+    <div className='flex flex-col gap-2 @3xl:flex-row @3xl:items-center @3xl:gap-4'>
       <div className='min-w-0 flex-1 space-y-0.5'>
-        <div className='flex flex-wrap items-center gap-x-2'>
-          <span className='font-medium'>{item.name}</span>
+        <div className='flex flex-wrap items-center gap-x-2 text-sm'>
           {showNode && (
-            <span className='text-xs'>
+            <span className='w-20 shrink-0 text-xs font-medium'>
               <NodeName nodeId={item.nodeId} />
             </span>
           )}
-          {item.notes_url && (
-            <button
-              type='button'
-              onClick={() => void openExternal(item.notes_url!)}
-              className='flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground'
-            >
-              Release notes <ArrowUpRight className='size-3' />
-            </button>
-          )}
-        </div>
-        <div
-          className='selectable truncate font-mono text-xs text-muted-foreground'
-          title={item.images.join('\n')}
-        >
-          {item.images.join(', ')}
-        </div>
-        <div className='flex flex-wrap items-center gap-x-2 text-sm'>
           <span className='font-mono'>{item.current}</span>
           {item.available && change && (
             <>
@@ -309,7 +307,12 @@ const UnitRow = memo(function UnitRow({
         {item.paused && (
           <p className='text-xs text-error'>Automatic updates paused: {item.paused}</p>
         )}
-        {note && <p className='text-xs text-muted-foreground'>{note}</p>}
+        {note && !listOnly && <p className='text-xs text-muted-foreground'>{note}</p>}
+        {listOnly && item.available && (
+          <p className='text-xs text-muted-foreground'>
+            Listed only: this node has no update workflow, so bump the tag in its repository.
+          </p>
+        )}
         {item.run && <RunLine run={item.run} />}
       </div>
 
@@ -328,10 +331,60 @@ const UnitRow = memo(function UnitRow({
       )}
     </div>
   );
+}
+
+/** One image, with a line per node that runs it. */
+const UnitRow = memo(function UnitRow({
+  group,
+  byNode,
+  showNode,
+  now,
+}: {
+  group: UnitGroup<UpdateItem>;
+  byNode: Record<string, UpdatesResponse>;
+  showNode: boolean;
+  now: number;
+}) {
+  const several = group.items.length > 1;
+  const only = group.items[0];
+
+  return (
+    <div data-update className='space-y-2 px-4 py-3'>
+      <div className='min-w-0 space-y-0.5'>
+        <div className='flex flex-wrap items-center gap-x-2'>
+          <span className='font-medium'>{group.name}</span>
+          {showNode && !several && (
+            <span className='text-xs'>
+              <NodeName nodeId={only.nodeId} />
+            </span>
+          )}
+          <ReleaseNotes url={group.notes_url} />
+        </div>
+        <div
+          className='selectable truncate font-mono text-xs text-muted-foreground'
+          title={group.images.join('\n')}
+        >
+          {group.images.join(', ')}
+        </div>
+      </div>
+      <div className={cn(several && 'divide-y border-l pl-3')}>
+        {group.items.map((item) => (
+          <div key={item.nodeId} className={cn(several && 'py-2 first:pt-0 last:pb-0')}>
+            <UnitState item={item} response={byNode[item.nodeId]} now={now} showNode={several} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 });
 
 export function UpdatesPage() {
-  const nodeCount = useNodeStore((s) => s.nodes.length);
+  const nodes = useNodeStore((s) => s.nodes);
+  const nodeCount = nodes.length;
+  const nameOf = (id: string) => {
+    const n = nodes.find((x) => x.id === id);
+    return n ? nodeDisplayName(n) : id;
+  };
   const updates = useUpdates();
   const actions = useUpdateActions();
   const now = useNow(60_000);
@@ -344,15 +397,24 @@ export function UpdatesPage() {
     updates.nodes.filter((id) => s.meta[id]?.capabilities.container_actions).join('|'),
   );
 
-  const sorted = useMemo(() => [...updates.items].sort(compareUnits), [updates.items]);
-  const visible = sorted.filter(
-    (u) =>
-      (filter === 'all' ||
-        (filter === 'available' && !!u.available) ||
-        (filter === 'automatic' && u.policy !== 'manual')) &&
-      matchesQuery(query, u.name, ...u.images, ...u.services),
+  const groups = useMemo(() => groupUnits([...updates.items].sort(compareUnits)), [updates.items]);
+  const visible = groups.filter(
+    (g) =>
+      g.items.some(
+        (u) =>
+          filter === 'all' ||
+          (filter === 'available' && !!u.available) ||
+          (filter === 'automatic' && u.policy !== 'manual'),
+      ) &&
+      matchesQuery(
+        query,
+        g.name,
+        ...g.images,
+        ...g.items.flatMap((u) => [nameOf(u.nodeId), ...u.services]),
+      ),
   );
-  const available = updates.items.filter((u) => u.available).length;
+  // Images with something newer, counted once however many nodes run them.
+  const available = groups.filter((g) => g.items.some((u) => u.available)).length;
   const history = useMemo(
     () =>
       Object.entries(updates.byNode)
@@ -361,16 +423,17 @@ export function UpdatesPage() {
         .slice(0, 15),
     [updates.byNode],
   );
-  const responses = Object.values(updates.byNode);
-  const errors = responses.flatMap((r) => r.errors);
-  const listOnly = responses.length > 0 && responses.every((r) => !r.can_apply);
-  const expiring = responses
-    .map((r) => r.token_expires_at)
-    .filter((t): t is number => t !== null && t - now / 1000 < 14 * 86_400);
-  const checkedAt = responses
-    .map((r) => r.checked_at)
-    .filter((t): t is number => t !== null);
-  const minAge = responses[0]?.min_age_days ?? 3;
+  const responses = Object.entries(updates.byNode);
+  const named = (nodeId: string, text: string) => (nodeCount > 1 ? `${nameOf(nodeId)}: ${text}` : text);
+  const errors = responses.flatMap(([id, r]) => r.errors.map((e) => named(id, e)));
+  const listOnly = responses.filter(([, r]) => !r.can_apply).map(([id]) => id);
+  const allListOnly = responses.length > 0 && listOnly.length === responses.length;
+  const expiring = responses.flatMap(([id, r]) =>
+    r.token_expires_at !== null && r.token_expires_at - now / 1000 < 14 * 86_400
+      ? [{ nodeId: id, at: r.token_expires_at }]
+      : [],
+  );
+  const checked = responses.flatMap(([id, r]) => (r.checked_at !== null ? [{ nodeId: id, at: r.checked_at }] : []));
 
   async function checkNow() {
     setChecking(true);
@@ -409,7 +472,7 @@ export function UpdatesPage() {
     }
     return (
       <>
-        {listOnly && (
+        {allListOnly && (
           <Alert>
             <PackageCheck />
             <AlertTitle>Updates are listed, not applied</AlertTitle>
@@ -420,17 +483,24 @@ export function UpdatesPage() {
             </AlertDescription>
           </Alert>
         )}
-        {expiring.length > 0 && (
-          <Alert className='border-warning/40'>
+        {!allListOnly && nodeCount > 1 && listOnly.length > 0 && (
+          <p className='flex flex-wrap items-center gap-2 text-sm text-muted-foreground'>
+            {listOnly.map(nameOf).join(', ')} {listOnly.length === 1 ? 'lists' : 'list'} updates
+            without applying them.
+            <SetupHint info={SETUP.updatesApply} />
+          </p>
+        )}
+        {expiring.map(({ nodeId, at }) => (
+          <Alert key={nodeId} className='border-warning/40'>
             <TriangleAlert className='text-warning' />
             <AlertTitle>
-              The GitHub token expires {relativeTime(iso(Math.min(...expiring)))}
+              {nodeCount > 1 ? `${nameOf(nodeId)}'s` : 'The'} GitHub token expires {relativeTime(iso(at))}
             </AlertTitle>
             <AlertDescription>
-              Make a new one with the same permissions and put it in the server's .env.
+              Make a new one with the same permissions and put it in that server's .env.
             </AlertDescription>
           </Alert>
-        )}
+        ))}
         {errors.length > 0 && (
           <Alert className='border-warning/40'>
             <TriangleAlert className='text-warning' />
@@ -441,12 +511,14 @@ export function UpdatesPage() {
 
         <Section
           title='Images'
-          count={updates.items.length || undefined}
+          count={groups.length || undefined}
           contentClassName='divide-y @container'
           actions={
-            checkedAt.length > 0 && (
+            checked.length > 0 && (
               <span className='text-xs text-muted-foreground'>
-                Checked {relativeTime(iso(Math.min(...checkedAt)))}
+                {nodeCount > 1
+                  ? checked.map((c) => `${nameOf(c.nodeId)} checked ${relativeTime(iso(c.at))}`).join(', ')
+                  : `Checked ${relativeTime(iso(checked[0].at))}`}
               </span>
             )
           }
@@ -463,12 +535,12 @@ export function UpdatesPage() {
           ) : visible.length === 0 ? (
             <EmptyState size='inline' icon={SearchX} title='No matching images' />
           ) : (
-            visible.map((u) => (
+            visible.map((g) => (
               <UnitRow
-                key={`${u.nodeId}:${u.id}`}
-                item={u}
+                key={g.id}
+                group={g}
+                byNode={updates.byNode}
                 showNode={nodeCount > 1}
-                minAgeDays={minAge}
                 now={now}
               />
             ))
@@ -482,6 +554,9 @@ export function UpdatesPage() {
                 <div className='text-sm'>
                   {updates.items.find((u) => u.nodeId === h.nodeId && u.id === h.unit)
                     ?.name ?? h.unit}{' '}
+                  {nodeCount > 1 && (
+                    <span className='text-xs text-muted-foreground'>on {nameOf(h.nodeId)} </span>
+                  )}
                   <span className='font-mono text-xs text-muted-foreground'>
                     {h.from} to {h.to}
                   </span>

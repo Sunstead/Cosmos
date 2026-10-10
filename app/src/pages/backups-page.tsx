@@ -21,7 +21,7 @@ import { NO_VALUE, sentence } from '@/lib/format';
 import { backupHealth } from '@/lib/backups';
 import { PageHeader } from '@/components/page-header';
 import { NodeSelect } from '@/components/node-select';
-import { useSelectedNode } from '@/hooks/use-selected-node';
+import { useNodeScope } from '@/hooks/use-node-scope';
 import { StatCard, StatRow } from '@/components/stat-card';
 import { Section } from '@/components/section';
 import { EmptyState, NoNodesState } from '@/components/empty-state';
@@ -121,7 +121,7 @@ function Step({ label, step }: { label: string; step: StepStatus | null | undefi
 
 export function BackupsPage() {
   const nodeCount = useNodeStore((s) => s.nodes.length);
-  const [nodeId, setNodeId] = useSelectedNode();
+  const [nodeId, setNodeId, candidates] = useNodeScope('backups', { capability: 'backups' });
   const meta = useNodeMeta(nodeId);
   const { data: status, isLoading, error } = useBackups(nodeId);
   useTick(60_000);
@@ -131,7 +131,7 @@ export function BackupsPage() {
 
   const body = () => {
     if (nodeCount === 0) return <NoNodesState />;
-    if (meta?.status === 'online' && !enabled) {
+    if (!nodeId || (meta?.status === 'online' && !enabled)) {
       return (
         <EmptyState
           size='page'
@@ -292,7 +292,7 @@ export function BackupsPage() {
         title='Backups'
         actions={
           <>
-            <NodeSelect value={nodeId} onChange={setNodeId} />
+            <NodeSelect value={nodeId} onChange={setNodeId} candidates={candidates} />
             <BackUpNowButton nodeId={nodeId} status={status} />
           </>
         }

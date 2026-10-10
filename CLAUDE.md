@@ -168,9 +168,24 @@ hook in `queries.ts` → store/page. Gate the UI on the `capabilities` flag so
 older agents degrade instead of erroring.
 
 **Service model.** Services come from the `cosmos.service` Docker label,
-grouped per node in `lib/services.ts`. `cosmos.service: system` marks
+grouped per node in `lib/services.ts`, then across nodes by that key
+(`groupServices`, the containers store's `groups`): a service on several nodes
+(Cosmos itself) is listed once, with a row per node, and counted once. The
+constellation keeps a moon per planet, since that's where each one runs.
+Updates group the same way (`groupUnits`). `cosmos.service: system` marks
 infrastructure (filtered by `userFacingServices()`). `cosmos.service.url` holds
 bare hostnames; always route them through `serviceHref()`.
+
+**Node scope.** A page that looks at one node at a time picks it with
+`useNodeScope(page, { capability, allowAll })`: each page keeps its own choice
+(`cosmos-scope-<page>`), offers only nodes with its feature (Backups never
+offers Pluto), and `ALL_NODES` is the "All nodes" entry. Monitoring then draws
+a line per node per metric (`mergeSeries` snaps them to a shared step), and
+Logs merges every node's all-containers socket, lines tagged with `node`.
+Events and Uptime use it as a filter, defaulting to all. Dialogs that act from
+a node (uptime checks, Wake-on-LAN targets) make you pick it when there's more
+than one. Notification channels are one list across nodes; a new one can be
+sent to several, each node storing its own copy.
 
 **Nodes bootstrap.** `router.tsx` root `beforeLoad` seeds from `config.ts`
 (nothing under Tauri; `/config.json` in a browser). `onRehydrateStorage` runs

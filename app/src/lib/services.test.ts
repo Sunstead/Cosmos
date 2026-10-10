@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ContainerInfo } from '@/generated/ContainerInfo';
-import { deriveNodeServices, userFacingServices } from './services';
+import { deriveNodeServices, groupServices, userFacingGroups, userFacingServices } from './services';
 
 function container(partial: Partial<ContainerInfo>): ContainerInfo {
   return {
@@ -143,5 +143,47 @@ describe('userFacingServices', () => {
 
     expect(services).toHaveLength(2);
     expect(userFacingServices(services).map((s) => s.key)).toEqual(['gitea']);
+  });
+});
+
+describe('groupServices', () => {
+  const cosmos = (nodeId: string, state = 'running', url: string | null = null) =>
+    deriveNodeServices(nodeId, [
+      container({ id: `${nodeId}-c`, name: 'cosmos-agent', cosmos_service: 'cosmos', state, cosmos_service_url: url }),
+    ])[0];
+
+  it('merges the same service on two nodes into one group', () => {
+    const groups = groupServices([cosmos('jupiter'), cosmos('pluto')]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].key).toBe('cosmos');
+    expect(groups[0].instances.map((s) => s.nodeId)).toEqual(['jupiter', 'pluto']);
+    expect(groups[0].running).toBe(2);
+    expect(groups[0].total).toBe(2);
+    expect(groups[0].status).toBe('running');
+  });
+
+  it('is partial when one node is down and the other runs', () => {
+    expect(groupServices([cosmos('jupiter'), cosmos('pluto', 'exited')])[0].status).toBe('partial');
+  });
+
+  it('is stopped only when every instance is', () => {
+    expect(groupServices([cosmos('jupiter', 'exited'), cosmos('pluto', 'exited')])[0].status).toBe('stopped');
+  });
+
+  it('keeps distinct URLs and takes the first as the url', () => {
+    const [g] = groupServices([
+      cosmos('jupiter', 'running', 'cosmos.jupiter.sunstead.net'),
+      cosmos('pluto'),
+      cosmos('saturn', 'running', 'cosmos.jupiter.sunstead.net'),
+    ]);
+    expect(g.url).toBe('cosmos.jupiter.sunstead.net');
+    expect(g.urls).toEqual(['cosmos.jupiter.sunstead.net']);
+  });
+
+  it('sorts groups by name and hides system ones', () => {
+    const system = deriveNodeServices('pluto', [container({ name: 'caddy', cosmos_service: 'system' })]);
+    const immich = deriveNodeServices('jupiter', [container({ name: 'immich', cosmos_service: 'immich' })]);
+    const groups = userFacingGroups(groupServices([...immich, cosmos('pluto'), ...system]));
+    expect(groups.map((g) => g.key)).toEqual(['cosmos', 'immich']);
   });
 });

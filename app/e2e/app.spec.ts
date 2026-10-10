@@ -460,7 +460,7 @@ test.describe('with a node', () => {
     expect(await res.text()).not.toContain('not-sent-back');
 
     await page.goto('/settings');
-    const channel = section(page, /Notifications from/).locator('[data-channel]', { hasText: 'e2e-hook' });
+    const channel = section(page, 'Notification channels').locator('[data-channel]', { hasText: 'e2e-hook' });
     await channel.getByRole('button', { name: 'Send test' }).click();
     await expect.poll(() => received.length).toBe(1);
     expect(received[0].title).toContain('Test notification');

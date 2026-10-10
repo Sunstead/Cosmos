@@ -6,42 +6,50 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@sunstead/ui/components/select';
+import { ALL_NODES } from '@/lib/node-scope';
 import { Dot } from './dot';
 
-/** Hidden when there's only one node to choose from. */
+/**
+ * Picks a node, or all of them with `allowAll`. Offers `candidates` (from
+ * `useNodeScope`) when given, else every node; hidden when there's only one
+ * choice.
+ */
 export function NodeSelect({
   value,
   onChange,
+  candidates,
+  allowAll = false,
 }: {
   value: string | null;
   onChange: (id: string) => void;
+  candidates?: string[];
+  allowAll?: boolean;
 }) {
-  const nodes = useNodeStore((s) => s.nodes);
+  const allNodes = useNodeStore((s) => s.nodes);
   const meta = useNodeStore((s) => s.meta);
+  const nodes = candidates ? allNodes.filter((n) => candidates.includes(n.id)) : allNodes;
   if (nodes.length < 2) return null;
 
+  const label = (id: string, name: string) => (
+    <>
+      <Dot variant={meta[id]?.status === 'online' ? 'success' : 'disabled'} />
+      {name}
+    </>
+  );
+  const items = [
+    ...(allowAll ? [{ value: ALL_NODES, label: 'All nodes' }] : []),
+    ...nodes.map((n) => ({ value: n.id, label: label(n.id, nodeDisplayName(n)) })),
+  ];
+
   return (
-    <Select
-      value={value}
-      onValueChange={(id) => id && onChange(id)}
-      items={nodes.map((n) => ({
-        value: n.id,
-        label: (
-          <>
-            <Dot variant={meta[n.id]?.status === 'online' ? 'success' : 'disabled'} />
-            {nodeDisplayName(n)}
-          </>
-        ),
-      }))}
-    >
+    <Select value={value} onValueChange={(id) => id && onChange(id)} items={items}>
       <SelectTrigger className='w-44' aria-label='Node'>
         <SelectValue placeholder='Select node' />
       </SelectTrigger>
       <SelectContent>
-        {nodes.map((n) => (
-          <SelectItem key={n.id} value={n.id}>
-            <Dot variant={meta[n.id]?.status === 'online' ? 'success' : 'disabled'} />
-            {nodeDisplayName(n)}
+        {items.map((item) => (
+          <SelectItem key={item.value} value={item.value}>
+            {item.label}
           </SelectItem>
         ))}
       </SelectContent>

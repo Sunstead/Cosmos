@@ -7,6 +7,9 @@ import { compareLogTime } from '@/lib/log-line';
 /** Pseudo container ID: every running container on the node at once. */
 export const ALL_CONTAINERS = 'all';
 
+/** A line as shown: tagged with its node when several nodes stream at once. */
+export type ViewLine = LogLine & { node?: string };
+
 const byTime = (a: LogLine, b: LogLine) => compareLogTime(a.ts, b.ts);
 
 export type LogConnectionState = 'idle' | 'connecting' | 'streaming' | 'closed' | 'error';
@@ -16,6 +19,11 @@ const MAX_LINES = 5_000;
 
 interface Options {
   nodeId: string | null;
+  /**
+   * Several nodes at once, merged by time and tagged with `node`. Overrides
+   * `nodeId`; only with `ALL_CONTAINERS`.
+   */
+  nodeIds?: string[];
   containerId: string | null;
   follow: boolean;
   tail?: number;
@@ -24,7 +32,7 @@ interface Options {
 /** State tagged with the stream it belongs to. */
 interface Session {
   target: string;
-  lines: LogLine[];
+  lines: ViewLine[];
   status: LogConnectionState;
   dropped: number;
   /** Why the agent closed the stream, when it said. */
@@ -46,14 +54,16 @@ const EMPTY: Session = { target: '', lines: [], status: 'idle', dropped: 0, reas
  *   Writing state synchronously in an effect costs an extra render pass and
  *   briefly shows the previous container's output under the new one's name.
  */
-export function useContainerLogs({ nodeId, containerId, follow, tail = 500 }: Options) {
+export function useContainerLogs({ nodeId, nodeIds, containerId, follow, tail = 500 }: Options) {
   const [session, setSession] = useState<Session>(EMPTY);
   const [attempt, setAttempt] = useState(0);
-  const buffer = useRef<LogLine[]>([]);
+  const buffer = useRef<ViewLine[]>([]);
 
-  const active = !!nodeId && !!containerId;
+  const multi = !!nodeIds && containerId === ALL_CONTAINERS;
+  const nodesKey = multi ? nodeIds.join(',') : (nodeId ?? '');
+  const active = !!nodesKey && !!containerId;
   // A reconnect is a new stream: its backlog replaces the old lines.
-  const target = active ? `${nodeId}|${containerId}|${follow}|${tail}|${attempt}` : '';
+  const target = active ? `${nodesKey}|${containerId}|${follow}|${tail}|${attempt}` : '';
   const current = session.target === target ? session : EMPTY;
 
   const clear = useCallback(() => {
@@ -62,9 +72,15 @@ export function useContainerLogs({ nodeId, containerId, follow, tail = 500 }: Op
   }, []);
 
   useEffect(() => {
-    if (!nodeId || !containerId) return;
-    const conn = getConnection(nodeId);
-    if (!conn) return;
+    if (!nodesKey || !containerId) return;
+    const sources = nodesKey
+      .split(',')
+      .flatMap((id) => {
+        const conn = getConnection(id);
+        return conn ? [{ id, conn }] : [];
+      });
+    if (sources.length === 0) return;
+    const tagged = multi;
 
     buffer.current = [];
     // Set by cleanup. Every callback below checks it: a socket replaced
@@ -83,24 +99,57 @@ export function useContainerLogs({ nodeId, containerId, follow, tail = 500 }: Op
       }));
 
     const all = containerId === ALL_CONTAINERS;
+    // Tagged once on arrival, so rows (memoised on the line object) stay put.
+    const tag = (line: LogLine, node: string): ViewLine => (tagged ? { ...line, node } : line);
 
     // Non-follow mode is a plain request; no socket needed.
     if (!follow) {
-      (all ? conn.client.getAllLogs({ tail }) : conn.client.getLogs(containerId, { tail }))
-        .then((res) => !cancelled && patch({ lines: res.lines, status: 'closed' }))
-        .catch(() => !cancelled && patch({ status: 'error' }));
+      Promise.allSettled(
+        sources.map(({ id, conn }) =>
+          (all ? conn.client.getAllLogs({ tail }) : conn.client.getLogs(containerId, { tail })).then((res) =>
+            res.lines.map((l) => tag(l, id)),
+          ),
+        ),
+      ).then((results) => {
+        if (cancelled) return;
+        const ok = results.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []));
+        if (ok.length === 0) return patch({ status: 'error' });
+        const lines = ok.flat();
+        patch({ lines: sources.length > 1 ? lines.sort(byTime) : lines, status: 'closed' });
+      });
       return () => {
         cancelled = true;
       };
     }
 
-    const ws = new WebSocket(
-      all ? conn.client.allLogsSocketUrl({ tail }) : conn.client.logsSocketUrl(containerId, { tail }),
-    );
+    // One socket per node. The view is live while any is; it has failed only
+    // when every one has.
+    const states = new Map<string, LogConnectionState>(sources.map(({ id }) => [id, 'connecting']));
+    const report = (id: string, state: LogConnectionState, reason?: string | null) => {
+      states.set(id, state);
+      const all = [...states.values()];
+      const status: LogConnectionState = all.includes('streaming')
+        ? 'streaming'
+        : all.includes('connecting')
+          ? 'connecting'
+          : all.every((s) => s === 'error')
+            ? 'error'
+            : 'closed';
+      patch(reason === undefined ? { status } : { status, reason });
+    };
 
-    ws.onopen = () => patch({ status: 'streaming' });
+    const sockets = sources.map(({ id, conn }) => {
+      const ws = new WebSocket(
+        all ? conn.client.allLogsSocketUrl({ tail }) : conn.client.logsSocketUrl(containerId, { tail }),
+      );
+      ws.onopen = () => !cancelled && report(id, 'streaming');
+      ws.onmessage = (event) => receive(id, event);
+      ws.onerror = () => !cancelled && report(id, 'error');
+      ws.onclose = () => !cancelled && states.get(id) !== 'error' && report(id, 'closed');
+      return ws;
+    });
 
-    ws.onmessage = (event) => {
+    const receive = (node: string, event: MessageEvent) => {
       if (cancelled) return;
       let frame: LogFrame;
       try {
@@ -111,7 +160,7 @@ export function useContainerLogs({ nodeId, containerId, follow, tail = 500 }: Op
 
       switch (frame.type) {
         case 'line':
-          buffer.current.push(frame);
+          buffer.current.push(tag(frame, node));
           // Trim as we go so a firehose can't grow the buffer without bound
           // between flushes.
           if (buffer.current.length > MAX_LINES) {
@@ -126,19 +175,10 @@ export function useContainerLogs({ nodeId, containerId, follow, tail = 500 }: Op
           );
           break;
         case 'closed':
-          patch({ status: 'closed', reason: frame.reason });
+          report(node, 'closed', frame.reason);
           break;
       }
     };
-
-    ws.onerror = () => patch({ status: 'error' });
-    ws.onclose = () =>
-      !cancelled &&
-      setSession((prev) =>
-        prev.target === target && prev.status !== 'error'
-          ? { ...prev, status: 'closed' }
-          : prev,
-      );
 
     // Coalesced flush: at most ~7 renders a second no matter the log rate.
     const flush = setInterval(() => {
@@ -150,7 +190,7 @@ export function useContainerLogs({ nodeId, containerId, follow, tail = 500 }: Op
         // Merged containers' backlogs arrive one after another; order them.
         // Live lines are already nearly in order, which a stable sort
         // handles in about linear time.
-        const next = all ? prev.lines.concat(pending).sort(byTime) : prev.lines.concat(pending);
+        const next = all || sources.length > 1 ? prev.lines.concat(pending).sort(byTime) : prev.lines.concat(pending);
         return {
           ...prev,
           lines: next.length > MAX_LINES ? next.slice(-MAX_LINES) : next,
@@ -161,10 +201,12 @@ export function useContainerLogs({ nodeId, containerId, follow, tail = 500 }: Op
     return () => {
       cancelled = true;
       clearInterval(flush);
-      ws.onopen = ws.onmessage = ws.onerror = ws.onclose = null;
-      ws.close();
+      for (const ws of sockets) {
+        ws.onopen = ws.onmessage = ws.onerror = ws.onclose = null;
+        ws.close();
+      }
     };
-  }, [nodeId, containerId, follow, tail, target]);
+  }, [nodesKey, multi, containerId, follow, tail, target]);
 
   const reconnect = useCallback(() => setAttempt((n) => n + 1), []);
 

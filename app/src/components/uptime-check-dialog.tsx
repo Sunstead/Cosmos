@@ -92,7 +92,9 @@ function CustomForm({
 }) {
   const allNodes = useNodeStore((s) => s.nodes);
   const { save } = useUptimeActions();
-  const [nodeId, setNodeId] = useState(fixedNode ?? nodes[0] ?? '');
+  // With several nodes the choice is deliberate: where a check runs from
+  // decides what it tests (Pluto's checks take the public path).
+  const [nodeId, setNodeId] = useState(fixedNode ?? (nodes.length === 1 ? nodes[0] : ''));
   const [name, setName] = useState(check?.name ?? '');
   const [kind, setKind] = useState<CheckKind>(check?.kind ?? 'http');
   const [target, setTarget] = useState(check?.target ?? '');
@@ -147,7 +149,7 @@ function CustomForm({
         <FieldGroup>
           {!fixedNode && nodes.length > 1 && (
             <Field>
-              <FieldLabel htmlFor='uptime-node'>Node</FieldLabel>
+              <FieldLabel htmlFor='uptime-node'>Checked from</FieldLabel>
               <Select
                 value={nodeId}
                 onValueChange={(v) => v && setNodeId(v)}
@@ -157,7 +159,7 @@ function CustomForm({
                 })}
               >
                 <SelectTrigger id='uptime-node'>
-                  <SelectValue />
+                  <SelectValue placeholder='Pick a node' />
                 </SelectTrigger>
                 <SelectContent>
                   {nodes.map((id) => {

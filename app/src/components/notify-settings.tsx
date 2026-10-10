@@ -14,8 +14,8 @@ import { Input } from '@sunstead/ui/components/input';
 import { Button } from '@sunstead/ui/components/button';
 import { Badge } from '@sunstead/ui/components/badge';
 import { Checkbox } from '@sunstead/ui/components/checkbox';
-import { useNodeMeta, useNotify, useNotifyActions } from '@/api/queries';
-import { nodeDisplayName, useNodeStore } from '@/stores/nodes';
+import { useNotifyActions, useNotifyAll } from '@/api/queries';
+import { nodeDisplayName, useNodeName, useNodeStore } from '@/stores/nodes';
 import { DeviceLevel, useNotificationPrefs } from '@/stores/notifications';
 import { CATEGORY } from '@/lib/events';
 import { relativeTime } from '@/lib/time';
@@ -30,6 +30,7 @@ import { SegmentedControl } from './segmented-control';
 import { ConfirmDialog } from './confirm-dialog';
 import { EmptyState } from './empty-state';
 import { TableSkeleton } from './skeletons';
+import { NodeName } from './node-name';
 
 const CATEGORIES = Object.keys(CATEGORY) as EventCategory[];
 
@@ -109,25 +110,64 @@ function ChannelStatusLine({ channel }: { channel: NotifyChannel }) {
   return null;
 }
 
-/** One node's channels. Admins only; editing also needs `allow_actions`. */
-export function NodeChannels({ nodeId }: { nodeId: string }) {
-  const node = useNodeStore((s) => s.nodes.find((n) => n.id === nodeId));
-  const meta = useNodeMeta(nodeId);
-  const { data, isLoading, error } = useNotify(nodeId);
-  const { remove, test, saveSettings, pending } = useNotifyActions();
-  const [editing, setEditing] = useState<NotifyChannel | 'new' | null>(null);
+/** A node's link setting: what tapping one of its notifications opens. */
+function LinkSetting({ nodeId, saved, canEdit, showNode }: { nodeId: string; saved: string; canEdit: boolean; showNode: boolean }) {
+  const { saveSettings } = useNotifyActions();
+  const name = useNodeName(nodeId);
   const [link, setLink] = useState<string | null>(null);
-  const canEdit = meta?.capabilities.notify_actions ?? false;
-  if (!node) return null;
-  const name = nodeDisplayName(node);
-  const savedLink = data?.settings.link_url ?? '';
+  return (
+    <form
+      className='p-4'
+      onSubmit={(e) => {
+        e.preventDefault();
+        void saveSettings(nodeId, { link_url: (link ?? saved).trim() || null });
+        setLink(null);
+      }}
+    >
+      <Field>
+        <FieldLabel htmlFor={`link-${nodeId}`}>{showNode ? `Link from ${name ?? nodeId}` : 'Link'}</FieldLabel>
+        <div className='flex gap-2'>
+          <Input
+            id={`link-${nodeId}`}
+            value={link ?? saved}
+            placeholder='https://cosmos.example.com/events'
+            disabled={!canEdit}
+            onChange={(e) => setLink(e.target.value)}
+          />
+          {canEdit && (
+            <Button type='submit' variant='outline' disabled={link === null || link === saved}>
+              Save
+            </Button>
+          )}
+        </div>
+        <FieldDescription>Opened when you tap a notification.</FieldDescription>
+      </Field>
+    </form>
+  );
+}
+
+type Editing = { nodeId: string; channel: NotifyChannel } | 'new' | null;
+
+/**
+ * Every node's channels in one list. Each node sends its own notifications,
+ * so a channel belongs to a node; a new one can be added to several at once.
+ * Admins only; editing also needs `allow_actions`.
+ */
+export function NotificationChannels({ nodeIds }: { nodeIds: string[] }) {
+  const meta = useNodeStore((s) => s.meta);
+  const { byNode, errors, loading } = useNotifyAll(nodeIds);
+  const { remove, test, pending } = useNotifyActions();
+  const [editing, setEditing] = useState<Editing>(null);
+  const showNode = nodeIds.length > 1;
+  const editable = nodeIds.filter((id) => meta[id]?.capabilities.notify_actions);
+  const rows = nodeIds.flatMap((nodeId) => (byNode[nodeId]?.channels ?? []).map((channel) => ({ nodeId, channel })));
 
   return (
     <Section
-      title={`Notifications from ${name}`}
-      count={data?.channels.length || undefined}
+      title='Notification channels'
+      count={rows.length || undefined}
       actions={
-        canEdit && (
+        editable.length > 0 && (
           <Button variant='outline' size='sm' onClick={() => setEditing('new')}>
             <Plus /> Add channel
           </Button>
@@ -135,13 +175,16 @@ export function NodeChannels({ nodeId }: { nodeId: string }) {
       }
       contentClassName='divide-y'
     >
-      {isLoading ? (
+      {loading && rows.length === 0 ? (
         <TableSkeleton columns={2} rows={2} />
-      ) : error ? (
-        <p className='p-4 text-sm text-error'>{error.message}</p>
       ) : (
         <>
-          {data?.channels.length === 0 && (
+          {errors.map((e) => (
+            <p key={e.nodeId} className='p-4 text-sm text-error'>
+              {showNode ? <NodeName nodeId={e.nodeId} /> : null} {e.message}
+            </p>
+          ))}
+          {rows.length === 0 && errors.length === 0 && (
             <EmptyState
               size='inline'
               icon={BellOff}
@@ -149,89 +192,86 @@ export function NodeChannels({ nodeId }: { nodeId: string }) {
               description='Add an ntfy topic or a webhook to hear about problems away from this app.'
             />
           )}
-          {data?.channels.map((c) => (
-            <div key={c.id} data-channel className='flex flex-wrap items-center gap-3 px-4 py-3'>
-              <div className='min-w-0 flex-1'>
-                <div className='flex items-center gap-2'>
-                  <p className='truncate font-medium'>{c.name}</p>
-                  <Badge variant='outline' className='text-2xs'>
-                    {c.kind === 'ntfy' ? 'ntfy' : 'Webhook'}
-                  </Badge>
-                  {!c.enabled && (
-                    <Badge variant='secondary' className='text-2xs'>
-                      Off
+          {rows.map(({ nodeId, channel: c }) => {
+            const canEdit = editable.includes(nodeId);
+            return (
+              <div key={`${nodeId}:${c.id}`} data-channel className='flex flex-wrap items-center gap-3 px-4 py-3'>
+                <div className='min-w-0 flex-1'>
+                  <div className='flex items-center gap-2'>
+                    <p className='truncate font-medium'>{c.name}</p>
+                    <Badge variant='outline' className='text-2xs'>
+                      {c.kind === 'ntfy' ? 'ntfy' : 'Webhook'}
                     </Badge>
-                  )}
+                    {!c.enabled && (
+                      <Badge variant='secondary' className='text-2xs'>
+                        Off
+                      </Badge>
+                    )}
+                    {showNode && (
+                      <span className='flex min-w-0 gap-1 text-xs text-muted-foreground'>
+                        from <NodeName nodeId={nodeId} />
+                      </span>
+                    )}
+                  </div>
+                  <p className='selectable truncate font-mono text-2xs text-muted-foreground'>
+                    {c.kind === 'ntfy' ? `${c.url.replace(/\/$/, '')}/${c.topic}` : c.url}
+                  </p>
+                  <p className='text-xs text-muted-foreground'>{rulesSummary(c)}</p>
+                  <ChannelStatusLine channel={c} />
                 </div>
-                <p className='selectable truncate font-mono text-2xs text-muted-foreground'>
-                  {c.kind === 'ntfy' ? `${c.url.replace(/\/$/, '')}/${c.topic}` : c.url}
-                </p>
-                <p className='text-xs text-muted-foreground'>{rulesSummary(c)}</p>
-                <ChannelStatusLine channel={c} />
-              </div>
-              {canEdit && (
-                <div className='flex items-center gap-1'>
-                  <Button
-                    variant='outline'
-                    size='sm'
-                    disabled={pending === `test:${nodeId}:${c.id}`}
-                    onClick={() => void test(nodeId, c.id, c.name)}
-                  >
-                    <Send /> Send test
-                  </Button>
-                  <Button variant='ghost' size='icon' aria-label={`Edit ${c.name}`} onClick={() => setEditing(c)}>
-                    <PencilLine />
-                  </Button>
-                  <ConfirmDialog
-                    trigger={
-                      <Button variant='ghost' size='icon' aria-label={`Remove ${c.name}`}>
-                        <Trash />
-                      </Button>
-                    }
-                    title={`Remove ${c.name}?`}
-                    description='It stops getting notifications. Its saved token is deleted.'
-                    confirmLabel='Remove'
-                    destructive
-                    onConfirm={() => void remove(nodeId, c.id, c.name)}
-                  />
-                </div>
-              )}
-            </div>
-          ))}
-          <form
-            className='p-4'
-            onSubmit={(e) => {
-              e.preventDefault();
-              void saveSettings(nodeId, { link_url: (link ?? savedLink).trim() || null });
-              setLink(null);
-            }}
-          >
-            <Field>
-              <FieldLabel htmlFor={`link-${nodeId}`}>Link</FieldLabel>
-              <div className='flex gap-2'>
-                <Input
-                  id={`link-${nodeId}`}
-                  value={link ?? savedLink}
-                  placeholder='https://cosmos.example.com/events'
-                  disabled={!canEdit}
-                  onChange={(e) => setLink(e.target.value)}
-                />
                 {canEdit && (
-                  <Button type='submit' variant='outline' disabled={link === null || link === savedLink}>
-                    Save
-                  </Button>
+                  <div className='flex items-center gap-1'>
+                    <Button
+                      variant='outline'
+                      size='sm'
+                      disabled={pending === `test:${nodeId}:${c.id}`}
+                      onClick={() => void test(nodeId, c.id, c.name)}
+                    >
+                      <Send /> Send test
+                    </Button>
+                    <Button
+                      variant='ghost'
+                      size='icon'
+                      aria-label={`Edit ${c.name}`}
+                      onClick={() => setEditing({ nodeId, channel: c })}
+                    >
+                      <PencilLine />
+                    </Button>
+                    <ConfirmDialog
+                      trigger={
+                        <Button variant='ghost' size='icon' aria-label={`Remove ${c.name}`}>
+                          <Trash />
+                        </Button>
+                      }
+                      title={`Remove ${c.name}?`}
+                      description='It stops getting notifications. Its saved token is deleted.'
+                      confirmLabel='Remove'
+                      destructive
+                      onConfirm={() => void remove(nodeId, c.id, c.name)}
+                    />
+                  </div>
                 )}
               </div>
-              <FieldDescription>Opened when you tap a notification.</FieldDescription>
-            </Field>
-          </form>
+            );
+          })}
+          {nodeIds
+            .filter((id) => byNode[id])
+            .map((id) => (
+              <LinkSetting
+                key={id}
+                nodeId={id}
+                saved={byNode[id].settings.link_url ?? ''}
+                canEdit={editable.includes(id)}
+                showNode={showNode}
+              />
+            ))}
         </>
       )}
       <Dialog open={editing !== null} onOpenChange={(o) => !o && setEditing(null)}>
         {editing !== null && (
           <ChannelForm
-            nodeId={nodeId}
-            channel={editing === 'new' ? undefined : editing}
+            nodeIds={editing === 'new' ? editable : [editing.nodeId]}
+            channel={editing === 'new' ? undefined : editing.channel}
             onDone={() => setEditing(null)}
           />
         )}
@@ -241,15 +281,20 @@ export function NodeChannels({ nodeId }: { nodeId: string }) {
 }
 
 function ChannelForm({
-  nodeId,
+  nodeIds,
   channel,
   onDone,
 }: {
-  nodeId: string;
+  /** Where it can go: the channel's own node when editing. */
+  nodeIds: string[];
   channel?: NotifyChannel;
   onDone: () => void;
 }) {
   const { save } = useNotifyActions();
+  const allNodes = useNodeStore((s) => s.nodes);
+  // A new channel with several nodes to send from: tick the ones it's for
+  // (each node's topic and token usually differ, so none by default).
+  const [targets, setTargets] = useState<string[]>(nodeIds.length === 1 ? nodeIds : []);
   const [name, setName] = useState(channel?.name ?? '');
   const [kind, setKind] = useState<ChannelKind>(channel?.kind ?? 'ntfy');
   const [url, setUrl] = useState(channel?.url ?? '');
@@ -285,7 +330,8 @@ function ChannelForm({
     setBusy(true);
     setError(null);
     try {
-      await save(nodeId, input, channel?.id);
+      // One at a time, so a failure says where and stops before the rest.
+      for (const nodeId of targets) await save(nodeId, input, channel?.id);
       onDone();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save.');
@@ -296,7 +342,8 @@ function ChannelForm({
 
   const secretLabel = kind === 'ntfy' ? 'Access token' : 'Bearer token';
   return (
-    <DialogContent>
+    // The tallest form in the app; it scrolls rather than run off a short window.
+    <DialogContent className='max-h-[calc(100dvh-2rem)] overflow-y-auto'>
       <DialogHeader>
         <DialogTitle>
           {channel ? `Edit ${channel.name}` : 'Add a notification channel'}
@@ -308,6 +355,28 @@ function ChannelForm({
 
       <form id='notify-channel' onSubmit={(e) => void submit(e)}>
         <FieldGroup>
+          {!channel && nodeIds.length > 1 && (
+            <Field>
+              <FieldLabel>Send from</FieldLabel>
+              <div className='flex flex-wrap gap-x-4 gap-y-2'>
+                {nodeIds.map((id) => {
+                  const node = allNodes.find((n) => n.id === id);
+                  return (
+                    <label key={id} className='flex items-center gap-2 text-sm'>
+                      <Checkbox
+                        checked={targets.includes(id)}
+                        onCheckedChange={(v) =>
+                          setTargets((all) => (v === true ? [...all, id] : all.filter((x) => x !== id)))
+                        }
+                      />
+                      {node ? nodeDisplayName(node) : id}
+                    </label>
+                  );
+                })}
+              </div>
+              <FieldDescription>Each node sends its own events. The same settings go to each one ticked.</FieldDescription>
+            </Field>
+          )}
           <Field>
             <FieldLabel htmlFor='channel-name'>Name</FieldLabel>
             <Input
@@ -443,7 +512,7 @@ function ChannelForm({
 
       <DialogFooter>
         <DialogClose render={<Button variant='outline' />}>Cancel</DialogClose>
-        <Button type='submit' form='notify-channel' disabled={busy}>
+        <Button type='submit' form='notify-channel' disabled={busy || targets.length === 0}>
           {channel ? 'Save' : 'Add'}
         </Button>
       </DialogFooter>
