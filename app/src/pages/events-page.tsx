@@ -17,6 +17,8 @@ import { TableSkeleton } from '@/components/skeletons';
 import { SETUP } from '@/lib/setup';
 import { EventItem, ProblemItem } from '@/components/event-item';
 import { Button } from '@sunstead/ui/components/button';
+import { NodeSelect } from '@/components/node-select';
+import { ALL_NODES, useNodeScope } from '@/hooks/use-node-scope';
 
 type Filter = 'all' | 'problems' | 'actions';
 
@@ -53,19 +55,32 @@ export function EventsPage() {
   const [loadingOlder, setLoadingOlder] = useState(false);
   useTick(60_000);
 
+  const [scope, setScope, scopeNodes] = useNodeScope('events', {
+    capability: 'events',
+    allowAll: true,
+    initial: ALL_NODES,
+  });
+  const inScope = (nodeId: string) => scope === ALL_NODES || nodeId === scope;
+
   const all = useMemo(() => mergeEvents(byNode), [byNode]);
-  const problems = useMemo(() => mergeProblems(byNode), [byNode]);
+  const problems = useMemo(
+    () => mergeProblems(byNode).filter((p) => scope === ALL_NODES || p.nodeId === scope),
+    [byNode, scope],
+  );
   const visible = useMemo(
     () =>
       all.filter(
-        (e) => matchesFilter(e, filter) && matchesQuery(query, e.title, e.detail, e.subject, e.actor, e.service),
+        (e) =>
+          (scope === ALL_NODES || e.nodeId === scope) &&
+          matchesFilter(e, filter) &&
+          matchesQuery(query, e.title, e.detail, e.subject, e.actor, e.service),
       ),
-    [all, filter, query],
+    [all, filter, query, scope],
   );
   const days = useMemo(() => byDay(visible), [visible]);
-  const showNode = nodeCount > 1;
-  const hasOlder = Object.values(byNode).some((n) => n.hasOlder);
-  const filtered = query !== '' || filter !== 'all';
+  const showNode = nodeCount > 1 && scope === ALL_NODES;
+  const hasOlder = Object.entries(byNode).some(([id, n]) => inScope(id) && n.hasOlder);
+  const filtered = query !== '' || filter !== 'all' || scope !== ALL_NODES;
 
   // Whatever is on screen has been seen, for the bell.
   useEffect(() => {
@@ -80,7 +95,7 @@ export function EventsPage() {
     try {
       await Promise.all(
         Object.entries(useEventsStore.getState().byNode)
-          .filter(([, n]) => n.hasOlder)
+          .filter(([id, n]) => inScope(id) && n.hasOlder)
           .map(async ([nodeId, n]) => {
             const conn = getConnection(nodeId);
             const oldest = n.events.at(-1);
@@ -163,6 +178,7 @@ export function EventsPage() {
         actions={
           all.length > 0 && (
             <>
+              <NodeSelect value={scope} onChange={setScope} candidates={scopeNodes} allowAll />
               <SearchInput value={query} onChange={setQuery} placeholder='Search events' />
               <SegmentedControl
                 label='Show'

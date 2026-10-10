@@ -40,6 +40,8 @@ import { NodeName } from '@/components/node-name';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { UptimeBar } from '@/components/uptime-bar';
 import { UptimeCheckDialog } from '@/components/uptime-check-dialog';
+import { NodeSelect } from '@/components/node-select';
+import { ALL_NODES, useNodeScope } from '@/hooks/use-node-scope';
 import { Button } from '@sunstead/ui/components/button';
 import {
   DropdownMenu,
@@ -198,8 +200,8 @@ const CheckRow = memo(function CheckRow({
               {item.check.name}
             </span>
             {showNode && (
-              <span className='text-xs'>
-                <NodeName nodeId={item.nodeId} />
+              <span className='flex min-w-0 gap-1 text-xs text-muted-foreground'>
+                from <NodeName nodeId={item.nodeId} />
               </span>
             )}
           </div>
@@ -267,16 +269,23 @@ export function UptimePage() {
   const actionNodes = useMemo(() => (actionKey ? actionKey.split('|') : []), [actionKey]);
   const canAdd = actionNodes.length > 0;
 
+  const [scope, setScope, scopeNodes] = useNodeScope('uptime', {
+    capability: 'uptime',
+    allowAll: true,
+    initial: ALL_NODES,
+  });
+
   const sorted = useMemo(() => [...uptime.items].sort(compareChecks), [uptime.items]);
   const visible = sorted.filter(
     (i) =>
+      (scope === ALL_NODES || i.nodeId === scope) &&
       (filter === 'all' ||
         (filter === 'down' && (i.state === 'down' || i.state === 'failing')) ||
         (filter === 'custom' && i.check.source === 'custom')) &&
       matchesQuery(query, i.check.name, i.check.target, i.check.service),
   );
   const down = uptime.items.filter((i) => i.state === 'down').length;
-  const showNode = nodeCount > 1;
+  const showNode = nodeCount > 1 && scope === ALL_NODES;
 
   function body() {
     if (nodeCount === 0) return <NoNodesState />;
@@ -350,6 +359,7 @@ export function UptimePage() {
           <>
             {uptime.items.length > 0 && (
               <>
+                <NodeSelect value={scope} onChange={setScope} candidates={scopeNodes} allowAll />
                 <SearchInput
                   value={query}
                   onChange={setQuery}

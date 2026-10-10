@@ -31,7 +31,7 @@ import { nodeDisplayName, useNodeStore } from '@/stores/nodes';
 import { useContainersStore } from '@/stores/containers';
 import { useContainerActions, useWol, useWolActions } from '@/api/queries';
 import { PAGES } from '@/lib/navigation';
-import { userFacingServices } from '@/lib/services';
+import { ServiceGroup, ServiceInfo, userFacingGroups } from '@/lib/services';
 import { serviceHref } from '@/lib/agent-url';
 import { openExternal } from '@/lib/open-external';
 import { copyText } from '@/lib/clipboard';
@@ -99,6 +99,13 @@ function ContainerPage({
   );
 }
 
+type PaletteService = {
+  group: ServiceGroup;
+  instance: ServiceInfo;
+  url: string | null;
+  multiple: boolean;
+};
+
 export function CommandPalette() {
   const open = useUiStore((s) => s.paletteOpen);
   const setOpen = useUiStore((s) => s.setPaletteOpen);
@@ -115,12 +122,32 @@ export function CommandPalette() {
   );
   const reconnect = useNodeStore((s) => s.reconnect);
   const nodeContainers = useContainersStore((s) => s.nodeContainers);
-  const allServices = useContainersStore((s) => s.services);
+  const allGroups = useContainersStore((s) => s.groups);
 
   const [target, setTarget] = useState<Target | null>(null);
   const [search, setSearch] = useState('');
 
-  const services = useMemo(() => userFacingServices(allServices), [allServices]);
+  // One entry per service: per address when it has one (a service on two
+  // nodes behind one URL is one entry), else per node, opening its logs.
+  const services = useMemo(
+    () =>
+      userFacingGroups(allGroups).flatMap((g): PaletteService[] =>
+        g.urls.length > 0
+          ? g.urls.map((url) => ({
+              group: g,
+              instance: g.instances.find((i) => i.url === url) ?? g.instances[0],
+              url,
+              multiple: g.urls.length > 1,
+            }))
+          : g.instances.map((instance) => ({
+              group: g,
+              instance,
+              url: null,
+              multiple: g.instances.length > 1,
+            })),
+      ),
+    [allGroups],
+  );
   const containers = useMemo(
     () =>
       Object.entries(nodeContainers).flatMap(([nodeId, list]) =>
@@ -252,22 +279,25 @@ export function CommandPalette() {
 
               {services.length > 0 && (
                 <CommandGroup heading='Services'>
-                  {services.map((s) => {
-                    const href = serviceHref(s.url);
+                  {services.map(({ group, instance, url, multiple }) => {
+                    const href = serviceHref(url);
                     return (
                       <CommandItem
-                        key={`${s.nodeId}:${s.key}`}
-                        value={`service ${s.name} ${s.key} ${s.url ?? ''}`}
+                        key={`${group.key}:${url ?? instance.nodeId}`}
+                        value={`service ${group.name} ${group.key} ${url ?? ''} ${multiple ? nameOf(instance.nodeId) : ''}`}
                         onSelect={go(() =>
                           href
                             ? void openExternal(href)
-                            : void navigate({ to: '/logs', search: { node: s.nodeId, container: s.containers[0]?.id } }),
+                            : void navigate({
+                                to: '/logs',
+                                search: { node: instance.nodeId, container: instance.containers[0]?.id },
+                              }),
                         )}
                       >
-                        <ServiceIcon service={s.key} size={16} />
-                        {s.name}
-                        {nodes.length > 1 && (
-                          <span className='text-xs text-muted-foreground'>{nameOf(s.nodeId)}</span>
+                        <ServiceIcon service={group.key} size={16} />
+                        {group.name}
+                        {nodes.length > 1 && multiple && (
+                          <span className='text-xs text-muted-foreground'>{nameOf(instance.nodeId)}</span>
                         )}
                         <CommandShortcut className='tracking-normal'>
                           {href ? (

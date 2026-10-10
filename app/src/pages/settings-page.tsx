@@ -19,7 +19,7 @@ import { PAGES } from '@/lib/navigation';
 import { ShortcutId } from '@/lib/shortcuts';
 import { getPlatform } from '@/lib/platform';
 import { ServerOff } from 'lucide-react';
-import { DeviceNotifications, NodeChannels } from '@/components/notify-settings';
+import { DeviceNotifications, NotificationChannels } from '@/components/notify-settings';
 import { ThemeSettings } from '@/components/theme-picker';
 
 const CAPS = [
@@ -171,9 +171,7 @@ export function SettingsPage() {
       </Section>
 
       <DeviceNotifications />
-      {notifyNodes.map((id) => (
-        <NodeChannels key={id} nodeId={id} />
-      ))}
+      {notifyNodes.length > 0 && <NotificationChannels nodeIds={notifyNodes} />}
 
       <Section title='Appearance' data-appearance>
         <ThemeSettings />

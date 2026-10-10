@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Hexagon, SearchX } from 'lucide-react';
 import { ServiceCard } from '@/components/service-card';
 import { PageHeader } from '@/components/page-header';
@@ -10,8 +10,8 @@ import { SETUP } from '@/lib/setup';
 import { useContainersStore } from '@/stores/containers';
 import { useAwaiting } from '@/hooks/use-awaiting';
 import { CardGridSkeleton } from '@/components/skeletons';
-import { useNodeStore } from '@/stores/nodes';
-import { ServiceStatus, userFacingServices } from '@/lib/services';
+import { nodeDisplayName, useNodeStore } from '@/stores/nodes';
+import { ServiceInfo, ServiceStatus, userFacingGroups } from '@/lib/services';
 import { matchesQuery } from '@/lib/format';
 import { serviceCheck } from '@/lib/uptime';
 import { useUptime } from '@/api/queries';
@@ -21,14 +21,20 @@ type Filter = 'all' | ServiceStatus;
 const SERVICE_GRID = 'grid grid-cols-[repeat(auto-fill,minmax(20rem,1fr))] gap-4';
 
 export function ServicesPage() {
-  const nodeCount = useNodeStore((s) => s.nodes.length);
-  const allServices = useContainersStore((s) => s.services);
+  const nodes = useNodeStore((s) => s.nodes);
+  const nodeCount = nodes.length;
+  const allGroups = useContainersStore((s) => s.groups);
   const awaiting = useAwaiting(useContainersStore((s) => s.nodeContainers));
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const uptime = useUptime(60_000);
 
-  const services = useMemo(() => userFacingServices(allServices), [allServices]);
+  const services = useMemo(() => userFacingGroups(allGroups), [allGroups]);
+  const nodeNames = useMemo(() => new Map(nodes.map((n) => [n.id, nodeDisplayName(n)])), [nodes]);
+  const checkFor = useCallback(
+    (s: ServiceInfo) => serviceCheck(uptime.items, s.nodeId, s.key),
+    [uptime.items],
+  );
 
   const visible = useMemo(
     () =>
@@ -40,11 +46,14 @@ export function ServicesPage() {
             s.name,
             s.key,
             s.description,
-            s.url,
-            ...s.containers.map((c) => c.name),
+            ...s.urls,
+            ...s.instances.flatMap((i) => [
+              nodeNames.get(i.nodeId),
+              ...i.containers.map((c) => c.name),
+            ]),
           ),
       ),
-    [services, query, filter],
+    [services, query, filter, nodeNames],
   );
 
   return (
@@ -90,12 +99,7 @@ export function ServicesPage() {
       ) : (
         <div className={SERVICE_GRID}>
           {visible.map((s) => (
-            <ServiceCard
-              key={`${s.nodeId}:${s.key}`}
-              service={s}
-              showNode={nodeCount > 1}
-              check={serviceCheck(uptime.items, s.nodeId, s.key)}
-            />
+            <ServiceCard key={s.key} group={s} showNode={nodeCount > 1} checkFor={checkFor} />
           ))}
         </div>
       )}

@@ -111,3 +111,64 @@ export function deriveNodeServices(
 export function userFacingServices(services: ServiceInfo[]): ServiceInfo[] {
   return services.filter((s) => s.key !== SYSTEM_SERVICE_KEY);
 }
+
+/**
+ * One service across every node that runs it: Cosmos itself runs on each
+ * node, and later so may a proxy or an exporter. Pages list these, so a
+ * service shows once, with a row per node inside it.
+ */
+export type ServiceGroup = {
+  key: string;
+  name: string;
+  description: string | null;
+  /** The first instance's URL; instances may differ (see `urls`). */
+  url: string | null;
+  /** Distinct URLs across instances, in instance order. */
+  urls: string[];
+  /** In node order, as the store holds them. */
+  instances: ServiceInfo[];
+  /** Running only when every instance is; stopped only when every one is. */
+  status: ServiceStatus;
+  running: number;
+  total: number;
+};
+
+function groupStatus(instances: ServiceInfo[]): ServiceStatus {
+  if (instances.every((s) => s.status === 'running')) return 'running';
+  if (instances.every((s) => s.status === 'stopped')) return 'stopped';
+  return 'partial';
+}
+
+/** Groups services by their `cosmos.service` key across nodes, sorted by name. */
+export function groupServices(services: ServiceInfo[]): ServiceGroup[] {
+  const byKey = new Map<string, ServiceInfo[]>();
+  for (const s of services) {
+    const list = byKey.get(s.key) ?? [];
+    list.push(s);
+    byKey.set(s.key, list);
+  }
+
+  const groups: ServiceGroup[] = [];
+  for (const [key, instances] of byKey) {
+    const urls = [...new Set(instances.map((s) => s.url).filter((u): u is string => u != null))];
+    groups.push({
+      key,
+      name: instances[0].name,
+      description: instances.map((s) => s.description).find((d) => d != null) ?? null,
+      url: urls[0] ?? null,
+      urls,
+      instances,
+      status: groupStatus(instances),
+      running: instances.reduce((sum, s) => sum + s.running, 0),
+      total: instances.reduce((sum, s) => sum + s.total, 0),
+    });
+  }
+
+  groups.sort((a, b) => a.name.localeCompare(b.name));
+  return groups;
+}
+
+/** Groups worth clicking on, with infrastructure filtered out. */
+export function userFacingGroups(groups: ServiceGroup[]): ServiceGroup[] {
+  return groups.filter((g) => g.key !== SYSTEM_SERVICE_KEY);
+}

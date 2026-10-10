@@ -10,8 +10,13 @@ const client = {
   getAllLogs: vi.fn(),
 };
 
+const client2 = {
+  ...client,
+  allLogsSocketUrl: () => 'ws://other.test/v1/logs/ws',
+};
+
 vi.mock('@/stores/nodes', () => ({
-  getConnection: (id: string) => (id === 'n1' ? { client } : null),
+  getConnection: (id: string) => (id === 'n1' ? { client } : id === 'n2' ? { client: client2 } : null),
 }));
 
 const line = (text: string) => ({ type: 'line', stream: 'stdout', ts: null, text });
@@ -186,6 +191,44 @@ describe('useContainerLogs', () => {
       });
       expect(client.getAllLogs).toHaveBeenCalled();
       expect(result.current.lines[0].container).toBe('c1');
+    });
+  });
+
+  describe('all nodes', () => {
+    const at = (ts: string) => ({ type: 'line', stream: 'stdout', ts, text: ts, container: 'c' });
+
+    it('opens one merged socket per node and tags lines with their node', () => {
+      const { result } = renderHook(() =>
+        useContainerLogs({ nodeId: null, nodeIds: ['n1', 'n2'], containerId: ALL_CONTAINERS, follow: true }),
+      );
+      expect(FakeWebSocket.instances.map((w) => w.url)).toEqual([
+        'ws://agent.test/v1/logs/ws',
+        'ws://other.test/v1/logs/ws',
+      ]);
+      const [a, b] = FakeWebSocket.instances;
+      act(() => {
+        a.open();
+        a.send(at('2026-10-10T10:00:02Z'));
+        b.send(at('2026-10-10T10:00:01Z'));
+        vi.advanceTimersByTime(200);
+      });
+      expect(result.current.state).toBe('streaming');
+      expect(result.current.lines.map((l) => [l.node, l.ts])).toEqual([
+        ['n2', '2026-10-10T10:00:01Z'],
+        ['n1', '2026-10-10T10:00:02Z'],
+      ]);
+    });
+
+    it('stays live while one node is, and fails only when all have', () => {
+      const { result } = renderHook(() =>
+        useContainerLogs({ nodeId: null, nodeIds: ['n1', 'n2'], containerId: ALL_CONTAINERS, follow: true }),
+      );
+      const [a, b] = FakeWebSocket.instances;
+      act(() => {
+        a.open();
+        b.onerror?.();
+      });
+      expect(result.current.state).toBe('streaming');
     });
   });
 

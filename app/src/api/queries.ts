@@ -113,6 +113,48 @@ export function useMetricHistory(
   });
 }
 
+/**
+ * The same history from several nodes at once, for comparing them. Shares
+ * `useMetricHistory`'s cache, so switching between one node and all of them
+ * doesn't refetch. Nodes that are offline or record no history are left out.
+ */
+export function useMetricHistories(
+  nodeIds: string[],
+  opts: { rangeSeconds: number; step?: MetricStep; maxPoints?: number },
+) {
+  const readyKey = useNodeStore((s) =>
+    nodeIds
+      .filter((id) => s.meta[id]?.status === 'online' && s.meta[id]?.capabilities.metrics_history)
+      .join('|'),
+  );
+  const ready = readyKey ? readyKey.split('|') : [];
+
+  return useQueries({
+    queries: ready.map((nodeId) => ({
+      queryKey: ['metrics', nodeId, opts.rangeSeconds, opts.step, opts.maxPoints],
+      queryFn: () => {
+        const conn = getConnection(nodeId);
+        if (!conn) throw new Error('node is not connected');
+        const to = Math.floor(Date.now() / 1000);
+        return conn.client.getMetrics({
+          from: to - opts.rangeSeconds,
+          to,
+          step: opts.step,
+          maxPoints: opts.maxPoints,
+        });
+      },
+      staleTime: 15_000,
+      refetchInterval: 60_000,
+      retry: 1,
+    })),
+    combine: (results) => ({
+      series: results.flatMap((r, i) => (r.data ? [{ nodeId: ready[i], series: r.data }] : [])),
+      loading: results.some((r) => r.isLoading),
+      error: results.length > 0 && results.every((r) => r.error) ? results[0].error!.message : null,
+    }),
+  });
+}
+
 export function useBackups(nodeId: string | null) {
   const meta = useNodeMeta(nodeId);
   const supported = meta?.capabilities.backups ?? false;
@@ -674,6 +716,31 @@ export function useNotify(nodeId: string | null) {
     enabled: !!nodeId && supported && meta?.status === 'online',
     refetchInterval: NOTIFY_POLL_MS,
     retry: 1,
+  });
+}
+
+/** Every given node's channels and settings, sharing `useNotify`'s cache. */
+export function useNotifyAll(nodeIds: string[]) {
+  const readyKey = useNodeStore((s) =>
+    nodeIds.filter((id) => s.meta[id]?.status === 'online' && s.meta[id]?.capabilities.notify).join('|'),
+  );
+  const ready = readyKey ? readyKey.split('|') : [];
+  return useQueries({
+    queries: ready.map((nodeId) => ({
+      queryKey: ['notify', nodeId],
+      queryFn: () => {
+        const conn = getConnection(nodeId);
+        if (!conn) throw new Error('node is not connected');
+        return conn.client.getNotify();
+      },
+      refetchInterval: NOTIFY_POLL_MS,
+      retry: 1,
+    })),
+    combine: (results) => ({
+      byNode: Object.fromEntries(results.flatMap((r, i) => (r.data ? [[ready[i], r.data] as const] : []))),
+      errors: results.flatMap((r, i) => (r.error ? [{ nodeId: ready[i], message: r.error.message }] : [])),
+      loading: results.some((r) => r.isLoading),
+    }),
   });
 }
 

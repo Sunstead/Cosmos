@@ -1,11 +1,11 @@
 import { useMemo } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Boxes, ChevronRight, Database, Hexagon, PackageCheck, Server } from 'lucide-react';
-import { useNodeStore } from '@/stores/nodes';
+import { nodeDisplayName, useNodeStore } from '@/stores/nodes';
 import { useContainersStore } from '@/stores/containers';
 import { useVolumesStore } from '@/stores/volumes';
 import { useAwaiting } from '@/hooks/use-awaiting';
-import { userFacingServices } from '@/lib/services';
+import { ServiceGroup, userFacingGroups } from '@/lib/services';
 import { getServiceStatusDisplay } from '@/lib/service-utils';
 import { PageHeader } from '@/components/page-header';
 import { NoNodesState } from '@/components/empty-state';
@@ -20,15 +20,24 @@ import { Dot } from '@/components/dot';
 import { ServiceIcon } from '@/lib/service-icons';
 import { useUpdates, useUptime } from '@/api/queries';
 import { serviceCheck } from '@/lib/uptime';
+import { UptimeEntry } from '@/generated/UptimeEntry';
 import { ServiceCheckChip } from '@/components/uptime-bar';
 
 const QUICK_LAUNCH_MAX = 9;
+
+/** The check to show for a service: a failing instance's, else the first. */
+function groupCheck(items: (UptimeEntry & { nodeId: string })[], group: ServiceGroup) {
+  const checks = group.instances
+    .map((s) => serviceCheck(items, s.nodeId, s.key))
+    .filter((c) => c != null);
+  return checks.find((c) => c.state === 'down') ?? checks[0];
+}
 
 export function OverviewPage() {
   const nodes = useNodeStore((s) => s.nodes);
   const onlineNodes = useNodeStore((s) => s.onlineNodes);
   const nodeContainers = useContainersStore((s) => s.nodeContainers);
-  const allServices = useContainersStore((s) => s.services);
+  const allGroups = useContainersStore((s) => s.groups);
   const nodeVolumes = useVolumesStore((s) => s.nodeVolumes);
   const awaitingContainers = useAwaiting(nodeContainers);
   const awaitingVolumes = useAwaiting(nodeVolumes);
@@ -40,7 +49,8 @@ export function OverviewPage() {
   const uptime = useUptime(60_000);
   const updates = useUpdates(5 * 60_000);
 
-  const services = useMemo(() => userFacingServices(allServices), [allServices]);
+  // One entry per service, however many nodes run it.
+  const services = useMemo(() => userFacingGroups(allGroups), [allGroups]);
 
   const stats = useMemo(() => {
     const containers = Object.values(nodeContainers).flat();
@@ -51,9 +61,8 @@ export function OverviewPage() {
       volumes: volumes.length,
       volumesInUse: volumes.filter((v) => v.in_use_by.length > 0).length,
       // Running, with an uptime check that isn't down.
-      healthy: services.filter(
-        (s) => s.status === 'running' && serviceCheck(uptime.items, s.nodeId, s.key)?.state !== 'down',
-      ).length,
+      healthy: services.filter((s) => s.status === 'running' && groupCheck(uptime.items, s)?.state !== 'down')
+        .length,
     };
   }, [nodeContainers, nodeVolumes, services, uptime.items]);
 
@@ -105,7 +114,8 @@ export function OverviewPage() {
           <StatCard
             icon={PackageCheck}
             label='Updates'
-            value={updates.items.filter((u) => u.available).length}
+            // An image on two nodes is one update to make.
+            value={new Set(updates.items.filter((u) => u.available).map((u) => u.id)).size}
             sublabel={(() => {
               const broken = updates.items.filter((u) => u.run?.state === 'broken').length;
               return broken ? `${broken} broken` : null;
@@ -134,7 +144,7 @@ export function OverviewPage() {
               contentClassName='grid grid-cols-3 gap-2 p-3'
             >
               {launchable.map((s) => (
-                <QuickLaunchServiceButton key={`${s.nodeId}:${s.key}`} serviceInfo={s} />
+                <QuickLaunchServiceButton key={s.key} group={s} />
               ))}
             </Section>
           )}
@@ -156,12 +166,24 @@ export function OverviewPage() {
           <Section title='Service health' count={services.length} contentClassName='max-h-80 divide-y overflow-auto'>
             {services.map((s) => {
               const status = getServiceStatusDisplay(s.status);
-              const check = serviceCheck(uptime.items, s.nodeId, s.key);
+              const check = groupCheck(uptime.items, s);
               const unreachable = check?.state === 'down';
+              const where =
+                nodes.length > 1
+                  ? s.instances
+                      .map((i) => {
+                        const n = nodes.find((x) => x.id === i.nodeId);
+                        return n ? nodeDisplayName(n) : i.nodeId;
+                      })
+                      .join(', ')
+                  : null;
               return (
-                <div key={`${s.nodeId}:${s.key}`} className='flex items-center gap-3 px-4 py-2 text-sm'>
+                <div key={s.key} className='flex items-center gap-3 px-4 py-2 text-sm'>
                   <ServiceIcon service={s.key} size={18} />
-                  <span className='min-w-0 flex-1 truncate'>{s.name}</span>
+                  <span className='flex min-w-0 flex-1 items-baseline gap-2'>
+                    <span className='truncate'>{s.name}</span>
+                    {where && <span className='truncate text-xs text-muted-foreground'>{where}</span>}
+                  </span>
                   {check && (
                     <span className='text-xs'>
                       <ServiceCheckChip check={check} />

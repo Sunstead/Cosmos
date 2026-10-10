@@ -90,3 +90,39 @@ export function autoNote(
   const days = Math.ceil((ready - nowSecs) / 86_400);
   return `${target.tag} applies automatically in ${days === 1 ? '1 day' : `${days} days`}, after a nightly backup`;
 }
+
+/** The same image (or update group) on every node that runs it. */
+export type UnitGroup<T extends UpdateUnit & { nodeId: string }> = {
+  id: string;
+  name: string;
+  images: string[];
+  notes_url: string | null;
+  /** One per node, in the order given. */
+  items: T[];
+};
+
+/**
+ * Groups units by id across nodes, keeping the order of `items` (pass them
+ * sorted with `compareUnits`, and a group sorts where its most urgent node
+ * does).
+ */
+export function groupUnits<T extends UpdateUnit & { nodeId: string }>(items: T[]): UnitGroup<T>[] {
+  const groups = new Map<string, UnitGroup<T>>();
+  for (const item of items) {
+    const group = groups.get(item.id);
+    if (group) {
+      group.items.push(item);
+      for (const image of item.images) if (!group.images.includes(image)) group.images.push(image);
+      group.notes_url ??= item.notes_url;
+    } else {
+      groups.set(item.id, {
+        id: item.id,
+        name: item.name,
+        images: [...item.images],
+        notes_url: item.notes_url,
+        items: [item],
+      });
+    }
+  }
+  return [...groups.values()];
+}
