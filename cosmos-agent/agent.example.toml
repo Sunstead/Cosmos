@@ -5,6 +5,12 @@
 # COSMOS_AGENT_OIDC_CLIENT_ID, COSMOS_AGENT_ALLOW_ANONYMOUS,
 # COSMOS_AGENT_ALLOW_ACTIONS, COSMOS_AGENT_DOCKER_SOCKET,
 # COSMOS_AGENT_HISTORY, COSMOS_AGENT_HISTORY_PATH, COSMOS_NODE_NAME, RUST_LOG.
+#
+# Any string can also name environment variables, ${NAME} ($$ for a dollar
+# sign), so domains can live in your .env instead of this file:
+#   issuer = "https://auth.${HOME_DOMAIN}/application/o/cosmos/"
+# The agent won't start if one isn't set. In Docker, pass each one under the
+# container's environment: (see compose.example.yaml).
 
 # Defaults to the system hostname.
 node_name = "jupiter"
@@ -212,10 +218,10 @@ path = "/var/lib/cosmos-agent/state.db"
 # On the node that can't reach the other (here, Jupiter):
 # [[peers]]
 # name = "pluto"
-# ui_url = "https://pluto.example.ts.net:7700"   # listed in this agent's web UI
+# ui_url = "https://pluto.${TAILNET_DOMAIN}:7700" # listed in this agent's web UI
 #
 # On the node that can (Pluto):
 # [[peers]]
 # name = "jupiter"
-# url = "https://cosmos.jupiter.example.net"
+# url = "https://cosmos.${HOME_DOMAIN}"
 # tailnet_name = "jupiter"                       # defaults to name

@@ -86,8 +86,9 @@ describe('UserAvatar', () => {
   it('puts initials on a neutral disc, not the primary colour', () => {
     render(<UserAvatar who={{ ...pat, picture: null }} />);
     const fallback = screen.getByText('PD');
-    expect(fallback).toHaveClass('bg-sidebar-accent', 'text-sidebar-accent-foreground');
-    expect(fallback.className).not.toMatch(/sidebar-primary/);
+    // `muted` is neutral in every theme; the sidebar accent is Concrete's yellow.
+    expect(fallback).toHaveClass('bg-muted', 'text-foreground');
+    expect(fallback.className).not.toMatch(/primary|sidebar-accent/);
   });
 
   it('shows a person, not initials, for nobody in particular', () => {

@@ -11,11 +11,11 @@ describe('restoreSteps', () => {
   it('restores files into a new folder before anything live changes', () => {
     const steps = restoreSteps('1a2b3c4d', 'primary', {
       kind: 'files',
-      path: '/srv/storage/nextcloud/data/pwb/files/Documents/',
+      path: '/srv/storage/nextcloud/data/riley/files/Documents/',
     });
     expect(steps.map((s) => s.command)).toEqual([
-      'sudo scripts/restore.sh files primary 1a2b3c4d /srv/storage/nextcloud/data/pwb/files/Documents',
-      'sudo cp -a <that folder>/srv/storage/nextcloud/data/pwb/files/Documents /srv/storage/nextcloud/data/pwb/files/',
+      'sudo scripts/restore.sh files primary 1a2b3c4d /srv/storage/nextcloud/data/riley/files/Documents',
+      'sudo cp -a <that folder>/srv/storage/nextcloud/data/riley/files/Documents /srv/storage/nextcloud/data/riley/files/',
     ]);
     expect(steps.map((s) => s.warning)).toEqual([undefined, 'Overwrites live files']);
   });

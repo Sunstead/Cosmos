@@ -170,7 +170,7 @@ mod tests {
                 kind: UpdateRunKind::Update,
                 from: "v2.28.0".into(),
                 to: "v2.28.1".into(),
-                by: "pwb".into(),
+                by: "riley".into(),
                 state,
                 requested_at: at,
                 finished_at: None,

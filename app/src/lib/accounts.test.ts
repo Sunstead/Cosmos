@@ -14,7 +14,7 @@ describe('deriveAccounts', () => {
   it('groups nodes by provider and says which wait for a sign-in', () => {
     const accounts = deriveAccounts(
       {
-        a: meta({ status: 'online', auth: oidc, principal: { name: 'pwb', admin: false } }),
+        a: meta({ status: 'online', auth: oidc, principal: { name: 'riley', admin: false } }),
         b: meta({ status: 'unauthorized', auth: oidc }),
         c: meta({ status: 'online', auth: null }),
       },
@@ -35,15 +35,15 @@ describe('deriveAccounts', () => {
     const other = { ...oidc, issuer: 'https://a.test/' };
     const accounts = deriveAccounts(
       {
-        a: meta({ status: 'online', auth: oidc, principal: { name: 'pwb', admin: false } }),
-        b: meta({ status: 'online', auth: oidc, principal: { name: 'pwb', admin: true } }),
+        a: meta({ status: 'online', auth: oidc, principal: { name: 'riley', admin: false } }),
+        b: meta({ status: 'online', auth: oidc, principal: { name: 'riley', admin: true } }),
         c: meta({ status: 'unauthorized', auth: other }),
       },
       signedIn(),
     );
     expect(accounts.map((a) => a.auth.issuer)).toEqual([ISSUER, 'https://a.test/']);
     expect(accounts[0].admin).toBe(true);
-    expect(accounts[0].session?.username).toBe('pwb');
+    expect(accounts[0].session?.username).toBe('riley');
   });
 });
 

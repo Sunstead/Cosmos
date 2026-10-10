@@ -57,9 +57,9 @@ export const QuickLaunchServiceButton = memo(function QuickLaunchServiceButton({
     );
   }
 
-  // Docker labels hold bare hostnames like `portainer.jupiter.sunstead.net`.
+  // Docker labels hold bare hostnames like `portainer.home.example.com`.
   // As an href that is a *relative path*, so the old anchor navigated the app
-  // to /portainer.jupiter.sunstead.net instead of opening the service.
+  // to /portainer.home.example.com instead of opening the service.
   const href = serviceHref(group.url);
   return (
     <Button

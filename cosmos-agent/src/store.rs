@@ -364,7 +364,7 @@ mod tests {
             assert_eq!(listed[0].target, saved);
             assert_eq!(listed[0].last_wake, None);
 
-            let wake = WolWake { at: 100, by: "pwb".into(), woke: Some(true), took_secs: Some(21) };
+            let wake = WolWake { at: 100, by: "riley".into(), woke: Some(true), took_secs: Some(21) };
             record_wake(c, &saved.id, &wake).unwrap();
 
             // Editing settings keeps the wake history.

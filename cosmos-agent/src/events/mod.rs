@@ -3,7 +3,7 @@
 //!
 //! Detectors report what they see and never decide what's new:
 //!
-//! - [`Report::Event`] for something that happened once ("pwb restarted gitea").
+//! - [`Report::Event`] for something that happened once ("riley restarted gitea").
 //! - [`Report::Open`] for a condition that is true now ("gitea is unhealthy").
 //!   Repeating it while it stays true is expected and free.
 //! - [`Report::Resolve`] for a condition that has cleared.

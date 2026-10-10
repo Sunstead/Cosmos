@@ -238,12 +238,12 @@ test.describe('with a node', () => {
   test('the account menu shows who you are and signs you out', async ({ page }, info) => {
     await addNodeOnline(page);
     const account = page.getByRole('button', { name: 'Account' });
-    await expect(account).toContainText('pwb');
+    await expect(account).toContainText('riley');
     await expect(account).toContainText('Admin');
 
     await account.click();
     const menu = page.getByRole('menu');
-    await expect(menu).toContainText('pwb');
+    await expect(menu).toContainText('riley');
     await expect(menu.getByRole('menuitem', { name: /Settings/ })).toBeVisible();
     await page.screenshot({ path: info.outputPath('account-menu.png') });
     await menu.getByRole('menuitem', { name: 'Sign out' }).click();
@@ -252,7 +252,7 @@ test.describe('with a node', () => {
     await expect(account).toContainText('Not signed in', { timeout: 15_000 });
     await expect(page.getByText('Your sign-in expired')).toHaveCount(0);
     await page.locator('[data-sidebar=footer]').getByRole('button', { name: 'Sign in' }).click();
-    await expect(account).toContainText('pwb', { timeout: 15_000 });
+    await expect(account).toContainText('riley', { timeout: 15_000 });
   });
 
   test('the account shows the provider picture, or initials when it fails to load', async ({ page, request }) => {
@@ -423,7 +423,7 @@ test.describe('with a node', () => {
     // The app polls every 10 seconds.
     const row = section(page, 'Timeline').locator('[data-event]', { hasText: 'Added events-nas' });
     await expect(row).toBeVisible({ timeout: 20_000 });
-    await expect(row).toContainText('by pwb');
+    await expect(row).toContainText('by riley');
 
     await page.getByRole('radio', { name: 'Actions' }).click();
     await expect(row).toBeVisible();
@@ -510,7 +510,7 @@ test.describe('with a node', () => {
     const [file] = readdirSync(inbox);
     expect(JSON.parse(readFileSync(join(inbox, file), 'utf8'))).toMatchObject({
       kind: 'backup',
-      requested_by: 'pwb',
+      requested_by: 'riley',
     });
     await expect(section(page, 'Started from Cosmos')).toContainText('Waiting for the server');
     await expect(page.getByRole('button', { name: 'Backing up' })).toBeDisabled();
@@ -580,7 +580,7 @@ test.describe('with a node', () => {
                 kind: 'update',
                 from: 'v2.28.0',
                 to: 'v2.29.0',
-                by: 'pwb',
+                by: 'riley',
                 state: 'watching',
                 requested_at: now - 120,
                 finished_at: null,

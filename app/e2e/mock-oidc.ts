@@ -23,7 +23,7 @@ interface User {
   picture?: string;
 }
 
-const ADMIN: User = { sub: 'e2e-admin', preferred_username: 'pwb', groups: ['homelab-users', 'homelab-admins'] };
+const ADMIN: User = { sub: 'e2e-admin', preferred_username: 'riley', groups: ['homelab-users', 'homelab-admins'] };
 
 const b64url = (b: Buffer | string) => Buffer.from(b).toString('base64url');
 

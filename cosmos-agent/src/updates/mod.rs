@@ -919,7 +919,7 @@ mod tests {
                 kind: UpdateRunKind::Update,
                 from: "v2.28.0".into(),
                 to: "v2.29.0".into(),
-                by: "pwb".into(),
+                by: "riley".into(),
                 state: UpdateRunState::Running,
                 requested_at: unix_now(),
                 finished_at: None,
@@ -995,14 +995,14 @@ mod tests {
         ]);
         task.refresh_units();
 
-        let a = task.queue("binwiederhier/ntfy", Some("v2.29.0".into()), UpdateRunKind::Update, "pwb").await.unwrap();
+        let a = task.queue("binwiederhier/ntfy", Some("v2.29.0".into()), UpdateRunKind::Update, "riley").await.unwrap();
         task.drive().await;
         task.drive().await;
         let run = |task: &Task, id: &str| task.runs.iter().find(|r| r.run.id == id).unwrap().run.clone();
         assert_eq!(run(&task, &a.id).state, UpdateRunState::Running);
         assert_eq!(run(&task, &a.id).step.as_deref(), Some("Pull the new images"), "the step under way");
 
-        let b = task.queue("louislam/uptime-kuma", Some("2.5.5".into()), UpdateRunKind::Update, "pwb").await.unwrap();
+        let b = task.queue("louislam/uptime-kuma", Some("2.5.5".into()), UpdateRunKind::Update, "riley").await.unwrap();
         task.drive().await;
         assert_eq!(run(&task, &b.id).state, UpdateRunState::Queued, "one workflow at a time");
 
@@ -1027,12 +1027,12 @@ mod tests {
         task.tags = HashMap::from([("binwiederhier/ntfy".to_string(), vec!["v2.28.1".to_string(), "v2.29.0".to_string()])]);
         task.refresh_units();
 
-        let refused = task.queue("binwiederhier/ntfy", Some("v9.0.0".into()), UpdateRunKind::Update, "pwb").await;
+        let refused = task.queue("binwiederhier/ntfy", Some("v9.0.0".into()), UpdateRunKind::Update, "riley").await;
         assert!(matches!(refused, Err(AgentError::BadRequest(_))), "{refused:?}");
 
-        let run = task.queue("binwiederhier/ntfy", Some("v2.29.0".into()), UpdateRunKind::Update, "pwb").await.unwrap();
+        let run = task.queue("binwiederhier/ntfy", Some("v2.29.0".into()), UpdateRunKind::Update, "riley").await.unwrap();
         assert_eq!((run.from.as_str(), run.to.as_str(), run.state), ("v2.28.0", "v2.29.0", UpdateRunState::Queued));
-        let again = task.queue("binwiederhier/ntfy", Some("v2.29.0".into()), UpdateRunKind::Update, "pwb").await;
+        let again = task.queue("binwiederhier/ntfy", Some("v2.29.0".into()), UpdateRunKind::Update, "riley").await;
         assert!(again.is_err(), "one run per unit at a time");
 
         task.drive().await;
@@ -1044,7 +1044,7 @@ mod tests {
         assert_eq!(task.runs[0].run.state, UpdateRunState::Failed, "the watch is over and ntfy still runs the old tag");
 
         // Again, with the deploy taking effect.
-        let run = task.queue("binwiederhier/ntfy", Some("v2.29.0".into()), UpdateRunKind::Update, "pwb").await.unwrap();
+        let run = task.queue("binwiederhier/ntfy", Some("v2.29.0".into()), UpdateRunKind::Update, "riley").await.unwrap();
         task.drive().await;
         task.drive().await;
         containers_tx.send(snapshot(ntfy("v2.29.0"))).unwrap();
@@ -1056,7 +1056,7 @@ mod tests {
         // Stored, so a restart picks it up, and the rollback goes back to v2.28.0.
         let stored = store.with(|c| db::recent_runs(c, 5).unwrap());
         assert_eq!(stored[0].run.state, UpdateRunState::Done);
-        let back = task.queue("binwiederhier/ntfy", None, UpdateRunKind::Rollback, "pwb").await.unwrap();
+        let back = task.queue("binwiederhier/ntfy", None, UpdateRunKind::Rollback, "riley").await.unwrap();
         assert_eq!((back.from.as_str(), back.to.as_str()), ("v2.29.0", "v2.28.0"));
 
         task.publish();

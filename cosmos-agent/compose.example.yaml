@@ -41,7 +41,10 @@ services:
 
     environment:
       COSMOS_AGENT_CONFIG: /etc/cosmos-agent/agent.toml
-      COSMOS_NODE_NAME: jupiter
+      COSMOS_NODE_NAME: homelab
+      # Named as ${HOME_DOMAIN} in agent.toml; the container sees only what's
+      # listed here, so pass every variable the file uses.
+      HOME_DOMAIN: ${HOME_DOMAIN:?set HOME_DOMAIN in .env}
       RUST_LOG: "info,cosmos_agent=info"
       TZ: ${TZ:-Etc/UTC}
       # Only with [[peers]]: the secret every peer shares.
@@ -76,7 +79,7 @@ services:
     labels:
       cosmos.service: cosmos
       cosmos.service.description: Homelab monitoring agent
-      cosmos.service.url: cosmos.jupiter.sunstead.net
+      cosmos.service.url: cosmos.${HOME_DOMAIN}
       com.centurylinklabs.watchtower.enable: "true"
 
 volumes:
@@ -85,7 +88,7 @@ volumes:
 # Caddyfile entry — the agent is on host networking, so reach it the same way
 # wol-waker is reached:
 #
-#     @cosmos host cosmos.jupiter.sunstead.net
+#     @cosmos host cosmos.{$HOME_DOMAIN}
 #     handle @cosmos {
 #         reverse_proxy host.docker.internal:7700
 #     }

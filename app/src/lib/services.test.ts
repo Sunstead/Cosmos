@@ -124,11 +124,11 @@ describe('deriveNodeServices', () => {
         id: 'b',
         cosmos_service: 'gitea',
         cosmos_service_description: 'Git hosting',
-        cosmos_service_url: 'gitea.jupiter.sunstead.net',
+        cosmos_service_url: 'gitea.home.example.com',
       }),
     ]);
     expect(services[0].description).toBe('Git hosting');
-    expect(services[0].url).toBe('gitea.jupiter.sunstead.net');
+    expect(services[0].url).toBe('gitea.home.example.com');
   });
 });
 
@@ -172,12 +172,12 @@ describe('groupServices', () => {
 
   it('keeps distinct URLs and takes the first as the url', () => {
     const [g] = groupServices([
-      cosmos('jupiter', 'running', 'cosmos.jupiter.sunstead.net'),
+      cosmos('jupiter', 'running', 'cosmos.home.example.com'),
       cosmos('pluto'),
-      cosmos('saturn', 'running', 'cosmos.jupiter.sunstead.net'),
+      cosmos('saturn', 'running', 'cosmos.home.example.com'),
     ]);
-    expect(g.url).toBe('cosmos.jupiter.sunstead.net');
-    expect(g.urls).toEqual(['cosmos.jupiter.sunstead.net']);
+    expect(g.url).toBe('cosmos.home.example.com');
+    expect(g.urls).toEqual(['cosmos.home.example.com']);
   });
 
   it('sorts groups by name and hides system ones', () => {

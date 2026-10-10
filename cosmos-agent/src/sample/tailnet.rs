@@ -339,7 +339,7 @@ mod tests {
           "LastSeen": "2026-09-20T18:04:00Z", "Expired": true
         },
         "nodekey:d": {
-          "ID": "nIPAD", "HostName": "localhost", "DNSName": "pwb-ipad-pro.tail1234.ts.net.",
+          "ID": "nIPAD", "HostName": "localhost", "DNSName": "riley-ipad-pro.tail1234.ts.net.",
           "OS": "iOS", "UserID": 1, "TailscaleIPs": ["100.64.0.5"], "Online": true
         },
         "nodekey:e": {
@@ -348,7 +348,7 @@ mod tests {
         }
       },
       "User": {
-        "1": { "ID": 1, "LoginName": "pwb@example.com", "DisplayName": "PWB" },
+        "1": { "ID": 1, "LoginName": "riley@example.com", "DisplayName": "Riley" },
         "2": { "ID": 2, "LoginName": "guest@example.com", "DisplayName": "Guest" }
       }
     }"#;
@@ -371,7 +371,7 @@ mod tests {
             .iter()
             .map(|d| d.name.as_str())
             .collect();
-        assert_eq!(order, ["jupiter", "air", "desktop", "fresh", "pixel", "pwb-ipad-pro"]);
+        assert_eq!(order, ["jupiter", "air", "desktop", "fresh", "pixel", "riley-ipad-pro"]);
         assert!(s.devices[0].is_self);
         assert_eq!(s.tailnet.as_deref(), Some("example.github"));
         assert_eq!(s.backend_state, "Running");
@@ -383,7 +383,7 @@ mod tests {
         let s = parsed();
         // iOS reports its hostname as `localhost`; the machine name is the
         // one you gave it in the admin console.
-        assert_eq!(device(&s, "nIPAD").name, "pwb-ipad-pro");
+        assert_eq!(device(&s, "nIPAD").name, "riley-ipad-pro");
         assert_eq!(device(&s, "nDESK").name, "desktop");
         // No MagicDNS name yet: the hostname is all there is.
         assert_eq!(device(&s, "nNEW").name, "fresh");

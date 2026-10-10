@@ -38,7 +38,7 @@ or filesystem path.
 - Docker Compose stack: Caddy, Authentik (own Postgres), OpenCloud, Immich (own
   Postgres), Gitea (shared Postgres), ntfy, Tailscale, and the Cosmos agent/UI.
   Nextcloud, Uptime Kuma and Portainer were retired on 2026-09-29/30.
-- Caddy serves `*.jupiter.sunstead.net` with wildcard TLS via Cloudflare DNS-01.
+- Caddy serves `*.home.example.com` with wildcard TLS via Cloudflare DNS-01.
 - Access is **Tailscale-only**. A Cloudflare Tunnel was tried and rolled back
   (SSL limits on second-level subdomains, 100MB upload cap).
 
@@ -57,7 +57,7 @@ or filesystem path.
   agent's own image is bumped by hand.
 
 ### Sign-in (working)
-- Authentik at `auth.jupiter.sunstead.net` is the single login, with MFA
+- Authentik at `auth.home.example.com` is the single login, with MFA
   (passkey or authenticator) required.
 - Authentik is configured through **blueprints in git** (`authentik/blueprints/`).
   **Exception:** Immich's OIDC client has no blueprint; it was set up by hand.
@@ -102,7 +102,7 @@ Details in Jupiter's `docs/BACKUPS.md`.
   connects to every agent directly. Anything "server-side" runs per node.
 - Jupiter runs agent 0.9.2 with `allow_actions = true`. The agent, web UI and
   desktop app share one version (`npm run release`, see `RELEASING.md`). The web UI is served by
-  the agent at `cosmos.jupiter.sunstead.net`; on my iPhone I use that.
+  the agent at `cosmos.home.example.com`; on my iPhone I use that.
 
 ### Other Sunstead projects
 - **Solstice:** Tauri/React markdown note-taking app with wikilinks. iOS sync is
@@ -202,7 +202,7 @@ iPhone, desktop notifications and "node unreachable" alerts.*
 - **Watching the watcher:** nothing on Jupiter can report Jupiter being down.
   The desktop app notifies when a node stays offline, and since 0.11 agents
   watch each other: Pluto exchanges heartbeats with Jupiter, each reports the
-  other unreachable, and ntfy runs on Pluto (public at `ntfy.pwbcloud.com`) so
+  other unreachable, and ntfy runs on Pluto (public at `ntfy.example.com`) so
   an alert about Jupiter has somewhere to go.
 
 ### B. Cosmos: health checks (replaces Uptime Kuma)
@@ -362,7 +362,7 @@ moving its folders is a planned migration, never an `mv`.
   folder is the source of truth. Export albums and faces via the API.
 - **Starbook** joins the suite as a custom Sunstead app (renamed).
 - **Solstice sync:** a dedicated CRDT sync service, enabling iOS Solstice
-  (decided 2026-10-03; live at `solstice.jupiter.sunstead.net` since
+  (decided 2026-10-03; live at `solstice.home.example.com` since
   2026-10-04, desktop app first). Solstice is a monorepo: `apps/desktop` (the
   Tauri app), `apps/sync` (the server), and shared Rust crates. Yjs
   via `yrs`, one document per note over its raw markdown, so the `.md` files
@@ -411,7 +411,7 @@ moving its folders is a planned migration, never an `mv`.
 | 2026-10-03 | Solstice Sync uses Yjs (`yrs`), keeping history so overlapping offline edits can be flagged and reviewed. |
 | 2026-10-04 | Solstice Sync is live on Jupiter (public OIDC client, 10-minute tokens; a sync connection closes when its token expires). Solstice is public under MIT. Atlas 0.1.4 searches notes from the vaults on disk. |
 | 2026-10-10 | Multi-node: a service on several nodes is one entry with a row per node; pages that show one node keep their own choice, and Monitoring and Logs have "All nodes". |
-| 2026-10-10 | ntfy moves to Pluto, public at `ntfy.pwbcloud.com`, so the phone needs no tailnet and Jupiter going down can be reported. "Pluto down" goes from Jupiter to a secret ntfy.sh topic. |
+| 2026-10-10 | ntfy moves to Pluto, public at `ntfy.example.com`, so the phone needs no tailnet and Jupiter going down can be reported. "Pluto down" goes from Jupiter to a secret ntfy.sh topic. |
 | 2026-10-10 | Agents are peers (0.11): heartbeats with a shared token (not Authentik, which lives on Jupiter), dialled by Pluto. Checks that go through a peer are folded into its one alert. |
 
 ### Open

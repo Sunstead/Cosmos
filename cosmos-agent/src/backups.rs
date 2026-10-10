@@ -469,11 +469,11 @@ mod tests {
             ..Default::default()
         });
 
-        let id = request(&inbox, BackupRequestKind::Backup, "pwb").unwrap();
+        let id = request(&inbox, BackupRequestKind::Backup, "riley").unwrap();
         let names: Vec<String> = std::fs::read_dir(&inbox).unwrap().map(|e| e.unwrap().file_name().into_string().unwrap()).collect();
         assert_eq!(names, [format!("{id}.json")], "no temporary file left behind");
         let written: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(inbox.join(format!("{id}.json"))).unwrap()).unwrap();
-        assert_eq!(written, serde_json::json!({ "id": id, "kind": "backup", "requested_by": "pwb" }));
+        assert_eq!(written, serde_json::json!({ "id": id, "kind": "backup", "requested_by": "riley" }));
 
         let queued = provider.requests();
         assert_eq!(queued.len(), 1);
@@ -484,19 +484,19 @@ mod tests {
         std::fs::remove_file(inbox.join(format!("{id}.json"))).unwrap();
         std::fs::write(
             results.join(format!("{id}.json")),
-            format!(r#"{{"id":"{id}","kind":"backup","requested_by":"pwb","state":"running","started_at":"2026-09-26T19:00:00Z"}}"#)
+            format!(r#"{{"id":"{id}","kind":"backup","requested_by":"riley","state":"running","started_at":"2026-09-26T19:00:00Z"}}"#)
         ).unwrap();
         std::fs::write(results.join("junk.json"), "not json").unwrap();
         std::fs::write(results.join("other.json"), r#"{"id":"x","kind":"format","state":"failed"}"#).unwrap();
         let running = provider.requests();
         assert_eq!(running.len(), 1, "junk and unknown kinds are skipped: {running:?}");
         assert_eq!(running[0].state, BackupRequestState::Running);
-        assert_eq!(running[0].requested_by.as_deref(), Some("pwb"));
+        assert_eq!(running[0].requested_by.as_deref(), Some("riley"));
     }
 
     #[test]
     fn a_request_fails_clearly_without_an_inbox() {
-        let err = request(Path::new("/nonexistent/inbox"), BackupRequestKind::Backup, "pwb").unwrap_err();
+        let err = request(Path::new("/nonexistent/inbox"), BackupRequestKind::Backup, "riley").unwrap_err();
         assert!(matches!(err, AgentError::Unavailable(ref m) if m.contains("inbox")), "{err}");
     }
 

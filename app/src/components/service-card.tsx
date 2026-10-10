@@ -74,22 +74,30 @@ function InstanceRow({
   now: number;
 }) {
   const status = getServiceStatusDisplay(service.status);
+  // Figures never wrap: the node name gives way first, then (in a narrow
+  // card) the uptime and the check, so the menu stays inside the padding.
+  const figure = 'shrink-0 whitespace-nowrap text-right tabular-nums text-muted-foreground';
   return (
     <div className='flex items-center gap-2 py-2 text-xs'>
       <Dot variant={status.dotVariant} title={status.label} />
-      <span className='w-20 min-w-0 shrink-0 font-medium'>
+      <span className='min-w-0 flex-1 truncate font-medium'>
         <NodeName nodeId={service.nodeId} />
       </span>
-      <ContainerDots service={service} />
-      {check && <ServiceCheckChip check={check} />}
-      <span className='flex-1' />
-      <span className='tabular-nums text-muted-foreground' title='Uptime'>
+      <span className='shrink-0'>
+        <ContainerDots service={service} />
+      </span>
+      {check && (
+        <span className='hidden shrink-0 @xs:flex'>
+          <ServiceCheckChip check={check} />
+        </span>
+      )}
+      <span className={`hidden @sm:inline ${figure}`} title='Uptime'>
         {uptimeOf(service, now)}
       </span>
-      <span className='w-12 text-right tabular-nums text-muted-foreground' title='CPU'>
+      <span className={`w-12 ${figure}`} title='CPU'>
         {formatCpuPercent(service.cpu_pct)}
       </span>
-      <span className='w-16 text-right tabular-nums text-muted-foreground' title='Memory'>
+      <span className={`w-14 ${figure}`} title='Memory'>
         {formatBytes(service.mem_used_bytes)}
       </span>
       <ServiceActionsMenu service={service} size='icon-xs' />
@@ -164,7 +172,7 @@ export const ServiceCard = memo(function ServiceCard({
         </span>
       </div>
 
-      <div className='divide-y border-t'>
+      <div className='@container divide-y border-t'>
         {group.instances.map((s) => (
           <InstanceRow key={s.nodeId} service={s} check={checkFor(s)} now={now} />
         ))}

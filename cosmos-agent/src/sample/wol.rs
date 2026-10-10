@@ -331,29 +331,29 @@ mod tests {
 
     #[test]
     fn a_wake_completes_when_the_machine_comes_up() {
-        let (state, outcome) = step(Signal::Up, Some((Duration::from_secs(23), 1000, "pwb")), None, TIMEOUT);
+        let (state, outcome) = step(Signal::Up, Some((Duration::from_secs(23), 1000, "riley")), None, TIMEOUT);
         assert_eq!(state, WolState::Awake);
         let wake = outcome.unwrap();
         assert_eq!(wake.woke, Some(true));
         assert_eq!(wake.took_secs, Some(23));
         assert_eq!(wake.at, 1000);
-        assert_eq!(wake.by, "pwb");
+        assert_eq!(wake.by, "riley");
     }
 
     #[test]
     fn a_wake_keeps_waiting_until_the_timeout() {
-        let (state, outcome) = step(Signal::Down, Some((Duration::from_secs(60), 0, "pwb")), None, TIMEOUT);
+        let (state, outcome) = step(Signal::Down, Some((Duration::from_secs(60), 0, "riley")), None, TIMEOUT);
         assert_eq!(state, WolState::Waking);
         assert!(outcome.is_none());
 
-        let (state, outcome) = step(Signal::Down, Some((TIMEOUT, 0, "pwb")), None, TIMEOUT);
+        let (state, outcome) = step(Signal::Down, Some((TIMEOUT, 0, "riley")), None, TIMEOUT);
         assert_eq!(state, WolState::DidNotWake);
         assert_eq!(outcome.unwrap().woke, Some(false));
     }
 
     #[test]
     fn a_failed_wake_sticks_until_the_machine_is_up() {
-        let failed = WolWake { at: 0, by: "pwb".into(), woke: Some(false), took_secs: None };
+        let failed = WolWake { at: 0, by: "riley".into(), woke: Some(false), took_secs: None };
         assert_eq!(step(Signal::Down, None, Some(&failed), TIMEOUT).0, WolState::DidNotWake);
         assert_eq!(step(Signal::Up, None, Some(&failed), TIMEOUT).0, WolState::Awake);
 
@@ -430,7 +430,7 @@ mod tests {
         assert_eq!(entry.state, WolState::Asleep);
         assert_eq!(entry.last_seen.as_deref(), Some("2026-09-22T10:00:00Z"));
 
-        handle.waking(saved.id.clone(), "pwb".into()).await.unwrap();
+        handle.waking(saved.id.clone(), "riley".into()).await.unwrap();
         let entry = handle.entry(&saved.id).unwrap();
         assert_eq!(entry.state, WolState::Waking);
         assert_eq!(entry.last_wake.as_ref().unwrap().woke, None);

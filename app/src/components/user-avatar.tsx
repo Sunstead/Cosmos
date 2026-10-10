@@ -15,7 +15,9 @@ export interface AvatarIdentity {
 
 /**
  * Who you are, at a glance: the provider's picture, or initials on a
- * neutral disc that follows the theme. The image only replaces the
+ * neutral disc that follows the theme. `muted` is neutral in every theme;
+ * the sidebar accent isn't (Concrete's is yellow), and the avatar sits on
+ * that accent when its button is hovered. The image only replaces the
  * initials once it has loaded (Base UI loads it off-screen first), so a
  * picture that 404s or a provider that's offline never shows as a broken
  * image.
@@ -30,14 +32,10 @@ export function UserAvatar({
   className?: string;
 }) {
   return (
-    <Avatar size={size} className={cn('ring-1 ring-sidebar-border', className)}>
+    <Avatar size={size} className={cn('ring-1 ring-foreground/10', className)}>
       {who.picture && <AvatarImage src={who.picture} alt='' draggable={false} />}
       <AvatarFallback
-        className={cn(
-          'font-medium',
-          size === 'lg' ? 'text-sm' : 'text-xs',
-          who.known && 'bg-sidebar-accent text-sidebar-accent-foreground',
-        )}
+        className={cn('font-medium', size === 'lg' ? 'text-sm' : 'text-xs', who.known && 'text-foreground')}
       >
         {who.known ? initials(who.name) : <UserRound className={size === 'lg' ? 'size-5' : 'size-4'} />}
       </AvatarFallback>
