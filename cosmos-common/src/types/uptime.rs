@@ -70,6 +70,11 @@ pub struct UptimeCheck {
     pub any_status: bool,
     /// The `cosmos.service` it belongs to.
     pub service: Option<String>,
+    /// A peer the target is reached through (Pluto's checks of the public
+    /// sites go through Jupiter). Its failures are held back from
+    /// notifications while that peer is unreachable. Absent before 0.12.
+    #[serde(default)]
+    pub via_peer: Option<String>,
 }
 
 /// One result, for the heartbeat bar.
@@ -145,6 +150,10 @@ pub struct UptimeCheckInput {
     pub enabled: bool,
     #[serde(default)]
     pub any_status: bool,
+    /// One of the agent's `[[peers]]`, or none.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub via_peer: Option<String>,
 }
 
 /// Settings for a service's automatic check.

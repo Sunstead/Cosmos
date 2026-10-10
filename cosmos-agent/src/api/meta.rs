@@ -27,6 +27,8 @@ pub async fn info(
         _ => AuthInfo::None,
     };
 
+    // Like the name, only for a caller who has signed in.
+    let node_description = principal.as_ref().and(state.cfg.node_description.clone());
     Json(AgentInfo {
         agent_version: env!("CARGO_PKG_VERSION").to_string(),
         // 2: `principal`, and writes need an admin as well as allow_actions.
@@ -36,6 +38,7 @@ pub async fn info(
         node_name: principal.is_some().then(|| state.facts.node_name.clone()),
         capabilities: state.capabilities(),
         principal: principal.map(|p| PrincipalInfo { admin: p.is_admin(), name: p.name }),
+        node_description,
         auth: Some(auth),
     })
 }

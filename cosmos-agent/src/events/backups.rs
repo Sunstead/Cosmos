@@ -47,6 +47,7 @@ fn spec(key: &str, kind: &'static str, s: &BackupsStatus, title: String, detail:
         title,
         detail: Some(detail),
         service: None,
+        depends_on: None,
     }
 }
 
@@ -317,6 +318,7 @@ mod tests {
             service: None,
             opened_at: 0,
             event_id: 1,
+            depends_on: None,
         }
     }
 

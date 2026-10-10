@@ -44,6 +44,8 @@ services:
       COSMOS_NODE_NAME: jupiter
       RUST_LOG: "info,cosmos_agent=info"
       TZ: ${TZ:-Etc/UTC}
+      # Only with [[peers]]: the secret every peer shares.
+      # COSMOS_AGENT_PEER_TOKEN: ${COSMOS_AGENT_PEER_TOKEN}
 
     volumes:
       - ./cosmos-agent.toml:/etc/cosmos-agent/agent.toml:ro

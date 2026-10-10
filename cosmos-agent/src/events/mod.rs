@@ -87,6 +87,9 @@ pub struct ProblemSpec {
     pub title: String,
     pub detail: Option<String>,
     pub service: Option<String>,
+    /// A peer whose being unreachable would explain it: while it is, the
+    /// notifier holds this back.
+    pub depends_on: Option<String>,
 }
 
 impl ProblemSpec {
@@ -305,6 +308,7 @@ mod tests {
             title: "gitea is unhealthy".into(),
             detail: None,
             service: Some("gitea".into()),
+            depends_on: None,
         }
     }
 

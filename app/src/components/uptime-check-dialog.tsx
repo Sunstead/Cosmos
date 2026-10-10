@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from '@sunstead/ui/components/select';
 import { SegmentedControl } from '@/components/segmented-control';
-import { useUptimeActions } from '@/api/queries';
+import { usePeers, useUptimeActions } from '@/api/queries';
 import { nodeDisplayName, useNodeStore } from '@/stores/nodes';
 import { CheckKind } from '@/generated/CheckKind';
 import { UptimeCheck } from '@/generated/UptimeCheck';
@@ -101,6 +101,9 @@ function CustomForm({
   const [interval, setInterval] = useState(String(check?.interval_secs ?? 60));
   const [anyStatus, setAnyStatus] = useState(check?.any_status ?? false);
   const [enabled, setEnabled] = useState(check?.enabled ?? true);
+  const NO_PEER = 'none';
+  const [viaPeer, setViaPeer] = useState(check?.via_peer ?? NO_PEER);
+  const peers = usePeers(nodeId || null).data?.peers ?? [];
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -123,6 +126,7 @@ function CustomForm({
           interval_secs: Number(interval),
           enabled,
           any_status: kind === 'http' && anyStatus,
+          via_peer: viaPeer === NO_PEER ? null : viaPeer,
         },
         check?.id,
       );
@@ -249,6 +253,36 @@ function CustomForm({
               </SelectContent>
             </Select>
           </Field>
+
+          {peers.length > 0 && (
+            <Field>
+              <FieldLabel htmlFor='uptime-via'>Goes through</FieldLabel>
+              <Select
+                value={viaPeer}
+                onValueChange={(v) => v && setViaPeer(v)}
+                items={[
+                  { value: NO_PEER, label: 'Nothing else' },
+                  ...peers.map((p) => ({ value: p.name, label: p.name })),
+                ]}
+              >
+                <SelectTrigger id='uptime-via'>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_PEER}>Nothing else</SelectItem>
+                  {peers.map((p) => (
+                    <SelectItem key={p.name} value={p.name}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FieldDescription>
+                A peer the target is reached through. While it's unreachable, this check's failures
+                don't notify on their own: the peer's alert covers them.
+              </FieldDescription>
+            </Field>
+          )}
 
           {check && (
             <label className='flex items-center gap-2 text-sm'>

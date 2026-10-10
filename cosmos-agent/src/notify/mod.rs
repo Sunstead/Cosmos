@@ -15,7 +15,7 @@ pub mod db;
 pub mod rules;
 pub mod send;
 
-use crate::{ error::AgentError, events::EventsHandle, sample::host::unix_now, store::Store };
+use crate::{ error::AgentError, events::EventsHandle, peers::PeersHandle, sample::host::unix_now, store::Store };
 use cosmos_common::types::{
     ChannelKind,
     ChannelStatus,
@@ -27,7 +27,7 @@ use cosmos_common::types::{
     NotifySettings,
     Severity,
 };
-use rules::FloodGuard;
+use rules::{ FloodGuard, PeerHolds };
 use std::{ collections::HashMap, fmt, sync::Arc, time::Duration };
 use tokio::sync::{ broadcast, mpsc, oneshot, watch };
 
@@ -229,7 +229,7 @@ async fn load(store: &Store) -> (Vec<Channel>, Option<String>) {
     }
 }
 
-pub fn spawn(store: Store, events: &EventsHandle, node: String) -> NotifyHandle {
+pub fn spawn(store: Store, events: &EventsHandle, node: String, peers: Option<PeersHandle>) -> NotifyHandle {
     let (tx, mut rx) = mpsc::channel::<Command>(64);
     let (status_tx, status) = watch::channel(Arc::new(HashMap::new()));
     let handle = NotifyHandle { store: store.clone(), tx: tx.clone(), status, client: send::client(), node: node.into() };
@@ -240,6 +240,8 @@ pub fn spawn(store: Store, events: &EventsHandle, node: String) -> NotifyHandle 
     tokio::spawn(async move {
         let (mut channels, mut link) = load(&store).await;
         let mut guard = FloodGuard::default();
+        let mut holds = PeerHolds::default();
+        let explains = |peer: &str| peers.as_ref().is_some_and(|p| p.explains(peer, unix_now()));
         let mut statuses: HashMap<i64, ChannelStatus> = HashMap::new();
         let mut tick = tokio::time::interval(Duration::from_secs(60));
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -266,6 +268,14 @@ pub fn spawn(store: Store, events: &EventsHandle, node: String) -> NotifyHandle 
                         }
                         Err(broadcast::error::RecvError::Closed) => return,
                     };
+                    // A problem that goes through an unreachable peer waits:
+                    // the peer's own problem says it.
+                    let depends_on = event.problem.as_ref().and_then(|p| {
+                        events.open_problems().iter().find(|o| o.key == p.key).and_then(|o| o.depends_on.clone())
+                    });
+                    if holds.hold(&event, depends_on.as_deref(), explains) || holds.cleared(&event) {
+                        continue;
+                    }
                     let now = unix_now();
                     for ch in &channels {
                         if rules::wants(ch, &event) && guard.allow(ch.id, &event, now) {
@@ -297,7 +307,15 @@ pub fn spawn(store: Store, events: &EventsHandle, node: String) -> NotifyHandle 
                 }
                 _ = tick.tick() => {
                     let open = events.open_problems();
-                    let due = guard.due(unix_now(), |key| open.iter().any(|p| p.key == key));
+                    let now = unix_now();
+                    for event in holds.release(|key| open.iter().any(|p| p.key == key), explains) {
+                        for ch in &channels {
+                            if rules::wants(ch, &event) && guard.allow(ch.id, &event, now) {
+                                deliver(ch, event.clone(), link.clone());
+                            }
+                        }
+                    }
+                    let due = guard.due(now, |key| open.iter().any(|p| p.key == key));
                     for (id, event) in due {
                         if let Some(ch) = channels.iter().find(|c| c.id == id && rules::wants(c, &event)) {
                             deliver(ch, event, link.clone());

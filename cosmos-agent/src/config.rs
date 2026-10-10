@@ -24,6 +24,9 @@ pub enum ConfigError {
 pub struct Config {
     /// Defaults to the system hostname.
     pub node_name: Option<String>,
+    /// What this node is for, in a few words ("Public edge"), shown in the
+    /// app beside its name.
+    pub node_description: Option<String>,
     /// Off by default: a node is read-only until you say otherwise. Gates
     /// every mutating route (container and volume actions, Wake-on-LAN), and
     /// even then only for admins.
@@ -42,6 +45,28 @@ pub struct Config {
     pub events: EventsConfig,
     pub uptime: UptimeConfig,
     pub updates: UpdatesConfig,
+    /// Other agents this one exchanges heartbeats with, each reporting the
+    /// other when it stops answering (`[[peers]]`).
+    pub peers: Vec<PeerConfig>,
+    /// From `COSMOS_AGENT_PEER_TOKEN` only, never the file: the secret every
+    /// peer shares. Needed when `peers` is set.
+    #[serde(skip)]
+    pub peer_token: Option<crate::peers::PeerToken>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PeerConfig {
+    /// The peer's node name, which it sends in its heartbeats.
+    pub name: String,
+    /// Where to reach its agent. Set: this agent sends it heartbeats. Unset:
+    /// it sends them here. Only one side needs to reach the other.
+    pub url: Option<String>,
+    /// Its web UI, so this agent's web UI lists it too. Defaults to `url`.
+    pub ui_url: Option<String>,
+    /// Its machine name on the tailnet, to say whether the tailnet sees it
+    /// online when it stops answering. Defaults to `name`.
+    pub tailnet_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -519,6 +544,10 @@ impl Config {
             let v = v.trim().to_string();
             self.updates.token = (!v.is_empty()).then_some(crate::updates::github::Secret(v));
         }
+        if let Ok(v) = std::env::var("COSMOS_AGENT_PEER_TOKEN") {
+            let v = v.trim().to_string();
+            self.peer_token = (!v.is_empty()).then_some(crate::peers::PeerToken(v));
+        }
         if let Ok(v) = std::env::var("COSMOS_AGENT_WEB_DIR") {
             self.web.dir = (!v.is_empty()).then(|| PathBuf::from(v));
         }
@@ -571,6 +600,7 @@ impl Config {
         if self.uptime.local_domains.iter().any(|d| d.trim_matches('.').is_empty()) {
             return Err(ConfigError::Invalid("uptime.local_domains has an empty entry".into()));
         }
+        self.validate_peers()?;
         let (warn, critical) = (self.events.disk_warn_pct, self.events.disk_critical_pct);
         if !(10..critical).contains(&warn) || critical > 100 {
             return Err(
@@ -580,6 +610,41 @@ impl Config {
             );
         }
         Ok(())
+    }
+
+    /// Names are unique and plain, and URLs are web addresses. The token is
+    /// checked at startup (`peers_ready`), not here: `--check-config` reads a
+    /// file without the environment.
+    fn validate_peers(&self) -> Result<(), ConfigError> {
+        let mut seen = Vec::new();
+        for p in &self.peers {
+            let ok = !p.name.is_empty() &&
+                p.name.len() <= 64 &&
+                p.name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+            if !ok {
+                return Err(ConfigError::Invalid(format!("peer name {:?} must be letters, digits, - or _", p.name)));
+            }
+            if seen.contains(&&p.name) {
+                return Err(ConfigError::Invalid(format!("peer {} is listed twice", p.name)));
+            }
+            seen.push(&p.name);
+            for url in [&p.url, &p.ui_url].into_iter().flatten() {
+                if !(url.starts_with("http://") || url.starts_with("https://")) {
+                    return Err(ConfigError::Invalid(format!("peer {}: {url} must start with http:// or https://", p.name)));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Peers need the shared token; without one they're off, loudly.
+    pub fn peers_ready(&self) -> Result<(), ConfigError> {
+        match &self.peer_token {
+            _ if self.peers.is_empty() => Ok(()),
+            Some(t) if t.0.len() >= 32 => Ok(()),
+            Some(_) => Err(ConfigError::Invalid("COSMOS_AGENT_PEER_TOKEN must be at least 32 characters".into())),
+            None => Err(ConfigError::Invalid("[[peers]] is set but COSMOS_AGENT_PEER_TOKEN isn't".into())),
+        }
     }
 
     /// How callers authenticate. An agent that can stop containers must
@@ -661,6 +726,47 @@ mod tests {
         cfg.auth.token = Some("s3cret".into());
         let err = cfg.auth_mode().unwrap_err().to_string();
         assert!(err.contains("[auth.oidc]"), "{err}");
+    }
+
+    #[test]
+    fn parses_peers_and_needs_their_token() {
+        let mut cfg: Config = toml
+            ::from_str(
+                r#"
+                node_description = "Public edge"
+
+                [[peers]]
+                name = "jupiter"
+                url = "https://cosmos.jupiter.example.net"
+
+                [[peers]]
+                name = "saturn"
+                ui_url = "https://saturn.example.net:7700"
+            "#
+            )
+            .unwrap();
+        cfg.validate().unwrap();
+        assert_eq!(cfg.peers.len(), 2);
+        assert_eq!(cfg.node_description.as_deref(), Some("Public edge"));
+        assert!(cfg.peers_ready().is_err(), "no token");
+        cfg.peer_token = Some(crate::peers::PeerToken("short".into()));
+        assert!(cfg.peers_ready().is_err(), "too short");
+        cfg.peer_token = Some(crate::peers::PeerToken("x".repeat(32)));
+        cfg.peers_ready().unwrap();
+        assert!(!format!("{cfg:?}").contains(&"x".repeat(32)));
+    }
+
+    #[test]
+    fn refuses_bad_peers() {
+        for bad in [
+            "[[peers]]\nname = \"has space\"",
+            "[[peers]]\nname = \"a\"\n[[peers]]\nname = \"a\"",
+            "[[peers]]\nname = \"a\"\nurl = \"cosmos.example.net\"",
+        ] {
+            let cfg: Config = toml::from_str(bad).unwrap();
+            assert!(cfg.validate().is_err(), "{bad}");
+        }
+        Config::default().peers_ready().unwrap();
     }
 
     #[test]

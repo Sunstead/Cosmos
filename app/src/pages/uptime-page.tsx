@@ -204,6 +204,9 @@ const CheckRow = memo(function CheckRow({
                 from <NodeName nodeId={item.nodeId} />
               </span>
             )}
+            {item.check.via_peer && (
+              <span className='text-xs text-muted-foreground'>via {item.check.via_peer}</span>
+            )}
           </div>
           <div className='selectable truncate pl-4 font-mono text-xs text-muted-foreground'>
             {item.check.kind === 'tcp' ? `tcp ${item.check.target}` : item.check.target}

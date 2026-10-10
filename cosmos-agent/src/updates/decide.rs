@@ -170,6 +170,7 @@ mod tests {
                 enabled: true,
                 any_status: false,
                 service: Some("immich".into()),
+                via_peer: None,
             },
             state,
             since: None,

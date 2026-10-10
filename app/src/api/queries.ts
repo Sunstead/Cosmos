@@ -155,6 +155,24 @@ export function useMetricHistories(
   });
 }
 
+/** Other agents this node exchanges heartbeats with. */
+export function usePeers(nodeId: string | null) {
+  const meta = useNodeMeta(nodeId);
+  const supported = meta?.capabilities.peers ?? false;
+  return useQuery({
+    queryKey: ['peers', nodeId],
+    queryFn: () => {
+      const conn = getConnection(nodeId!);
+      if (!conn) throw new Error('node is not connected');
+      return conn.client.getPeers();
+    },
+    enabled: !!nodeId && supported && meta?.status === 'online',
+    // Heartbeats are 15 s apart; nothing changes faster.
+    refetchInterval: 15_000,
+    retry: 1,
+  });
+}
+
 export function useBackups(nodeId: string | null) {
   const meta = useNodeMeta(nodeId);
   const supported = meta?.capabilities.backups ?? false;

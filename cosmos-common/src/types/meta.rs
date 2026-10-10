@@ -26,6 +26,12 @@ pub struct AgentInfo {
     #[serde(default)]
     #[ts(optional = nullable)]
     pub auth: Option<AuthInfo>,
+    /// What this node is for, in a few words ("Public edge"), from its
+    /// config. `None` unless authenticated, like `node_name`; absent before
+    /// 0.12.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub node_description: Option<String>,
 }
 
 /// Public sign-in parameters, so the app can start the provider's flow
@@ -109,6 +115,10 @@ pub struct Capabilities {
     /// `allow_actions`.
     #[serde(default)]
     pub update_actions: bool,
+    /// `/v1/peers`: other agents this one exchanges heartbeats with. Absent
+    /// from agents before 0.12.
+    #[serde(default)]
+    pub peers: bool,
 }
 
 impl Capabilities {
@@ -137,6 +147,7 @@ impl Capabilities {
             backup_actions: false,
             updates: false,
             update_actions: false,
+            peers: false,
         }
     }
 }

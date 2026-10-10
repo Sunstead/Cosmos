@@ -9,7 +9,7 @@ const EVENT_COLUMNS: &str =
     "id, at, category, kind, severity, subject, title, detail, actor, service, problem_key, problem_state";
 
 const PROBLEM_COLUMNS: &str =
-    "key, category, kind, severity, subject, title, detail, service, opened_at, event_id";
+    "key, category, kind, severity, subject, title, detail, service, opened_at, event_id, depends_on";
 
 /// `None` for a row this build doesn't understand (written by a newer agent
 /// that was then rolled back), which is skipped rather than failing the page.
@@ -58,6 +58,7 @@ fn row_to_problem(r: &Row) -> rusqlite::Result<Option<Problem>> {
             service: r.get(7)?,
             opened_at: r.get(8)?,
             event_id: r.get(9)?,
+            depends_on: r.get(10)?,
         })
     )
 }
@@ -104,7 +105,7 @@ pub fn open(conn: &Connection, at: i64, p: &ProblemSpec) -> Result<(Event, Probl
     let tx = conn.unchecked_transaction().map_err(AgentError::internal)?;
     let event = insert(&tx, at, &p.event(), Some((&p.key, ProblemState::Opened))).map_err(AgentError::internal)?;
     tx.execute(
-        &format!("INSERT OR REPLACE INTO problems ({PROBLEM_COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)"),
+        &format!("INSERT OR REPLACE INTO problems ({PROBLEM_COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)"),
         params![
             p.key,
             p.category.as_str(),
@@ -115,7 +116,8 @@ pub fn open(conn: &Connection, at: i64, p: &ProblemSpec) -> Result<(Event, Probl
             p.detail,
             p.service,
             at,
-            event.id
+            event.id,
+            p.depends_on
         ]
     ).map_err(AgentError::internal)?;
     tx.commit().map_err(AgentError::internal)?;
@@ -130,6 +132,7 @@ pub fn open(conn: &Connection, at: i64, p: &ProblemSpec) -> Result<(Event, Probl
         service: p.service.clone(),
         opened_at: at,
         event_id: event.id,
+        depends_on: p.depends_on.clone(),
     };
     Ok((event, problem))
 }
@@ -246,6 +249,7 @@ mod tests {
             title: "/ is 86% full".into(),
             detail: Some("360 GB of 418 GB used".into()),
             service: None,
+            depends_on: None,
         }
     }
 

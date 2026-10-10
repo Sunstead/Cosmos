@@ -82,6 +82,8 @@ pub struct UptimeHandle {
     pub store: Store,
     pub rx: watch::Receiver<Arc<UptimeSnapshot>>,
     pub default_interval: u32,
+    /// `[[peers]]` names, which a custom check may go through.
+    pub peers: Arc<[String]>,
     tx: mpsc::Sender<Command>,
 }
 
@@ -105,7 +107,8 @@ impl UptimeHandle {
 }
 
 /// Checks a custom check's settings, filling in the default interval.
-pub fn validate(input: UptimeCheckInput, id: i64, default_interval: u32) -> Result<CustomCheck, AgentError> {
+/// `peers` are the configured peers' names, which `via_peer` must be one of.
+pub fn validate(input: UptimeCheckInput, id: i64, default_interval: u32, peers: &[String]) -> Result<CustomCheck, AgentError> {
     let name = input.name.trim().to_string();
     if name.is_empty() || name.chars().count() > 64 {
         return Err(AgentError::BadRequest("a name is 1 to 64 characters".into()));
@@ -133,6 +136,12 @@ pub fn validate(input: UptimeCheckInput, id: i64, default_interval: u32) -> Resu
             );
         }
     }
+    let via_peer = input.via_peer.map(|p| p.trim().to_string()).filter(|p| !p.is_empty());
+    if let Some(p) = &via_peer {
+        if !peers.contains(p) {
+            return Err(AgentError::BadRequest(format!("{p} isn't one of this agent's peers")));
+        }
+    }
     Ok(CustomCheck {
         id,
         name,
@@ -141,6 +150,7 @@ pub fn validate(input: UptimeCheckInput, id: i64, default_interval: u32) -> Resu
         interval_secs: input.interval_secs.filter(|&i| i != default_interval),
         enabled: input.enabled,
         any_status: input.any_status,
+        via_peer,
     })
 }
 
@@ -219,6 +229,7 @@ fn define(
                     enabled: s.is_none_or(|s| s.enabled),
                     any_status: s.is_some_and(|s| s.any_status),
                     service: Some(service.to_string()),
+                    via_peer: None,
                 },
                 active: running,
                 grace_until: started.map(|t| t + STARTUP_GRACE),
@@ -237,6 +248,7 @@ fn define(
                 enabled: c.enabled,
                 any_status: c.any_status,
                 service: None,
+                via_peer: c.via_peer.clone(),
             },
             active: true,
             grace_until: None,
@@ -354,13 +366,14 @@ pub fn spawn(
     cfg: &UptimeConfig,
     store: Store,
     containers: watch::Receiver<Arc<ContainerSnapshot>>,
-    events: Option<EventsHandle>
+    events: Option<EventsHandle>,
+    peers: Vec<String>
 ) -> UptimeHandle {
     let (snap_tx, rx) = watch::channel(
         Arc::new(UptimeSnapshot { json: r#"{"checks":[],"sampled_at":0}"#.into(), entries: vec![] })
     );
     let (tx, cmd_rx) = mpsc::channel::<Command>(16);
-    let handle = UptimeHandle { store: store.clone(), rx, default_interval: cfg.interval_secs, tx };
+    let handle = UptimeHandle { store: store.clone(), rx, default_interval: cfg.interval_secs, peers: peers.into(), tx };
     let task = Task {
         store,
         events,
@@ -571,6 +584,7 @@ impl Task {
             name: &def.check.name,
             target: &def.check.target,
             service: def.check.service.as_deref(),
+            via_peer: def.check.via_peer.as_deref(),
         };
         if !o.ok && def.grace_until.is_some_and(|g| r.at < g) {
             if live.state != CheckState::Down {
@@ -711,6 +725,7 @@ mod tests {
             interval_secs: None,
             enabled: true,
             any_status: false,
+            via_peer: None,
         }];
         let checks = define(&containers, &settings, &custom, 60);
         let ids: Vec<&str> = checks.iter().map(|c| c.check.id.as_str()).collect();
@@ -762,14 +777,15 @@ mod tests {
             interval_secs: Some(60),
             enabled: true,
             any_status: false,
+            via_peer: None,
         };
-        let ok = validate(input(CheckKind::Tcp, "192.168.1.1:443"), 0, 60).unwrap();
+        let ok = validate(input(CheckKind::Tcp, "192.168.1.1:443"), 0, 60, &[]).unwrap();
         assert_eq!(ok.name, "Router");
         assert_eq!(ok.interval_secs, None, "the default is stored as the default");
-        assert!(validate(input(CheckKind::Tcp, "192.168.1.1"), 0, 60).is_err());
-        assert!(validate(input(CheckKind::Http, "ftp://x"), 0, 60).is_err());
-        assert!(validate(input(CheckKind::Http, "https://example.com/health"), 0, 60).is_ok());
-        assert!(validate(UptimeCheckInput { interval_secs: Some(5), ..input(CheckKind::Tcp, "a:1") }, 0, 60).is_err());
+        assert!(validate(input(CheckKind::Tcp, "192.168.1.1"), 0, 60, &[]).is_err());
+        assert!(validate(input(CheckKind::Http, "ftp://x"), 0, 60, &[]).is_err());
+        assert!(validate(input(CheckKind::Http, "https://example.com/health"), 0, 60, &[]).is_ok());
+        assert!(validate(UptimeCheckInput { interval_secs: Some(5), ..input(CheckKind::Tcp, "a:1") }, 0, 60, &[]).is_err());
 
         let path = |p: &str| validate_service(UptimeServiceInput { enabled: true, path: Some(p.into()), any_status: false });
         assert_eq!(path(" / ").unwrap().path, None);
@@ -804,13 +820,14 @@ mod tests {
                 interval_secs: Some(3_600),
                 enabled: true,
                 any_status: false,
+                via_peer: None,
             }).unwrap()
         });
         let (_tx, containers) = watch::channel(
             Arc::new(ContainerSnapshot { json: "[]".into(), running: Arc::new([]), containers: Arc::new([]), sampled_at: 0 })
         );
         let cfg = UptimeConfig { enabled: true, interval_secs: 60, local_domains: vec![] };
-        let handle = spawn(&cfg, store, containers, None);
+        let handle = spawn(&cfg, store, containers, None, Vec::new());
 
         let id = saved.id.to_string();
         handle.reload(Some(id.clone())).await.unwrap();

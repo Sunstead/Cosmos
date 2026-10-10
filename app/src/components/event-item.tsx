@@ -78,6 +78,11 @@ export const ProblemItem = memo(function ProblemItem({
       <div className='min-w-0 flex-1'>
         <p className='text-sm wrap-anywhere'>{problem.title}</p>
         {problem.detail && <p className='text-xs text-muted-foreground'>{problem.detail}</p>}
+        {problem.depends_on && (
+          <p className='text-xs text-muted-foreground'>
+            Goes through {problem.depends_on}: no alert of its own while {problem.depends_on} is unreachable.
+          </p>
+        )}
         {showNode && (
           <p className='flex min-w-0 text-xs'>
             <NodeName nodeId={problem.nodeId} />

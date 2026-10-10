@@ -37,7 +37,7 @@ pub async fn create(
     Json(input): Json<UptimeCheckInput>
 ) -> Result<(StatusCode, Json<UptimeEntry>), AgentError> {
     let uptime = handle(&state)?;
-    let check = uptime::validate(input, 0, uptime.default_interval)?;
+    let check = uptime::validate(input, 0, uptime.default_interval, &uptime.peers)?;
     let action = check_action("uptime_check_create", &check.name, "Added", "Couldn't add");
     let result = uptime.store.call(move |c| db::insert(c, &check)).await;
     record_action(&state, &by, action, &result);
@@ -53,7 +53,7 @@ pub async fn update(
     Json(input): Json<UptimeCheckInput>
 ) -> Result<Json<UptimeEntry>, AgentError> {
     let uptime = handle(&state)?;
-    let check = uptime::validate(input, db::parse_id(&id)?, uptime.default_interval)?;
+    let check = uptime::validate(input, db::parse_id(&id)?, uptime.default_interval, &uptime.peers)?;
     let action = check_action("uptime_check_update", &check.name, "Edited", "Couldn't edit");
     let result = uptime.store.call(move |c| db::update(c, &check)).await;
     record_action(&state, &by, action, &result);

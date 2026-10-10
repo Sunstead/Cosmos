@@ -35,6 +35,8 @@ export interface NodeMeta {
   /** How to sign in to this agent. Null for agents before API v3. */
   auth: AuthInfo | null;
   agentVersion: string | null;
+  /** What the node is for ("Public edge"), from its config. Agent 0.12+. */
+  description: string | null;
   apiVersion: number;
   /** Why we're offline, for the UI to show rather than a bare dot. */
   error: string | null;
@@ -113,6 +115,7 @@ export class NodeConnection {
     principal: null,
     auth: null,
     agentVersion: null,
+    description: null,
     apiVersion: 0,
     error: null,
   };
@@ -199,6 +202,7 @@ export class NodeConnection {
       next.status === this.meta.status &&
       next.error === this.meta.error &&
       next.agentVersion === this.meta.agentVersion &&
+      next.description === this.meta.description &&
       next.capabilities === this.meta.capabilities &&
       next.principal === this.meta.principal &&
       next.auth === this.meta.auth
@@ -312,6 +316,7 @@ export class NodeConnection {
         principal: info.principal ?? null,
         auth: info.auth ?? null,
         agentVersion: info.agent_version,
+        description: info.node_description ?? null,
         apiVersion: info.api_version,
       });
 

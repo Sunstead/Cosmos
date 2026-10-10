@@ -200,8 +200,10 @@ iPhone, desktop notifications and "node unreachable" alerts.*
 - Follows the agent's patterns: background tasks, never on the request path,
   capability flag, types in `cosmos-common`.
 - **Watching the watcher:** nothing on Jupiter can report Jupiter being down.
-  Short term, the desktop app notifies when a node stays offline. Long term,
-  agents on other nodes watch each other.
+  The desktop app notifies when a node stays offline, and since 0.12 agents
+  watch each other: Pluto exchanges heartbeats with Jupiter, each reports the
+  other unreachable, and ntfy runs on Pluto (public at `ntfy.pwbcloud.com`) so
+  an alert about Jupiter has somewhere to go.
 
 ### B. Cosmos: health checks (replaces Uptime Kuma)
 *Shipped in 0.6 (Cosmos#15, Jupiter#23): an HTTP check per labelled service,
@@ -408,6 +410,9 @@ moving its folders is a planned migration, never an `mv`.
 | 2026-10-03 | Every repo lives in the `Sunstead` GitHub organization (Solstice and Jupiter moved from `InventorPWB`). Cosmos's update token is now owned by the organization. |
 | 2026-10-03 | Solstice Sync uses Yjs (`yrs`), keeping history so overlapping offline edits can be flagged and reviewed. |
 | 2026-10-04 | Solstice Sync is live on Jupiter (public OIDC client, 10-minute tokens; a sync connection closes when its token expires). Solstice is public under MIT. Atlas 0.1.4 searches notes from the vaults on disk. |
+| 2026-10-10 | Multi-node: a service on several nodes is one entry with a row per node; pages that show one node keep their own choice, and Monitoring and Logs have "All nodes". |
+| 2026-10-10 | ntfy moves to Pluto, public at `ntfy.pwbcloud.com`, so the phone needs no tailnet and Jupiter going down can be reported. "Pluto down" goes from Jupiter to a secret ntfy.sh topic. |
+| 2026-10-10 | Agents are peers (0.12): heartbeats with a shared token (not Authentik, which lives on Jupiter), dialled by Pluto. Checks that go through a peer are folded into its one alert. |
 
 ### Open
 - **Starbook name:** Sunstead Kin (current favorite), Tether, Folk.

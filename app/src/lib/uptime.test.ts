@@ -18,6 +18,7 @@ function entry(name: string, state: UptimeEntry['state']): UptimeEntry {
       target: 'https://example.com/',
       interval_secs: 60,
       enabled: true,
+      via_peer: null,
       any_status: false,
       service: null,
     },

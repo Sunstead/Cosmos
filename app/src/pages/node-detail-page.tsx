@@ -33,6 +33,7 @@ import { cn } from '@/lib/utils';
 import { Hint } from '@/components/hint';
 import { Progress } from '@sunstead/ui/components/progress';
 import { Skeleton } from '@sunstead/ui/components/skeleton';
+import { PeersSection } from '@/components/peers-section';
 
 function Spec({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -121,6 +122,7 @@ export function NodeDetailPage({ nodeId }: { nodeId: string }) {
             <Spec label='Status'>
               <NodeStatusBadge nodeId={nodeId} />
             </Spec>
+            {meta?.description && <Spec label='Role'>{meta.description}</Spec>}
             <Spec label='Uptime'>
               <LiveValue nodeId={nodeId} className='tabular-nums' format={(h) => secondsToDuration(h.uptime_secs)} />
             </Spec>
@@ -155,6 +157,8 @@ export function NodeDetailPage({ nodeId }: { nodeId: string }) {
           </div>
         )}
       </Section>
+
+      <PeersSection nodeId={nodeId} />
 
       {host && (
         <>

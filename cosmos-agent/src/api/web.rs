@@ -14,7 +14,7 @@ use std::path::Path;
 use tower_http::{ compression::CompressionLayer, services::ServeDir };
 
 /// `None` when `dir` holds no `index.html`, so a bad path degrades to API-only.
-pub fn router<S: Clone + Send + Sync + 'static>(dir: &Path) -> Option<Router<S>> {
+pub fn router<S: Clone + Send + Sync + 'static>(dir: &Path, peers: Vec<String>) -> Option<Router<S>> {
     if !dir.join("index.html").is_file() {
         tracing::warn!(dir = %dir.display(), "web.dir has no index.html; not serving the web UI");
         return None;
@@ -24,16 +24,22 @@ pub fn router<S: Clone + Send + Sync + 'static>(dir: &Path) -> Option<Router<S>>
     let files = ServeDir::new(dir);
     Some(
         Router::new()
-            .route("/config.json", get(config_json))
+            .route("/config.json", get(move || config_json(peers.clone())))
             .fallback(move |req: Request| serve(files.clone(), req))
             .layer(CompressionLayer::new().gzip(true))
     )
 }
 
-/// Seeds the UI with this agent. Relative, so it resolves against whatever
-/// origin the page was loaded from, proxied or not.
-async fn config_json() -> impl IntoResponse {
-    ([(header::CACHE_CONTROL, "no-cache")], Json(serde_json::json!([{ "url": "/" }])))
+/// Seeds the UI with this agent, then its peers' web UIs. This one is
+/// relative, so it resolves against whatever origin the page was loaded
+/// from, proxied or not.
+async fn config_json(peers: Vec<String>) -> impl IntoResponse {
+    let nodes: Vec<serde_json::Value> = std::iter
+        ::once("/".to_string())
+        .chain(peers)
+        .map(|url| serde_json::json!({ "url": url }))
+        .collect();
+    ([(header::CACHE_CONTROL, "no-cache")], Json(nodes))
 }
 
 async fn serve(mut files: ServeDir, req: Request) -> Response {
@@ -88,7 +94,7 @@ mod tests {
         std::fs::write(dir.path().join("index.html"), "<!doctype html>app").unwrap();
         std::fs::create_dir(dir.path().join("assets")).unwrap();
         std::fs::write(dir.path().join("assets/app-abc.js"), "js").unwrap();
-        let router = router(dir.path()).unwrap();
+        let router = router(dir.path(), vec!["https://pluto.example.net:7700".into()]).unwrap();
         (dir, router)
     }
 
@@ -128,14 +134,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn config_points_at_this_origin() {
+    async fn config_points_at_this_origin_then_the_peers() {
         let (_dir, r) = site();
-        assert_eq!(text(get(&r, "/config.json").await).await, r#"[{"url":"/"}]"#);
+        assert_eq!(
+            text(get(&r, "/config.json").await).await,
+            r#"[{"url":"/"},{"url":"https://pluto.example.net:7700"}]"#
+        );
     }
 
     #[test]
     fn missing_index_disables_the_ui() {
         let dir = tempfile::tempdir().unwrap();
-        assert!(router::<()>(dir.path()).is_none());
+        assert!(router::<()>(dir.path(), Vec::new()).is_none());
     }
 }

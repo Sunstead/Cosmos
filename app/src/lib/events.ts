@@ -5,6 +5,7 @@ import {
   HeartPulse,
   PackageCheck,
   MousePointerClick,
+  Network,
   Power,
   Server,
   type LucideIcon,
@@ -27,6 +28,7 @@ export const CATEGORY: Record<EventCategory, { label: string; icon: LucideIcon }
   agent: { label: 'Agent', icon: Server },
   uptime: { label: 'Uptime', icon: HeartPulse },
   update: { label: 'Update', icon: PackageCheck },
+  peer: { label: 'Peers', icon: Network },
 };
 
 export function isResolution(e: Event): boolean {
