@@ -200,7 +200,7 @@ iPhone, desktop notifications and "node unreachable" alerts.*
 - Follows the agent's patterns: background tasks, never on the request path,
   capability flag, types in `cosmos-common`.
 - **Watching the watcher:** nothing on Jupiter can report Jupiter being down.
-  The desktop app notifies when a node stays offline, and since 0.12 agents
+  The desktop app notifies when a node stays offline, and since 0.11 agents
   watch each other: Pluto exchanges heartbeats with Jupiter, each reports the
   other unreachable, and ntfy runs on Pluto (public at `ntfy.pwbcloud.com`) so
   an alert about Jupiter has somewhere to go.
@@ -412,7 +412,7 @@ moving its folders is a planned migration, never an `mv`.
 | 2026-10-04 | Solstice Sync is live on Jupiter (public OIDC client, 10-minute tokens; a sync connection closes when its token expires). Solstice is public under MIT. Atlas 0.1.4 searches notes from the vaults on disk. |
 | 2026-10-10 | Multi-node: a service on several nodes is one entry with a row per node; pages that show one node keep their own choice, and Monitoring and Logs have "All nodes". |
 | 2026-10-10 | ntfy moves to Pluto, public at `ntfy.pwbcloud.com`, so the phone needs no tailnet and Jupiter going down can be reported. "Pluto down" goes from Jupiter to a secret ntfy.sh topic. |
-| 2026-10-10 | Agents are peers (0.12): heartbeats with a shared token (not Authentik, which lives on Jupiter), dialled by Pluto. Checks that go through a peer are folded into its one alert. |
+| 2026-10-10 | Agents are peers (0.11): heartbeats with a shared token (not Authentik, which lives on Jupiter), dialled by Pluto. Checks that go through a peer are folded into its one alert. |
 
 ### Open
 - **Starbook name:** Sunstead Kin (current favorite), Tether, Folk.

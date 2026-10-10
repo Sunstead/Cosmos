@@ -35,7 +35,7 @@ export interface NodeMeta {
   /** How to sign in to this agent. Null for agents before API v3. */
   auth: AuthInfo | null;
   agentVersion: string | null;
-  /** What the node is for ("Public edge"), from its config. Agent 0.12+. */
+  /** What the node is for ("Public edge"), from its config. Agent 0.11+. */
   description: string | null;
   apiVersion: number;
   /** Why we're offline, for the UI to show rather than a bare dot. */

@@ -379,7 +379,7 @@ async fn send(req: reqwest::RequestBuilder) -> Result<PeerHello, String> {
         s if s.is_success() => res.json::<PeerHello>().await.map_err(|_| "answered with something that isn't a heartbeat".into()),
         reqwest::StatusCode::UNAUTHORIZED => Err("it refused the peer token".into()),
         reqwest::StatusCode::FORBIDDEN => Err("it doesn't list this agent as a peer".into()),
-        reqwest::StatusCode::NOT_FOUND => Err("it has no heartbeat route (an agent older than 0.12?)".into()),
+        reqwest::StatusCode::NOT_FOUND => Err("it has no heartbeat route (an agent older than 0.11?)".into()),
         s => Err(format!("HTTP {}", s.as_u16())),
     }
 }

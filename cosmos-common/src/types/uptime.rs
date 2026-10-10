@@ -72,7 +72,7 @@ pub struct UptimeCheck {
     pub service: Option<String>,
     /// A peer the target is reached through (Pluto's checks of the public
     /// sites go through Jupiter). Its failures are held back from
-    /// notifications while that peer is unreachable. Absent before 0.12.
+    /// notifications while that peer is unreachable. Absent before 0.11.
     #[serde(default)]
     pub via_peer: Option<String>,
 }

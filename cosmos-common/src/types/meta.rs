@@ -28,7 +28,7 @@ pub struct AgentInfo {
     pub auth: Option<AuthInfo>,
     /// What this node is for, in a few words ("Public edge"), from its
     /// config. `None` unless authenticated, like `node_name`; absent before
-    /// 0.12.
+    /// 0.11.
     #[serde(default)]
     #[ts(optional = nullable)]
     pub node_description: Option<String>,
@@ -116,7 +116,7 @@ pub struct Capabilities {
     #[serde(default)]
     pub update_actions: bool,
     /// `/v1/peers`: other agents this one exchanges heartbeats with. Absent
-    /// from agents before 0.12.
+    /// from agents before 0.11.
     #[serde(default)]
     pub peers: bool,
 }

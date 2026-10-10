@@ -28,7 +28,7 @@ pub enum EventCategory {
     Uptime,
     /// Image updates: applied, failed, broken. Absent before 0.8.
     Update,
-    /// Other agents this one exchanges heartbeats with. Absent before 0.12.
+    /// Other agents this one exchanges heartbeats with. Absent before 0.11.
     Peer,
 }
 
@@ -124,7 +124,7 @@ pub struct Problem {
     pub event_id: i64,
     /// The peer it goes through (an uptime check of a site Pluto proxies to
     /// Jupiter). While that peer is unreachable, it's held back from
-    /// notifications: the peer's own problem says it. Absent before 0.12.
+    /// notifications: the peer's own problem says it. Absent before 0.11.
     #[serde(default)]
     pub depends_on: Option<String>,
 }
