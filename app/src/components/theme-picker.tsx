@@ -74,13 +74,18 @@ function ThemePreview({ id }: { id: string }) {
   );
 }
 
+// Muted text on the accent hover and selection is unreadable in some themes
+// (Concrete's is hot pink), so it brightens there.
+const MUTED =
+  'text-muted-foreground group-hover/theme:text-foreground/80 group-has-data-checked/theme:text-foreground/80';
+
 function ThemeCard({ theme, badge }: { theme: ThemeDef; badge?: Scheme }) {
   const inputId = `theme-${theme.id}`;
   return (
     <Label
       htmlFor={inputId}
       className={cn(
-        'flex cursor-pointer flex-col items-stretch gap-2 rounded-lg border p-2 font-normal transition-colors',
+        'group/theme flex cursor-pointer flex-col items-stretch gap-2 rounded-lg border p-2 font-normal transition-colors',
         'hover:bg-accent/50 has-data-checked:border-primary has-data-checked:bg-accent/40',
         'has-focus-visible:ring-3 has-focus-visible:ring-ring/50',
       )}
@@ -90,12 +95,12 @@ function ThemeCard({ theme, badge }: { theme: ThemeDef; badge?: Scheme }) {
         <RadioGroupItem id={inputId} value={theme.id} className='focus-visible:ring-0' />
         <span className='min-w-0 flex-1 truncate text-sm font-medium'>{theme.name}</span>
         {badge && (
-          <span className='text-muted-foreground' title={`Used when the system is ${badge}`}>
+          <span className={MUTED} title={`Used when the system is ${badge}`}>
             {badge === 'dark' ? <Moon className='size-3.5' /> : <Sun className='size-3.5' />}
           </span>
         )}
       </span>
-      <span className='truncate text-xs text-muted-foreground'>{theme.description}</span>
+      <span className={cn('truncate text-xs', MUTED)}>{theme.description}</span>
     </Label>
   );
 }

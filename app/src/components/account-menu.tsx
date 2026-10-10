@@ -41,11 +41,28 @@ interface Identity {
   attention: boolean;
 }
 
-function NameBlock({ who }: { who: Identity }) {
+/**
+ * Who you are, in the sidebar button or the menu. In the button the name
+ * takes the button's own colour, which turns to `sidebar-accent-foreground`
+ * on hover and while the menu is open (dark text in Concrete), and the
+ * detail follows it there: muted text on the accent is unreadable in some
+ * themes.
+ */
+function NameBlock({ who, inMenu = false }: { who: Identity; inMenu?: boolean }) {
   return (
     <div className='grid min-w-0 flex-1 text-left leading-tight'>
-      <span className='truncate text-sm font-medium text-sidebar-accent-foreground'>{who.name}</span>
-      {who.detail && <span className='truncate text-xs text-muted-foreground'>{who.detail}</span>}
+      <span className={cn('truncate text-sm font-medium', inMenu && 'text-popover-foreground')}>{who.name}</span>
+      {who.detail && (
+        <span
+          className={cn(
+            'truncate text-xs text-muted-foreground',
+            !inMenu &&
+              'group-hover/menu-button:text-sidebar-accent-foreground/85 group-data-popup-open/menu-button:text-sidebar-accent-foreground/85',
+          )}
+        >
+          {who.detail}
+        </span>
+      )}
     </div>
   );
 }
@@ -152,7 +169,7 @@ export function AccountMenu() {
                 size='lg'
                 aria-label='Account'
                 tooltip={{ children: [who.name, who.detail].filter(Boolean).join(', ') }}
-                className='h-12 min-w-0 flex-1 gap-3 pl-3 data-popup-open:bg-sidebar-accent group-data-[collapsible=icon]:h-12! group-data-[collapsible=icon]:w-12! group-data-[collapsible=icon]:pl-2!'
+                className='h-12 min-w-0 flex-1 gap-3 pl-3 data-popup-open:bg-sidebar-accent data-popup-open:text-sidebar-accent-foreground group-data-[collapsible=icon]:h-12! group-data-[collapsible=icon]:w-12! group-data-[collapsible=icon]:pl-2!'
               />
             }
           >
@@ -169,7 +186,7 @@ export function AccountMenu() {
               <DropdownMenuGroup>
                 <DropdownMenuLabel className='flex items-center gap-3 py-2 font-normal'>
                   <UserAvatar who={who} size='lg' />
-                  <NameBlock who={who} />
+                  <NameBlock who={who} inMenu />
                 </DropdownMenuLabel>
               </DropdownMenuGroup>
             ) : (

@@ -29,13 +29,13 @@ export function AppSidebar() {
   const followed = () => isMobile && setOpenMobile(false);
 
   return (
-    <Sidebar collapsible='icon' className='chrome'>
+    <Sidebar collapsible='icon' className='chrome border-r-0'>
       <SidebarContent className='gap-0 pt-1 in-data-[mobile=true]:pt-3'>
         {NAV_GROUPS.map((group, i) => (
           <SidebarGroup key={group.label ?? i} className='px-2 py-1.5'>
             {group.label && (
               // Lined up with the item icons (the buttons' px-3).
-              <SidebarGroupLabel className='label-hud h-7 pl-3 text-2xs text-sidebar-foreground/60 group-data-[collapsible=icon]:-mt-7'>
+              <SidebarGroupLabel className='label-hud h-7 pl-3 text-2xs text-muted-foreground group-data-[collapsible=icon]:-mt-7'>
                 {group.label}
               </SidebarGroupLabel>
             )}

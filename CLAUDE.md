@@ -83,6 +83,13 @@ Background samplers publish to `tokio::sync::watch` channels; handlers hand out 
 - `watch` not `broadcast`: subscribers only want the newest sample, and `watch` coalesces by construction.
 - Snapshots carry `json: Arc<str>` — serialization happens once per tick, not once per request per client.
 
+**Config** (`config.rs`). `agent.toml`, then the `COSMOS_AGENT_*` overlay.
+Any string in the file may name environment variables, `${NAME}` (`$$` is a
+dollar), expanded after parsing so TOML quoting never matters; unset or empty
+is a startup error naming the key. That's how a deployment keeps its domains
+in `.env`: nothing in this repo or the infrastructure repos names a real
+domain. `--check-config` expands too, so it needs the same variables.
+
 **Stopping** (`main.rs`, `shutdown.rs`). axum's graceful shutdown waits for every response to finish, and SSE streams and log sockets never do, so on SIGTERM the agent first records the clean stop (so an overrun can't make a deploy read as a crash), then fires a `Shutdown` signal that ends streams (`sse::stream_watch` takes it) and log sockets (a `closed` frame saying the agent is restarting), drains for at most 5 s, and flushes the history writer explicitly (the sampler thread holds a handle forever, so its channel never closes). Any new long-lived response must end on `state.shutdown` too, or one open app keeps the agent alive until Docker's SIGKILL.
 
 **Routes.** `/healthz` and `/v1/info` are public; everything else needs a token; every mutating route sits behind `require_write`, which needs both the node's top-level `allow_actions` and an admin `Principal` (and logs one `action` line saying who). `docker.allow_actions` is a deprecated alias. `/v1/logs` and `/v1/logs/ws` (`all_logs` capability) merge every running container: the socket keeps each container's Docker stream in a `StreamMap`, adds containers that start later from the container snapshot's `running` IDs, and tags lines with `container`; the client orders the interleaved backlogs by timestamp (`compareLogTime`: Docker trims trailing fraction zeros, so the strings don't sort). Logs use a WebSocket (`/v1/containers/:id/logs/ws`) because Docker log frames contain embedded newlines, `EventSource` reconnects uncontrollably against crash-looping containers, and browsers cap ~6 HTTP/1.1 connections per origin.
@@ -105,13 +112,13 @@ Background samplers publish to `tokio::sync::watch` channels; handlers hand out 
 
 **Notifications** (`notify/`). Every stored event is broadcast; the notifier offers it to each channel (ntfy, webhook), which takes it when `rules::wants` (enabled, category, `min_severity`, `recoveries`) and the `FloodGuard` agree: a problem opens at most once per 30 min per channel (a held-back opening is delivered late if the problem is still open, so a flap that sticks isn't left looking resolved), and the same one-off event (one container crashing) at most once. Delivery is a task per message, three tries, no 3xx or 4xx retry, then dropped: the log has it. The client doesn't follow redirects: a redirected POST becomes a GET, which once made an `http://` ntfy address that redirects to `https://` read as delivered. Channels are edited in the app and stored in `state.db`; **the channel secret is write-only** (`has_secret` in the API, hidden from `Debug`), the agent's one stored credential. The notifier must subscribe before anything reports, or it misses the lifecycle events at startup.
 
-**Uptime** (`uptime/`). One task owns the checks, like Wake-on-LAN's: every `cosmos.service` with a url label gets an HTTP check (`svc:<service>`, `https://` added as `serviceHref` does), and custom HTTP or TCP checks live in `state.db`, as do per-service settings (off, path, any status counts). A service's check only runs while one of its containers is running, and failures in the first 2 minutes after a container starts don't count, so a deliberate stop or a deploy never pages. A service whose containers vanish keeps its check, paused, for a minute (`carry_vanished`), so a deploy that removes and recreates them doesn't resolve its problem or reset its heartbeat. Probes run in their own tasks and report back, so a slow target doesn't hold up a reload; creating or editing a check waits for its first result. HTTP doesn't follow redirects (a forward-auth 302 is up) and is up below 400. `[uptime] local_domains` resolves those names to 127.0.0.1 through a custom reqwest resolver: on Jupiter `*.jupiter.sunstead.net` points at the Tailscale IP, which the host can't reach, so checks go through Caddy on the host. `detector.rs` is pure: down after 3 failures in a row, up after 2 passes, and certificates (read from `tls_info` by the small DER walker in `cert.rs`, keyed by serial so a wildcard is one problem) warn in their last quarter and are an error under 3 days. Results are tallied per hour into `uptime_hourly` every 5 minutes (additive, kept 90 days) for the 24h/30d/90d figures; the newest 90 per check live in memory for the heartbeat bar, and outages themselves are in the event log.
+**Uptime** (`uptime/`). One task owns the checks, like Wake-on-LAN's: every `cosmos.service` with a url label gets an HTTP check (`svc:<service>`, `https://` added as `serviceHref` does), and custom HTTP or TCP checks live in `state.db`, as do per-service settings (off, path, any status counts). A service's check only runs while one of its containers is running, and failures in the first 2 minutes after a container starts don't count, so a deliberate stop or a deploy never pages. A service whose containers vanish keeps its check, paused, for a minute (`carry_vanished`), so a deploy that removes and recreates them doesn't resolve its problem or reset its heartbeat. Probes run in their own tasks and report back, so a slow target doesn't hold up a reload; creating or editing a check waits for its first result. HTTP doesn't follow redirects (a forward-auth 302 is up) and is up below 400. `[uptime] local_domains` resolves those names to 127.0.0.1 through a custom reqwest resolver: on Jupiter the home domain's names point at the Tailscale IP, which the host can't reach, so checks go through Caddy on the host. `detector.rs` is pure: down after 3 failures in a row, up after 2 passes, and certificates (read from `tls_info` by the small DER walker in `cert.rs`, keyed by serial so a wildcard is one problem) warn in their last quarter and are an error under 3 days. Results are tallied per hour into `uptime_hourly` every 5 minutes (additive, kept 90 days) for the 24h/30d/90d figures; the newest 90 per check live in memory for the heartbeat bar, and outages themselves are in the event log.
 
 **Peers** (`peers/`). Agents watch each other, since nothing on a node can
 report that node down. `[[peers]]` lists the others; the side with a `url`
 POSTs a `PeerHello` to the other's `/v1/peer/heartbeat` every 15 s and gets
 one back, so one exchange tells both sides and only one has to reach the
-other (Pluto dials Jupiter through `cosmos.jupiter.sunstead.net`: Jupiter's
+other (Pluto dials Jupiter's agent through Caddy's public name for it: Jupiter's
 Tailscale is userspace and can't reach Pluto, and Pluto may only reach
 `jupiter:443`). The route is public and checks `COSMOS_AGENT_PEER_TOKEN`
 itself (constant time, env only, the agent refuses to start with peers and no
@@ -218,8 +225,10 @@ palette, add-node dialog and `CommandHost` (shortcuts + native menu events).
 The sidebar's foot is `AccountMenu`: who you are, role, a gear for Settings
 (which isn't in the nav list) and a menu with settings, a theme picker and
 sign in or out. `UserAvatar` (also in Settings) shows the access token's `picture` claim,
-only if it is `https://` (`setSession`), else initials on the neutral
-`--sidebar-accent` with a `--sidebar-border` ring, never the primary colour.
+only if it is `https://` (`setSession`), else initials on `--muted` (neutral in every theme; the sidebar accent isn't, Concrete's is
+yellow) with a `foreground/10` ring, never the primary colour. Text on a
+coloured fill always uses that fill's own foreground: Concrete's
+`sidebar-accent-foreground` is near black, so it vanishes on the plain sidebar.
 Base UI swaps the image in only once it has loaded, so a 404 or an offline
 provider never shows a broken image. Jupiter sets no picture, so it shows
 initials. Title bar controls are all ghost `Button`s so they match.
@@ -227,7 +236,9 @@ Nav items (`app-sidebar.tsx`) are default-size `h-8` buttons, rounded all
 round and inset from the edges; the current page is a fill
 (`sidebar-accent`), never an edge bar, and the rest are `muted-foreground`
 so the fill reads in light themes too. Collapsed, each icon is centred in
-the 4rem rail, under the title bar's toggle and over the avatar.
+the 4rem rail, under the title bar's toggle and over the avatar. The sidebar has no border of its own
+(`border-r-0` over the package's): it runs into the title bar, and `<main>`'s
+`border-t border-l` with its rounded top-left corner draw the only edge.
 Routes are lazy (`lazyRouteComponent`) and pick a layout through
 `staticData.layout`: `scroll` (default), `fill` (logs) or `bleed` (constellation:
 no padding, no header, edge to edge in `<main>`). The body never
@@ -298,7 +309,13 @@ escapes and control characters are stripped, and search/download use
 writes everything to stderr. `logLevel` (`lib/log-line.ts`) reads the level
 the line states; times render in the viewer's zone via `formatLogTime`
 (Docker's nanosecond stamps are cut to ms first, since WebKit's `Date.parse`
-has rejected longer fractions).
+has rejected longer fractions). Each line is prepared once on arrival (`lib/log-view.ts`
+`prepareLine`: ID, level, times, search text, numeric sort key), merged by
+time into the buffer rather than re-sorted, and keyed by its ID; the list is
+virtualized (`@tanstack/react-virtual`), so only the rows on screen render. A
+JSON line (`lib/structured-log.ts`) shows its message, or `GET /path 200 9ms`
+for an access log, then the other fields faint, and opens to every field;
+its level comes from its own `level` field.
 
 **Loading.** Until a node sends its first containers or volumes, a page shows
 skeletons (`components/skeletons.tsx`, `DataTable loading`), never an empty
