@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { Download, Eraser, Logs, Pause, Play, RefreshCw, ScrollText, SearchX } from 'lucide-react';
 import { nodeDisplayName, useNodeName, useNodeStore } from '@/stores/nodes';
@@ -128,23 +129,53 @@ export function LogsPage() {
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
+    if (!q && stream === 'all') return lines;
     return lines.filter(
       (l) =>
         (stream === 'all' || l.stream === stream) &&
         (!q ||
-          stripAnsi(l.text).toLowerCase().includes(q) ||
+          l.search.includes(q) ||
           (!!l.container && !!names.get(l.container)?.toLowerCase().includes(q)) ||
           (!!l.node && !!nodeNames.get(l.node)?.toLowerCase().includes(q))),
     );
   }, [lines, query, stream, names, nodeNames]);
 
-  // Stay pinned to the bottom while following, unless the user scrolled up.
+  // JSON lines opened to show every field, by line ID.
+  const [expanded, setExpanded] = useState<ReadonlySet<number>>(new Set());
+  const toggle = useCallback(
+    (id: number) =>
+      setExpanded((prev) => {
+        const next = new Set(prev);
+        if (!next.delete(id)) next.add(id);
+        return next;
+      }),
+    [],
+  );
+
+  // Only the rows on screen are rendered: a busy container keeps thousands.
+  // Rows wrap and open, so each is measured once it renders. TanStack
+  // Virtual, like Table, leaves the page unmemoized by the compiler; the
+  // rows themselves are memoised.
   const viewport = useRef<HTMLDivElement>(null);
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const rows = useVirtualizer({
+    count: visible.length,
+    getScrollElement: () => viewport.current,
+    estimateSize: () => 20,
+    getItemKey: (i) => visible[i].id,
+    overscan: 20,
+    paddingStart: 12,
+    paddingEnd: 12,
+  });
+
+  // Stay pinned to the bottom while following, unless the user scrolled up.
+  // A new stream (another container, or Follow after Pause) starts empty and
+  // pins again.
   const pinned = useRef(true);
   useEffect(() => {
-    const el = viewport.current;
-    if (el && follow && pinned.current) el.scrollTop = el.scrollHeight;
-  }, [visible, follow]);
+    if (lines.length === 0) pinned.current = true;
+    else if (follow && pinned.current && visible.length > 0) rows.scrollToIndex(visible.length - 1, { align: 'end' });
+  }, [lines.length, visible, follow, rows]);
 
   const selectNode = (id: string) => {
     setStoredScope(id);
@@ -180,20 +211,40 @@ export function LogsPage() {
           const el = e.currentTarget;
           pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
         }}
-        className='selectable min-h-0 flex-1 overflow-auto p-3 font-mono text-xs leading-relaxed'
+        className='selectable min-h-0 flex-1 overflow-auto font-mono text-xs leading-relaxed'
       >
         {visible.length === 0 ? (
-          lines.length === 0 && state === 'connecting' ? (
-            <LogSkeleton />
-          ) : lines.length === 0 ? (
-            <p className='text-muted-foreground'>Waiting for output</p>
-          ) : (
-            <EmptyState size='inline' icon={SearchX} title='No matching lines' />
-          )
+          <div className='p-3'>
+            {lines.length === 0 && state === 'connecting' ? (
+              <LogSkeleton />
+            ) : lines.length === 0 ? (
+              <p className='text-muted-foreground'>Waiting for output</p>
+            ) : (
+              <EmptyState size='inline' icon={SearchX} title='No matching lines' />
+            )}
+          </div>
         ) : (
-          visible.map((line, i) => (
-            <LogRow key={i} line={line} container={showAll ? labelOf(line) : undefined} />
-          ))
+          <div className='relative w-full' style={{ height: rows.getTotalSize() }}>
+            {rows.getVirtualItems().map((item) => {
+              const line = visible[item.index];
+              return (
+                <div
+                  key={item.key}
+                  data-index={item.index}
+                  ref={rows.measureElement}
+                  className='absolute inset-x-0 top-0 px-3'
+                  style={{ transform: `translateY(${item.start}px)` }}
+                >
+                  <LogRow
+                    line={line}
+                    container={showAll ? labelOf(line) : undefined}
+                    expanded={expanded.has(line.id)}
+                    onToggle={toggle}
+                  />
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
     </Card>

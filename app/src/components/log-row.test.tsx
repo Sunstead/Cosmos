@@ -1,9 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { render } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render } from '@testing-library/react';
 import { LogRow } from './log-row';
 import { LogLine } from '@/generated/LogLine';
+import { prepareLine } from '@/lib/log-view';
 
-const line = (partial: Partial<LogLine>): LogLine => ({ stream: 'stdout', ts: null, text: '', ...partial });
+const line = (partial: Partial<LogLine>) => prepareLine({ stream: 'stdout', ts: null, text: '', ...partial });
 
 describe('LogRow', () => {
   const saved = process.env.TZ;
@@ -39,5 +40,29 @@ describe('LogRow', () => {
   it('tags the container in the all-containers view', () => {
     const { getByText } = render(<LogRow line={line({ text: 'hello', container: 'abc' })} container='web' />);
     expect(getByText('web').style.color).toMatch(/var\(--ansi-\d+\)/);
+  });
+
+  describe('a JSON line', () => {
+    const json = line({ text: '{"level":"error","msg":"disk full","path":"/srv","pid":7}' });
+
+    it('reads as its message and fields, coloured by its own level', () => {
+      const { container } = render(<LogRow line={json} />);
+      const row = container.firstElementChild!;
+      expect(row.textContent).toContain('disk full');
+      expect(row.textContent).toContain('path=/srv');
+      expect(row.textContent).not.toContain('"msg"');
+      expect(row.className).toMatch(/text-error/);
+    });
+
+    it('opens to every field from its chevron', () => {
+      const onToggle = vi.fn();
+      const closed = render(<LogRow line={json} onToggle={onToggle} />);
+      fireEvent.click(closed.getByRole('button', { name: 'Show fields' }));
+      expect(onToggle).toHaveBeenCalledTimes(1);
+      expect(onToggle).toHaveBeenCalledWith(json.id);
+
+      const open = render(<LogRow line={json} onToggle={onToggle} expanded />);
+      expect(open.container.querySelector('pre')!.textContent).toContain('"pid": 7');
+    });
   });
 });

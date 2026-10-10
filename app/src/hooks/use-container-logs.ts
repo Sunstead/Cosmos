@@ -2,20 +2,20 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { LogFrame } from '@/generated/LogFrame';
 import { LogLine } from '@/generated/LogLine';
 import { getConnection } from '@/stores/nodes';
-import { compareLogTime } from '@/lib/log-line';
+import { compareView, mergeByTime, prepareLine, ViewLine } from '@/lib/log-view';
+
+export type { ViewLine };
 
 /** Pseudo container ID: every running container on the node at once. */
 export const ALL_CONTAINERS = 'all';
 
-/** A line as shown: tagged with its node when several nodes stream at once. */
-export type ViewLine = LogLine & { node?: string };
-
-const byTime = (a: LogLine, b: LogLine) => compareLogTime(a.ts, b.ts);
-
 export type LogConnectionState = 'idle' | 'connecting' | 'streaming' | 'closed' | 'error';
 
-/** Lines kept in memory. A busy container would otherwise grow unbounded. */
-const MAX_LINES = 5_000;
+/**
+ * Lines kept in memory. A busy container would otherwise grow unbounded.
+ * The view only renders the rows on screen, so this is about memory.
+ */
+const MAX_LINES = 10_000;
 
 interface Options {
   nodeId: string | null;
@@ -48,7 +48,8 @@ const EMPTY: Session = { target: '', lines: [], status: 'idle', dropped: 0, reas
  *
  * - Lines are buffered in a ref and flushed on a timer, not per message. A
  *   container emitting hundreds of lines a second would otherwise trigger
- *   hundreds of React renders a second.
+ *   hundreds of React renders a second. Each is prepared (`prepareLine`)
+ *   once on arrival, with an ID that keys its row.
  * - State is tagged with the stream it came from, so switching container
  *   *derives* an empty view rather than clearing it from inside an effect.
  *   Writing state synchronously in an effect costs an extra render pass and
@@ -99,8 +100,8 @@ export function useContainerLogs({ nodeId, nodeIds, containerId, follow, tail = 
       }));
 
     const all = containerId === ALL_CONTAINERS;
-    // Tagged once on arrival, so rows (memoised on the line object) stay put.
-    const tag = (line: LogLine, node: string): ViewLine => (tagged ? { ...line, node } : line);
+    // Prepared once on arrival, so rows (memoised on the line object) stay put.
+    const tag = (line: LogLine, node: string): ViewLine => prepareLine(line, tagged ? node : undefined);
 
     // Non-follow mode is a plain request; no socket needed.
     if (!follow) {
@@ -115,7 +116,7 @@ export function useContainerLogs({ nodeId, nodeIds, containerId, follow, tail = 
         const ok = results.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []));
         if (ok.length === 0) return patch({ status: 'error' });
         const lines = ok.flat();
-        patch({ lines: sources.length > 1 ? lines.sort(byTime) : lines, status: 'closed' });
+        patch({ lines: sources.length > 1 ? lines.sort(compareView) : lines, status: 'closed' });
       });
       return () => {
         cancelled = true;
@@ -188,9 +189,12 @@ export function useContainerLogs({ nodeId, nodeIds, containerId, follow, tail = 
       setSession((prev) => {
         if (prev.target !== target) return prev;
         // Merged containers' backlogs arrive one after another; order them.
-        // Live lines are already nearly in order, which a stable sort
-        // handles in about linear time.
-        const next = all || sources.length > 1 ? prev.lines.concat(pending).sort(byTime) : prev.lines.concat(pending);
+        // Only the new batch is sorted, then merged into lines already in
+        // order, which is an append when they come in order.
+        const next =
+          all || sources.length > 1
+            ? mergeByTime(prev.lines, pending.sort(compareView))
+            : prev.lines.concat(pending);
         return {
           ...prev,
           lines: next.length > MAX_LINES ? next.slice(-MAX_LINES) : next,
