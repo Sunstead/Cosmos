@@ -406,6 +406,7 @@ impl Task {
                     title: if days == 0 { "The GitHub token for updates has expired".into() } else { format!("The GitHub token for updates expires in {days} days") },
                     detail: Some("Make a new one with the same permissions and put it in the server's .env.".into()),
                     service: None,
+                    depends_on: None,
                 })
             );
         } else {
@@ -702,6 +703,7 @@ impl Task {
                                 )
                             ),
                             service,
+                            depends_on: None,
                         })
                     );
                 }

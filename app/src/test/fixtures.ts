@@ -71,6 +71,7 @@ export function agentInfo(partial: Partial<AgentInfo> = {}): AgentInfo {
       backup_actions: true,
       updates: true,
       update_actions: true,
+      peers: true,
     },
     ...partial,
   };
@@ -195,6 +196,7 @@ export function problem(partial: Partial<Problem> = {}): Problem {
     service: 'gitea',
     opened_at: 1_790_000_000,
     event_id: 1,
+    depends_on: null,
     ...partial,
   };
 }

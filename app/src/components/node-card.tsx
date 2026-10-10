@@ -88,7 +88,8 @@ export const NodeCard = memo(function NodeCard({ nodeId }: { nodeId: string }) {
 
   return (
     <Card className='@container gap-4 px-4 py-4'>
-      <Header nodeId={nodeId} subtitle={host.hostname} />
+      {/* What it's for, when its config says, else the machine's name. */}
+      <Header nodeId={nodeId} subtitle={meta?.description ?? host.hostname} />
 
       <div className='grid gap-4 @2xl:grid-cols-[minmax(0,14rem)_1fr]'>
         <div className='grid grid-cols-2 content-start gap-x-4 gap-y-3 @2xl:grid-cols-1'>

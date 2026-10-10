@@ -134,6 +134,10 @@ const MIGRATIONS: &[&str] = &[
         watch_until  INTEGER
     );
     CREATE INDEX update_runs_at ON update_runs (requested_at);",
+    // 0.11: peers. A problem can depend on a peer, and a custom check can go
+    // through one.
+    "ALTER TABLE problems ADD COLUMN depends_on TEXT;
+    ALTER TABLE uptime_checks ADD COLUMN via_peer TEXT;",
 ];
 
 #[derive(Clone)]

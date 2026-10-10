@@ -17,6 +17,8 @@ pub struct CustomCheck {
     pub interval_secs: Option<u32>,
     pub enabled: bool,
     pub any_status: bool,
+    /// One of `[[peers]]` the target is reached through.
+    pub via_peer: Option<String>,
 }
 
 /// Results within one hour, or summed over several.
@@ -53,7 +55,7 @@ impl Tally {
     }
 }
 
-const COLUMNS: &str = "id, name, kind, target, interval_secs, enabled, any_status";
+const COLUMNS: &str = "id, name, kind, target, interval_secs, enabled, any_status, via_peer";
 
 /// `None` for a kind this build doesn't know, which is then left alone.
 fn row_to_check(r: &Row) -> rusqlite::Result<Option<CustomCheck>> {
@@ -69,6 +71,7 @@ fn row_to_check(r: &Row) -> rusqlite::Result<Option<CustomCheck>> {
             interval_secs: r.get(4)?,
             enabled: r.get(5)?,
             any_status: r.get(6)?,
+            via_peer: r.get(7)?,
         })
     )
 }
@@ -97,9 +100,9 @@ pub fn list(conn: &Connection) -> Result<Vec<CustomCheck>, AgentError> {
 /// Inserts `c` (its `id` is ignored) and returns it with the new id.
 pub fn insert(conn: &Connection, c: &CustomCheck) -> Result<CustomCheck, AgentError> {
     conn.execute(
-        "INSERT INTO uptime_checks (name, kind, target, interval_secs, enabled, any_status)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        params![c.name, c.kind.as_str(), c.target, c.interval_secs, c.enabled, c.any_status]
+        "INSERT INTO uptime_checks (name, kind, target, interval_secs, enabled, any_status, via_peer)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![c.name, c.kind.as_str(), c.target, c.interval_secs, c.enabled, c.any_status, c.via_peer]
     ).map_err(|e| map_unique(e, &c.name))?;
     Ok(CustomCheck { id: conn.last_insert_rowid(), ..c.clone() })
 }
@@ -108,8 +111,8 @@ pub fn update(conn: &Connection, c: &CustomCheck) -> Result<(), AgentError> {
     let changed = conn
         .execute(
             "UPDATE uptime_checks SET name = ?2, kind = ?3, target = ?4, interval_secs = ?5, enabled = ?6,
-             any_status = ?7 WHERE id = ?1",
-            params![c.id, c.name, c.kind.as_str(), c.target, c.interval_secs, c.enabled, c.any_status]
+             any_status = ?7, via_peer = ?8 WHERE id = ?1",
+            params![c.id, c.name, c.kind.as_str(), c.target, c.interval_secs, c.enabled, c.any_status, c.via_peer]
         )
         .map_err(|e| map_unique(e, &c.name))?;
     if changed == 0 {
@@ -217,6 +220,7 @@ mod tests {
             interval_secs: None,
             enabled: true,
             any_status: false,
+            via_peer: None,
         }
     }
 

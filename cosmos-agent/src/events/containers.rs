@@ -177,6 +177,7 @@ impl ContainerTracker {
                             title: format!("{} keeps crashing", e.name),
                             detail: Some(format!("{} crashes in the last {} minutes. {detail}", exits.len(), LOOP_WINDOW / 60)),
                             service: e.service.clone(),
+                            depends_on: None,
                         })
                     );
                 }
@@ -241,6 +242,7 @@ impl ContainerTracker {
                         title: format!("{name} is down"),
                         detail: Some(format!("{} It hasn't restarted.", d.detail)),
                         service: c.cosmos_service.clone().or_else(|| d.service.clone()),
+                        depends_on: None,
                     });
                     false
                 }
@@ -261,6 +263,7 @@ impl ContainerTracker {
                         title: format!("{} is unhealthy", c.name),
                         detail: Some("Its health check is failing.".into()),
                         service: c.cosmos_service.clone(),
+                        depends_on: None,
                     })
                 );
             }
@@ -425,6 +428,7 @@ mod tests {
             service: None,
             opened_at: 0,
             event_id: 1,
+            depends_on: None,
         }
     }
 

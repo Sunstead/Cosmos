@@ -14,6 +14,7 @@ mod error;
 mod events;
 mod history;
 mod notify;
+mod peers;
 mod sample;
 mod shutdown;
 mod sse;
@@ -65,6 +66,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     // Decided before anything is bound, so a misconfigured agent fails fast
     // rather than coming up open.
     let mode = cfg.auth_mode()?;
+    cfg.peers_ready()?;
     match mode {
         config::AuthMode::Anonymous =>
             tracing::warn!(
@@ -175,11 +177,30 @@ async fn serve(cfg: Config, mode: config::AuthMode) -> Result<(), Box<dyn std::e
         _ => None,
     };
 
+    let (stop, shutdown) = shutdown::channel();
+
+    // Its first report is a minute away at the soonest, after the notifier
+    // below has subscribed.
+    let peers = match (&cfg.peer_token, cfg.peers.is_empty()) {
+        (Some(token), false) =>
+            Some(
+                peers::spawn(peers::Inputs {
+                    peers: cfg.peers.clone(),
+                    token: token.clone(),
+                    node: facts.node_name.clone(),
+                    events: events.clone(),
+                    tailnet: tailnet_rx.clone(),
+                    shutdown: shutdown.clone(),
+                })
+            ),
+        _ => None,
+    };
+
     // Before anything reports: the notifier only hears events stored after it
     // subscribes, and the lifecycle check below reports straight away.
     let notify = events
         .as_ref()
-        .map(|events| notify::spawn(events.store.clone(), events, facts.node_name.clone()));
+        .map(|events| notify::spawn(events.store.clone(), events, facts.node_name.clone(), peers.clone()));
 
     // The container tracker needs the Docker event stream even when the
     // samplers don't.
@@ -220,7 +241,16 @@ async fn serve(cfg: Config, mode: config::AuthMode) -> Result<(), Box<dyn std::e
     };
 
     let uptime = match (&store, cfg.uptime.enabled) {
-        (Some(store), true) => Some(uptime::spawn(&cfg.uptime, store.clone(), containers_rx.clone(), events.clone())),
+        (Some(store), true) =>
+            Some(
+                uptime::spawn(
+                    &cfg.uptime,
+                    store.clone(),
+                    containers_rx.clone(),
+                    events.clone(),
+                    cfg.peers.iter().map(|p| p.name.clone()).collect()
+                )
+            ),
         _ => None,
     };
 
@@ -242,7 +272,6 @@ async fn serve(cfg: Config, mode: config::AuthMode) -> Result<(), Box<dyn std::e
         tracing::warn!("COSMOS_AGENT_GITHUB_TOKEN is set but [updates] repo isn't; updates are only listed");
     }
 
-    let (stop, shutdown) = shutdown::channel();
     let state = AppState::new(Inner {
         auth: match (mode, &cfg.auth.oidc) {
             (config::AuthMode::Oidc { .. }, Some(oidc)) => auth::Auth::oidc(oidc, cfg.auth.allow_query_token),
@@ -262,6 +291,7 @@ async fn serve(cfg: Config, mode: config::AuthMode) -> Result<(), Box<dyn std::e
         notify,
         uptime,
         updates,
+        peers,
         shutdown: shutdown.clone(),
         cfg: cfg.clone(),
     });

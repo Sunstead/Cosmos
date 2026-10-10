@@ -28,6 +28,8 @@ pub struct Subject<'a> {
     pub name: &'a str,
     pub target: &'a str,
     pub service: Option<&'a str>,
+    /// The peer the target is reached through, if any.
+    pub via_peer: Option<&'a str>,
 }
 
 pub fn down_key(id: &str) -> String {
@@ -82,6 +84,7 @@ pub fn observe(
                 None => format!("No answer from {}", s.target),
             }),
             service: s.service.map(str::to_string),
+            depends_on: s.via_peer.map(str::to_string),
         };
         return (CheckState::Down, Some(Report::Open(spec)));
     }
@@ -122,6 +125,7 @@ fn cert_problem(serial: &str, host: &str, v: &CertValidity, now: i64) -> Option<
             "It should have been renewed by now. Check the reverse proxy's logs: renewal may be failing.".into()
         ),
         service: None,
+        depends_on: None,
     })
 }
 
@@ -167,6 +171,7 @@ mod tests {
         name: "immich",
         target: "https://immich.example.net/",
         service: Some("immich"),
+        via_peer: None,
     };
 
     fn problem(key: &str, subject: &str, opened_at: i64) -> Problem {
@@ -181,6 +186,7 @@ mod tests {
             service: None,
             opened_at,
             event_id: 1,
+            depends_on: None,
         }
     }
 

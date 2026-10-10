@@ -100,6 +100,50 @@ impl FloodGuard {
     }
 }
 
+/// Openings held back because a peer they go through is unreachable: when
+/// Jupiter is down, every public site Pluto checks fails too, and the one
+/// thing worth saying is "jupiter isn't answering". Each is let through once
+/// the peer is back and has settled, if its problem is still open; one that
+/// cleared meanwhile says nothing, opening or recovery.
+#[derive(Default)]
+pub struct PeerHolds {
+    /// By problem key: the opening, and the peer it waits on.
+    held: HashMap<String, (Event, String)>,
+}
+
+impl PeerHolds {
+    /// Whether to hold `e`, an event whose problem depends on `peer`.
+    pub fn hold(&mut self, e: &Event, peer: Option<&str>, explains: impl Fn(&str) -> bool) -> bool {
+        let (Some(p), Some(peer)) = (&e.problem, peer) else {
+            return false;
+        };
+        if p.state != ProblemState::Opened || !explains(peer) {
+            return false;
+        }
+        self.held.insert(p.key.clone(), (e.clone(), peer.to_string()));
+        true
+    }
+
+    /// A resolution of a held opening, which nobody heard: say nothing.
+    pub fn cleared(&mut self, e: &Event) -> bool {
+        matches!(&e.problem, Some(p) if p.state == ProblemState::Resolved && self.held.remove(&p.key).is_some())
+    }
+
+    /// Held openings whose peer no longer explains them and whose problem is
+    /// still open, now due. Ones that closed are forgotten.
+    pub fn release(&mut self, still_open: impl Fn(&str) -> bool, explains: impl Fn(&str) -> bool) -> Vec<Event> {
+        self.held.retain(|key, _| still_open(key));
+        let due: Vec<String> = self.held
+            .iter()
+            .filter(|(_, (_, peer))| !explains(peer))
+            .map(|(key, _)| key.clone())
+            .collect();
+        due.into_iter()
+            .filter_map(|k| self.held.remove(&k).map(|(e, _)| e))
+            .collect()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -218,5 +262,50 @@ mod tests {
     fn a_recovery_after_a_restart_is_sent() {
         let mut g = FloodGuard::default();
         assert!(g.allow(1, &resolved(), 0));
+    }
+
+    fn site_down(key: &str, state: ProblemState) -> Event {
+        Event {
+            id: 1,
+            at: 0,
+            category: EventCategory::Uptime,
+            kind: "down".into(),
+            severity: Severity::Error,
+            subject: "photos".into(),
+            title: "photos is down".into(),
+            detail: None,
+            actor: None,
+            service: None,
+            problem: Some(ProblemRef { key: key.into(), state }),
+        }
+    }
+
+    #[test]
+    fn an_opening_waits_while_its_peer_is_down() {
+        let mut holds = PeerHolds::default();
+        let down = |_: &str| true;
+        let up = |_: &str| false;
+        let open = site_down("uptime:3:down", ProblemState::Opened);
+
+        assert!(!holds.hold(&open, None, down), "no peer, nothing to wait for");
+        assert!(!holds.hold(&open, Some("jupiter"), up), "the peer is fine: send it");
+        assert!(holds.hold(&open, Some("jupiter"), down));
+
+        assert!(holds.release(|_| true, down).is_empty(), "still waiting");
+        let due = holds.release(|_| true, up);
+        assert_eq!(due, vec![open], "the peer is back and it's still down");
+        assert!(holds.release(|_| true, up).is_empty(), "once");
+    }
+
+    #[test]
+    fn a_held_opening_that_clears_says_nothing() {
+        let mut holds = PeerHolds::default();
+        let open = site_down("uptime:3:down", ProblemState::Opened);
+        assert!(holds.hold(&open, Some("jupiter"), |_| true));
+        assert!(holds.cleared(&site_down("uptime:3:down", ProblemState::Resolved)));
+        assert!(!holds.cleared(&site_down("uptime:3:down", ProblemState::Resolved)), "only the held one");
+
+        assert!(holds.hold(&open, Some("jupiter"), |_| true));
+        assert!(holds.release(|_| false, |_| false).is_empty(), "closed before the peer came back");
     }
 }

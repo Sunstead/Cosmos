@@ -12,6 +12,7 @@ mod logs;
 mod meta;
 mod metrics;
 mod notify;
+mod peers;
 mod tailnet;
 mod updates;
 mod uptime;
@@ -71,6 +72,7 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/events", get(events::list))
         // Admin-only inside the handler, like the neighbours below.
         .route("/v1/notify", get(notify::get))
+        .route("/v1/peers", get(peers::list))
         .route("/v1/tailnet", get(tailnet::current))
         .route("/v1/uptime", get(uptime::list))
         .route("/v1/updates", get(updates::list))
@@ -86,10 +88,20 @@ pub fn router(state: AppState) -> Router {
     // it has one. It reveals only the version and capability flags.
     let public = Router::new()
         .route("/healthz", get(meta::healthz))
-        .route("/v1/info", get(meta::info));
+        .route("/v1/info", get(meta::info))
+        // Checks the peer token itself (see the handler).
+        .route("/v1/peer/heartbeat", post(peers::heartbeat));
 
     // The web UI, when bundled: public static files plus an SPA fallback.
-    let web = state.cfg.web.dir.as_deref().and_then(web::router).unwrap_or_default();
+    // Each peer's web UI is listed beside this one, so either seeds both.
+    let peer_uis: Vec<String> = state.cfg.peers
+        .iter()
+        .filter_map(|p| p.ui_url.clone().or_else(|| p.url.clone()))
+        .collect();
+    let web = state.cfg.web.dir
+        .as_deref()
+        .and_then(|dir| web::router(dir, peer_uis))
+        .unwrap_or_default();
 
     Router::new()
         .merge(read)

@@ -61,6 +61,7 @@ export const DEFAULT_META: NodeMeta = {
   principal: null,
   auth: null,
   agentVersion: null,
+  description: null,
   apiVersion: 0,
   error: null,
 };

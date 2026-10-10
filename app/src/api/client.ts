@@ -18,6 +18,7 @@ import { Capabilities } from '@/generated/Capabilities';
 import { TailnetStatus } from '@/generated/TailnetStatus';
 import { UpdatePolicy } from '@/generated/UpdatePolicy';
 import { UpdateRun } from '@/generated/UpdateRun';
+import { PeersResponse } from '@/generated/PeersResponse';
 import { UpdatesResponse } from '@/generated/UpdatesResponse';
 import { UptimeCheckInput } from '@/generated/UptimeCheckInput';
 import { UptimeEntry } from '@/generated/UptimeEntry';
@@ -80,6 +81,7 @@ export const LEGACY_CAPABILITIES: Capabilities = {
   backup_actions: false,
   updates: false,
   update_actions: false,
+  peers: false,
 };
 
 /**
@@ -196,6 +198,10 @@ export class AgentClient {
 
   getUptime(): Promise<UptimeResponse> {
     return this.request<UptimeResponse>('/v1/uptime');
+  }
+
+  getPeers(): Promise<PeersResponse> {
+    return this.request<PeersResponse>('/v1/peers');
   }
 
   getUpdates(): Promise<UpdatesResponse> {
