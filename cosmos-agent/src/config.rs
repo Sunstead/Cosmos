@@ -2,6 +2,11 @@
 //! overlay on top. Everything has a working default except auth: the agent
 //! refuses to start without an identity provider unless explicitly opened
 //! up with `allow_anonymous`.
+//!
+//! Any string in the file can name environment variables, `${NAME}` (`$$`
+//! for a dollar sign), so one file serves any domain: a deployment keeps
+//! its names in `.env` and passes them to the container. A variable that
+//! isn't set, or is empty, is an error.
 
 use serde::Deserialize;
 use std::{ net::SocketAddr, path::PathBuf };
@@ -476,8 +481,9 @@ impl Config {
     }
 
     /// Whether this version accepts the config at `path`, without the
-    /// environment overlay. For `--check-config`: an update workflow runs the
-    /// new image against the live config before switching to it.
+    /// `COSMOS_AGENT_*` overlay. For `--check-config`: an update workflow runs
+    /// the new image against the live config before switching to it. The
+    /// file's `${NAME}`s are still expanded, so the check needs them set.
     pub fn check_file(path: &str) -> Result<(), ConfigError> {
         let mut cfg = Self::from_file(path)?;
         cfg.migrate_deprecated()?;
@@ -490,9 +496,7 @@ impl Config {
         let text = std::fs
             ::read_to_string(path)
             .map_err(|source| ConfigError::Read { path: path.to_string(), source })?;
-        toml
-            ::from_str(&text)
-            .map_err(|source| ConfigError::Parse { path: path.to_string(), source })
+        parse(&text, path, |name| std::env::var(name).ok())
     }
 
     fn apply_env(&mut self) -> Result<(), ConfigError> {
@@ -702,8 +706,160 @@ fn env_bool(key: &str) -> Result<Option<bool>, ConfigError> {
     }
 }
 
+/// Parses a config file, expanding `${NAME}` in its strings through `lookup`.
+/// Strings are expanded after parsing, so TOML quoting is never in play; a
+/// file without a `$` is read directly, which keeps line numbers in errors.
+fn parse(
+    text: &str,
+    path: &str,
+    lookup: impl Fn(&str) -> Option<String>
+) -> Result<Config, ConfigError> {
+    let parse_err = |source| ConfigError::Parse { path: path.to_string(), source };
+    if !text.contains('$') {
+        return toml::from_str(text).map_err(parse_err);
+    }
+    let mut value = toml::Value::Table(toml::from_str(text).map_err(parse_err)?);
+    expand_value(&mut value, String::new(), &lookup)?;
+    value.try_into().map_err(parse_err)
+}
+
+fn expand_value(
+    value: &mut toml::Value,
+    key: String,
+    lookup: &impl Fn(&str) -> Option<String>
+) -> Result<(), ConfigError> {
+    match value {
+        toml::Value::String(s) => {
+            *s = expand(s, &key, lookup)?;
+        }
+        toml::Value::Array(items) => {
+            for (i, item) in items.iter_mut().enumerate() {
+                expand_value(item, format!("{key}[{i}]"), lookup)?;
+            }
+        }
+        toml::Value::Table(table) => {
+            for (k, item) in table.iter_mut() {
+                let key = if key.is_empty() { k.clone() } else { format!("{key}.{k}") };
+                expand_value(item, key, lookup)?;
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+/// `${NAME}` replaced by its value, `$$` by `$`; any other `$` is kept.
+fn expand(
+    s: &str,
+    key: &str,
+    lookup: &impl Fn(&str) -> Option<String>
+) -> Result<String, ConfigError> {
+    let mut out = String::with_capacity(s.len());
+    let mut rest = s;
+    while let Some(at) = rest.find('$') {
+        out.push_str(&rest[..at]);
+        let after = &rest[at + 1..];
+        if let Some(tail) = after.strip_prefix('$') {
+            out.push('$');
+            rest = tail;
+        } else if let Some(body) = after.strip_prefix('{') {
+            let end = body
+                .find('}')
+                .ok_or_else(|| ConfigError::Invalid(format!("{key}: an unclosed ${{ in {s:?}")))?;
+            let name = &body[..end];
+            let valid =
+                name.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_') &&
+                name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+            if !valid {
+                return Err(ConfigError::Invalid(format!("{key}: ${{{name}}} isn't a variable name")));
+            }
+            match lookup(name) {
+                Some(v) if !v.is_empty() => out.push_str(&v),
+                _ => {
+                    return Err(
+                        ConfigError::Invalid(
+                            format!("{key} uses ${{{name}}}, which isn't set in the agent's environment")
+                        )
+                    );
+                }
+            }
+            rest = &body[end + 1..];
+        } else {
+            out.push('$');
+            rest = after;
+        }
+    }
+    out.push_str(rest);
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
+    mod env_vars {
+        use super::super::*;
+
+        fn vars(name: &str) -> Option<String> {
+            match name {
+                "HOME_DOMAIN" => Some("home.example.com".into()),
+                "TAILNET" => Some("tail1234.ts.net".into()),
+                "EMPTY" => Some(String::new()),
+                _ => None,
+            }
+        }
+
+        #[test]
+        fn expands_strings_in_nested_tables_and_arrays() {
+            let text = r#"
+                [auth.oidc]
+                issuer = "https://auth.${HOME_DOMAIN}/application/o/cosmos/"
+                client_id = "cosmos"
+                [uptime]
+                local_domains = ["${HOME_DOMAIN}", "example.org"]
+                [[peers]]
+                name = "pluto"
+                ui_url = "https://pluto.${TAILNET}:7700"
+            "#;
+            let cfg = parse(text, "t.toml", vars).unwrap();
+            assert_eq!(
+                cfg.auth.oidc.unwrap().issuer,
+                "https://auth.home.example.com/application/o/cosmos/"
+            );
+            assert_eq!(cfg.uptime.local_domains, ["home.example.com", "example.org"]);
+            assert_eq!(cfg.peers[0].ui_url.as_deref(), Some("https://pluto.tail1234.ts.net:7700"));
+        }
+
+        #[test]
+        fn names_the_key_and_the_variable_that_is_missing() {
+            for missing in ["${NOPE}", "${EMPTY}"] {
+                let text = format!("[[peers]]\nname = \"jupiter\"\nurl = \"https://{missing}\"");
+                let err = parse(&text, "t.toml", vars).unwrap_err().to_string();
+                assert!(err.contains("peers[0].url"), "{err}");
+                assert!(err.contains(missing), "{err}");
+            }
+        }
+
+        #[test]
+        fn a_double_dollar_is_a_dollar_and_a_lone_one_stays() {
+            assert_eq!(expand("a$$b", "k", &vars).unwrap(), "a$b");
+            assert_eq!(expand("$${HOME_DOMAIN}", "k", &vars).unwrap(), "${HOME_DOMAIN}");
+            assert_eq!(expand("cost $5", "k", &vars).unwrap(), "cost $5");
+            assert!(expand("${HOME_DOMAIN", "k", &vars).is_err());
+            assert!(expand("${1X}", "k", &vars).is_err());
+        }
+
+        #[test]
+        fn keys_are_never_expanded() {
+            let err = parse("[\"${HOME_DOMAIN}\"]\nx = 1", "t.toml", vars).unwrap_err().to_string();
+            assert!(err.contains("${HOME_DOMAIN}"), "an unknown table, by its literal name: {err}");
+        }
+
+        #[test]
+        fn a_file_without_variables_parses_directly() {
+            let cfg = parse("node_name = \"jupiter\"", "t.toml", |_| None).unwrap();
+            assert_eq!(cfg.node_name.as_deref(), Some("jupiter"));
+        }
+    }
+
     use super::*;
 
     #[test]
@@ -845,9 +1001,9 @@ mod tests {
     #[test]
     fn parses_update_settings_and_hides_the_token() {
         let parse = |s: &str| toml::from_str::<Config>(s).unwrap();
-        let mut cfg = parse("[updates]\nrepo = \"Sunstead/Jupiter\"\nref = \"main\"\nmin_age_days = 5");
+        let mut cfg = parse("[updates]\nrepo = \"example/homelab\"\nref = \"main\"\nmin_age_days = 5");
         assert!(cfg.validate().is_ok());
-        assert_eq!(cfg.updates.repo.as_deref(), Some("Sunstead/Jupiter"));
+        assert_eq!(cfg.updates.repo.as_deref(), Some("example/homelab"));
         assert_eq!(cfg.updates.min_age_days, 5);
         assert!(parse("[updates]\nrepo = \"Jupiter\"").validate().is_err());
         assert!(toml::from_str::<Config>("[updates]\ntoken = \"x\"").is_err(), "never from the file");

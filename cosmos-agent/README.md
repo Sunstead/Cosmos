@@ -18,8 +18,8 @@ COSMOS_AGENT_ALLOW_ANONYMOUS=true COSMOS_AGENT_BIND=127.0.0.1:7700 cargo run -p 
 That runs it open, for development. Everything else has a working default
 except sign-in: a real agent needs an OpenID Connect provider (`[auth.oidc]`,
 or `COSMOS_AGENT_OIDC_ISSUER`) and refuses to start without one. See [`agent.example.toml`](agent.example.toml) for the full
-configuration, or [`cosmos-agent.jupiter.toml`](cosmos-agent.jupiter.toml) for
-a filled-in one.
+configuration. Any string in it can name environment variables, `${NAME}`, so
+domains and the like can live in your `.env` rather than in the file.
 
 ## Deploying to a Docker host
 
