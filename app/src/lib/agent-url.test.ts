@@ -32,8 +32,8 @@ describe('serviceHref', () => {
   it('adds https to the bare hostnames Docker labels carry', () => {
     // This is the real shape in compose/management.yml. Left bare, an href
     // resolves as a relative path and navigates inside the app.
-    expect(serviceHref('portainer.jupiter.sunstead.net')).toBe(
-      'https://portainer.jupiter.sunstead.net',
+    expect(serviceHref('portainer.home.example.com')).toBe(
+      'https://portainer.home.example.com',
     );
   });
 

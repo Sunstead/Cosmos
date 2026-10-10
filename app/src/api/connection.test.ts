@@ -344,7 +344,7 @@ describe('NodeConnection', () => {
   it('keeps actions for an admin', async () => {
     const { conn, metas } = connect({
       ...healthy,
-      '/v1/info': { body: agentInfo({ api_version: 2, principal: { name: 'pwb', admin: true } }) },
+      '/v1/info': { body: agentInfo({ api_version: 2, principal: { name: 'riley', admin: true } }) },
     });
     conn.start();
     await settle();

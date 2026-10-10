@@ -82,7 +82,7 @@ describe('keyState', () => {
 
 describe('machineName', () => {
   it('uses the MagicDNS name, since iOS says every device is localhost', () => {
-    expect(machineName({ name: 'localhost', dns_name: 'pwb-ipad-pro.tail1234.ts.net' })).toBe('pwb-ipad-pro');
+    expect(machineName({ name: 'localhost', dns_name: 'riley-ipad-pro.tail1234.ts.net' })).toBe('riley-ipad-pro');
     expect(machineName({ name: 'fresh', dns_name: '' })).toBe('fresh');
   });
 
@@ -91,11 +91,11 @@ describe('machineName', () => {
       {
         nodeId: 'n-jupiter',
         status: tailnetStatus({
-          devices: [tailnetDevice({ id: 'i', name: 'localhost', dns_name: 'pwb-ipad-pro.tail1234.ts.net' })],
+          devices: [tailnetDevice({ id: 'i', name: 'localhost', dns_name: 'riley-ipad-pro.tail1234.ts.net' })],
         }),
       },
     ]);
-    expect(ipad.name).toBe('pwb-ipad-pro');
+    expect(ipad.name).toBe('riley-ipad-pro');
   });
 });
 

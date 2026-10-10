@@ -346,7 +346,7 @@ pub(crate) mod tests {
             "iss": issuer,
             "aud": "cosmos",
             "sub": "abc123",
-            "preferred_username": "pwb",
+            "preferred_username": "riley",
             "groups": groups,
             "exp": now() + 600,
             "iat": now(),
@@ -371,7 +371,7 @@ pub(crate) mod tests {
 
         let admin = v.verify(&token("k1", claims(&p.issuer, &["homelab-users", "homelab-admins"]))).await.unwrap();
         assert!(admin.is_admin());
-        assert_eq!(admin.name, "pwb");
+        assert_eq!(admin.name, "riley");
         assert_eq!(admin.subject, "abc123");
 
         let viewer = v.verify(&token("k1", claims(&p.issuer, &["homelab-users"]))).await.unwrap();
