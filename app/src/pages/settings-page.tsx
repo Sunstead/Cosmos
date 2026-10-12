@@ -17,7 +17,8 @@ import { Badge } from '@sunstead/ui/components/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@sunstead/ui/components/popover';
 import { PAGES } from '@/lib/navigation';
 import { ShortcutId } from '@/lib/shortcuts';
-import { getPlatform } from '@/lib/platform';
+import { getPlatform, isDesktop } from '@/lib/platform';
+import { AppUpdateSettings } from '@/components/app-update-settings';
 import { ServerOff } from 'lucide-react';
 import { DeviceNotifications, NotificationChannels } from '@/components/notify-settings';
 import { ThemeSettings } from '@/components/theme-picker';
@@ -177,16 +178,23 @@ export function SettingsPage() {
         <ThemeSettings />
       </Section>
 
-      <Section title='About' contentClassName='grid gap-2 p-4 text-sm @4xl:grid-cols-2 @4xl:gap-8'>
-        <div className='flex justify-between'>
-          <span className='text-muted-foreground'>Version</span>
-          <span className='font-mono tabular-nums'>{__APP_VERSION__}</span>
-        </div>
-        <div className='flex justify-between'>
-          <span className='text-muted-foreground'>Platform</span>
-          <span>{PLATFORM_LABEL[getPlatform()]}</span>
-        </div>
-      </Section>
+      {isDesktop() ? (
+        // The desktop app updates itself; the web UI is its agent's version.
+        <Section title='About' contentClassName='divide-y'>
+          <AppUpdateSettings platform={PLATFORM_LABEL[getPlatform()]} />
+        </Section>
+      ) : (
+        <Section title='About' contentClassName='grid gap-2 p-4 text-sm @4xl:grid-cols-2 @4xl:gap-8'>
+          <div className='flex justify-between'>
+            <span className='text-muted-foreground'>Version</span>
+            <span className='font-mono tabular-nums'>{__APP_VERSION__}</span>
+          </div>
+          <div className='flex justify-between'>
+            <span className='text-muted-foreground'>Platform</span>
+            <span>{PLATFORM_LABEL[getPlatform()]}</span>
+          </div>
+        </Section>
+      )}
 
       <Section title='Keyboard shortcuts' contentClassName='grid @2xl:grid-cols-2'>
         {SHORTCUT_ROWS.map((r) => (

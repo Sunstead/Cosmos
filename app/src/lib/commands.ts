@@ -3,6 +3,8 @@ export function menuToCommand(menuId: string): string {
   switch (menuId) {
     case 'app.settings':
       return 'settings';
+    case 'app.check-for-updates':
+      return 'check-updates';
     case 'view.command-palette':
       return 'palette';
     case 'view.toggle-sidebar':

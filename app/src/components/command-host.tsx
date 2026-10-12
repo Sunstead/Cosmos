@@ -5,6 +5,7 @@ import { useUiStore } from '@/stores/ui';
 import { PAGES } from '@/lib/navigation';
 import { getPlatform } from '@/lib/platform';
 import { menuToCommand } from '@/lib/commands';
+import { useAppUpdate } from '@/stores/app-update';
 import {
   isOverlayTarget,
   isSequence,
@@ -55,6 +56,9 @@ export function CommandHost() {
           break;
         case 'reload':
           window.location.reload();
+          break;
+        case 'check-updates':
+          void useAppUpdate.getState().check({ manual: true });
           break;
       }
     };

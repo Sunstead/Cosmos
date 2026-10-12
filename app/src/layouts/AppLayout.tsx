@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { useEffect, type CSSProperties } from 'react';
 import { useMatches } from '@tanstack/react-router';
 import { AppSidebar } from '@/components/app-sidebar';
 import { TitleBar } from '@/components/title-bar';
@@ -7,6 +7,8 @@ import { WolWatcher } from '@/components/wol-watcher';
 import { NotificationWatcher } from '@/components/notification-watcher';
 import { AddNodeDialog } from '@/components/add-node';
 import { CommandPalette } from '@/components/command-palette';
+import { AppUpdateDialog } from '@/components/app-update-dialog';
+import { startBackgroundChecks } from '@/stores/app-update';
 import { SidebarInset, SidebarProvider } from '@sunstead/ui/components/resizable-sidebar';
 import { ScrollArea } from '@sunstead/ui/components/scroll-area';
 import { useStatusToasts } from '@/hooks/use-status-toasts';
@@ -32,6 +34,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const layout = matches.at(-1)?.staticData.layout ?? 'scroll';
   useStatusToasts();
   useUnreachableAlerts();
+  // Desktop only; a browser hears of a new version from the agent serving it.
+  useEffect(() => startBackgroundChecks(), []);
   // localStorage, not a cookie: cookies don't persist under Tauri's custom protocol.
   const [sidebarOpen, setSidebarOpen] = usePersistentState('cosmos-sidebar-open', true);
   const [sidebarWidth, setSidebarWidth] = usePersistentState('cosmos-sidebar-width', '18rem');
@@ -51,6 +55,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <NotificationWatcher />
       <AddNodeDialog />
       <CommandPalette />
+      <AppUpdateDialog />
       <TitleBar />
       <div className='relative flex min-h-0 w-full max-w-full flex-1'>
         <AppSidebar />

@@ -3,6 +3,7 @@ import { useNavigate } from '@tanstack/react-router';
 import {
   ArrowUpRight,
   ChevronLeft,
+  CircleArrowDown,
   Copy,
   Info,
   Logs,
@@ -14,6 +15,8 @@ import {
   RotateCcw,
   Square,
 } from 'lucide-react';
+import { useAppUpdate } from '@/stores/app-update';
+import { isDesktop } from '@/lib/platform';
 import {
   Command,
   CommandDialog,
@@ -231,6 +234,14 @@ export function CommandPalette() {
                     <ShortcutKeys id='sidebar' />
                   </CommandShortcut>
                 </CommandItem>
+                {isDesktop() && (
+                  <CommandItem
+                    value='check for app updates cosmos version'
+                    onSelect={go(() => void useAppUpdate.getState().check({ manual: true }))}
+                  >
+                    <CircleArrowDown /> Check for app updates
+                  </CommandItem>
+                )}
               </CommandGroup>
 
               {wakeable.length > 0 && (

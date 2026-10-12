@@ -38,6 +38,12 @@ base64 = "0.22"
 getrandom = "0.3"
 url = "2"
 
+# In-app updates from GitHub releases, and the relaunch after one. A phone
+# updates through its store.
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
