@@ -29,7 +29,7 @@ export function AppSidebar() {
   const followed = () => isMobile && setOpenMobile(false);
 
   return (
-    <Sidebar collapsible='icon' className='chrome border-r-0'>
+    <Sidebar collapsible='icon' className='chrome group-data-[side=left]:border-r-0'>
       <SidebarContent className='gap-0 pt-1 in-data-[mobile=true]:pt-3'>
         {NAV_GROUPS.map((group, i) => (
           <SidebarGroup key={group.label ?? i} className='px-2 py-1.5'>
