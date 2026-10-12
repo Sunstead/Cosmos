@@ -237,8 +237,11 @@ round and inset from the edges; the current page is a fill
 (`sidebar-accent`), never an edge bar, and the rest are `muted-foreground`
 so the fill reads in light themes too. Collapsed, each icon is centred in
 the 4rem rail, under the title bar's toggle and over the avatar. The sidebar has no border of its own
-(`border-r-0` over the package's): it runs into the title bar, and `<main>`'s
-`border-t border-l` with its rounded top-left corner draw the only edge.
+(`group-data-[side=left]:border-r-0`, the package's own variant, so `cn`
+replaces its `border-r`; a plain `border-r-0` is less specific and loses,
+which drew a second line in 0.12.0): it runs into the title bar, and
+`<main>`'s `border-t border-l` with its rounded top-left corner draw the
+only edge.
 Routes are lazy (`lazyRouteComponent`) and pick a layout through
 `staticData.layout`: `scroll` (default), `fill` (logs) or `bleed` (constellation:
 no padding, no header, edge to edge in `<main>`). The body never
