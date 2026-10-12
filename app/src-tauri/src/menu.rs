@@ -49,6 +49,7 @@ fn item<R: Runtime>(
 pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let app_menu = SubmenuBuilder::new(app, "Cosmos")
         .about(None)
+        .item(&item(app, "app.check-for-updates", "Check for App Updates…", None)?)
         .separator()
         .item(&item(app, "app.settings", "Settings…", Some("CmdOrCtrl+,"))?)
         .separator()

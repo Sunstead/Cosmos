@@ -389,6 +389,21 @@ text field, dialog or menu; the macOS Go menu has no accelerators because a
 menu can't show a sequence. Keep non-component exports out of component files
 (hooks in `hooks/`, data and helpers in `lib/`), or fast refresh lint warns.
 
+**App updates** (not the Updates page, which is about service images). The
+desktop app updates itself with `tauri-plugin-updater` from `latest.json` on
+the newest *published, full* GitHub release (`plugins.updater` in
+`tauri.conf.json`); tag builds sign the bundles (`tauri.updater.conf.json`,
+the `TAURI_SIGNING_*` secrets, see RELEASING.md). `lib/app-update.ts` wraps
+the plugins (imported lazily, so the web bundle never loads them) and
+`stores/app-update.ts` owns the state: a check 10 s after launch and every
+6 h while `autoCheck` is on (persisted), a quiet failure for background
+checks and the dialog for manual ones, Later per version. The title bar's
+`AppUpdateIndicator`, `AppUpdateDialog`, **Check for App Updates…** in the
+macOS app menu, the palette and Settings > About drive it. Desktop only (a
+phone updates through its store): in a browser the same indicator appears
+when the agent serving the page (`servedUpdate`: the node on this origin)
+reports a newer version than `__APP_VERSION__`, and offers a reload.
+
 **Cosmos mark.** `app/scripts/build-mark.mjs` (`npm run build:mark`) turns the
 two Inkscape sources (`icon_simple.svg` light ink, `icon_simple_dark.svg` dark
 ink) into `public/favicon.svg`, which carries both palettes and switches on

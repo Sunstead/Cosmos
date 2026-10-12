@@ -23,6 +23,13 @@ pub fn run() {
             ]
         );
 
+    // Updates come from GitHub releases (`plugins.updater` in
+    // tauri.conf.json); a phone updates through its store.
+    #[cfg(desktop)]
+    let builder = builder
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init());
+
     // macOS only: on Windows and Linux a menu becomes a menubar under our
     // custom title bar.
     #[cfg(target_os = "macos")]
