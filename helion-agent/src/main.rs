@@ -13,6 +13,7 @@ mod docker;
 mod error;
 mod events;
 mod history;
+mod labels;
 mod notify;
 mod peers;
 mod sample;

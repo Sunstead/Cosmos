@@ -97,7 +97,7 @@ jobs:
           # An issuer nothing answers at: the agent must still start and
           # refuse unauthenticated reads.
           docker run -d --name smoke -p 7700:7700 \
-            -e HELION_AGENT_OIDC_ISSUER=http://127.0.0.1:9/application/o/cosmos/ \
+            -e HELION_AGENT_OIDC_ISSUER=http://127.0.0.1:9/application/o/helion/ \
             -v smoke_data:/var/lib/helion-agent helion-agent:test
           for i in $(seq 30); do curl -fsS localhost:7700/healthz >/dev/null && break; sleep 1; done
 
@@ -110,6 +110,26 @@ jobs:
           docker logs smoke 2>&1 | tee agent.log
           grep -q 'metrics history enabled' agent.log
           if grep -q $'\x1b' agent.log; then echo 'ANSI escapes in docker logs' >&2; exit 1; fi
+          if grep -q 'deprecated' agent.log; then echo 'the current names must not warn' >&2; exit 1; fi
+          docker rm -f smoke >/dev/null
+
+          # What 0.13 and older deployments pass must keep working: COSMOS_
+          # variables, a volume at the old data path and cosmos.* labels.
+          docker run -d --name legacy_svc --label cosmos.service=legacy-svc busybox sleep 300
+          docker run -d --name smoke_legacy -p 7700:7700 \
+            --group-add "$(stat -c %g /var/run/docker.sock)" \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -e COSMOS_AGENT_ALLOW_ANONYMOUS=true \
+            -e COSMOS_NODE_NAME=legacy \
+            -v smoke_legacy_data:/var/lib/cosmos-agent helion-agent:test
+          for i in $(seq 30); do curl -fsS localhost:7700/healthz >/dev/null && break; sleep 1; done
+          curl -fsS localhost:7700/v1/info | grep '"node_name":"legacy"' >/dev/null
+          for i in $(seq 15); do curl -fsS localhost:7700/v1/containers | grep '"helion_service":"legacy-svc"' >/dev/null && break; sleep 1; done
+          curl -fsS localhost:7700/v1/containers | grep '"helion_service":"legacy-svc"' >/dev/null
+          docker logs smoke_legacy 2>&1 | tee legacy.log
+          grep -q 'COSMOS_NODE_NAME is deprecated; rename it to HELION_NODE_NAME' legacy.log
+          grep -q 'cosmos.service is deprecated; rename it to helion.service' legacy.log
+          docker rm -f smoke_legacy legacy_svc >/dev/null
 
       - name: Push
         if: github.event_name != 'pull_request'

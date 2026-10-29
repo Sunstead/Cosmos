@@ -51,10 +51,10 @@
           return has(aliases, id) ? aliases[id] : id;
         };
         try {
-          var t = alias(localStorage.getItem('helion-theme') || 'sunstead-dark');
+          var t = alias(localStorage.getItem('helion-theme') || localStorage.getItem('cosmos-theme') || 'sunstead-dark');
           if (t === 'system') {
             var s = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-            t = alias(localStorage.getItem('helion-theme-' + s));
+            t = alias(localStorage.getItem('helion-theme-' + s) || localStorage.getItem('cosmos-theme-' + s));
             if (!info(t) || info(t)[0] !== s) t = 'sunstead-' + s;
           }
           if (!info(t)) t = 'sunstead-dark';

@@ -9,7 +9,12 @@
 //! isn't set, or is empty, is an error.
 
 use serde::Deserialize;
-use std::{ net::SocketAddr, path::PathBuf };
+use std::{ net::SocketAddr, path::{ Path, PathBuf } };
+
+/// Where the databases live unless the config says otherwise.
+const DATA_DIR: &str = "/var/lib/helion-agent";
+/// Where 0.13 and older kept them.
+const LEGACY_DATA_DIR: &str = "/var/lib/cosmos-agent";
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
@@ -370,7 +375,7 @@ impl Default for HistoryConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            path: PathBuf::from("/var/lib/helion-agent/metrics.db"),
+            path: Path::new(DATA_DIR).join("metrics.db"),
             flush_interval_secs: 10,
             retain_1s_secs: 3_600, // 1 hour
             retain_1m_secs: 604_800, // 7 days
@@ -424,7 +429,7 @@ impl Default for UptimeConfig {
 
 impl Default for StateConfig {
     fn default() -> Self {
-        Self { path: PathBuf::from("/var/lib/helion-agent/state.db") }
+        Self { path: Path::new(DATA_DIR).join("state.db") }
     }
 }
 
@@ -449,14 +454,16 @@ impl Config {
     /// Reads the TOML file named by `HELION_AGENT_CONFIG` (if set and present),
     /// then applies the environment overlay, then validates.
     pub fn load() -> Result<Self, ConfigError> {
-        let mut cfg = match std::env::var("HELION_AGENT_CONFIG").ok() {
+        let get = |name: &str| std::env::var(name).ok();
+        let mut cfg = match env(&get, "HELION_AGENT_CONFIG") {
             Some(path) => Self::from_file(&path)?,
             // No config file is a perfectly good way to run the agent: the
-            // defaults plus COSMOS_AGENT_TOKEN are enough.
+            // defaults plus the environment are enough.
             None => Self::default(),
         };
         cfg.migrate_deprecated()?;
-        cfg.apply_env()?;
+        cfg.apply_env(&get)?;
+        cfg.use_legacy_data_dir(|p| p.exists());
         cfg.validate()?;
         Ok(cfg)
     }
@@ -499,25 +506,26 @@ impl Config {
         parse(&text, path, |name| std::env::var(name).ok())
     }
 
-    fn apply_env(&mut self) -> Result<(), ConfigError> {
-        if let Ok(v) = std::env::var("HELION_NODE_NAME") {
+    /// The environment overlay. `get` is the process environment in
+    /// production and a map in tests.
+    fn apply_env(&mut self, get: Getter) -> Result<(), ConfigError> {
+        if let Some(v) = env(get, "HELION_NODE_NAME") {
             self.node_name = Some(v);
         }
-        if let Ok(v) = std::env::var("HELION_AGENT_BIND") {
+        if let Some(v) = env(get, "HELION_AGENT_BIND") {
             self.server.bind = v
                 .parse()
                 .map_err(|_| ConfigError::Invalid(format!("HELION_AGENT_BIND is not an address: {v}")))?;
         }
-        if let Ok(v) = std::env::var("COSMOS_AGENT_TOKEN") {
+        // Only to reject a pre-0.3 setup with an explanation (see `auth_mode`).
+        if let Some(v) = get("COSMOS_AGENT_TOKEN") {
             self.auth.token = Some(v);
         }
-        if let Ok(v) = std::env::var("COSMOS_AGENT_TOKEN_FILE") {
+        if let Some(v) = get("COSMOS_AGENT_TOKEN_FILE") {
             self.auth.token_file = Some(PathBuf::from(v));
         }
-        if let Ok(issuer) = std::env::var("HELION_AGENT_OIDC_ISSUER") {
-            let client_id = std::env
-                ::var("HELION_AGENT_OIDC_CLIENT_ID")
-                .unwrap_or_else(|_| "helion".into());
+        if let Some(issuer) = env(get, "HELION_AGENT_OIDC_ISSUER") {
+            let client_id = env(get, "HELION_AGENT_OIDC_CLIENT_ID").unwrap_or_else(|| "helion".into());
             let oidc = self.auth.oidc.get_or_insert_with(|| OidcConfig {
                 issuer: issuer.clone(),
                 client_id: client_id.clone(),
@@ -529,33 +537,53 @@ impl Config {
             oidc.issuer = issuer;
             oidc.client_id = client_id;
         }
-        if let Some(v) = env_bool("HELION_AGENT_ALLOW_ACTIONS")? {
+        if let Some(v) = env_bool(get, "HELION_AGENT_ALLOW_ACTIONS")? {
             self.allow_actions = v;
         }
-        if let Some(v) = env_bool("HELION_AGENT_ALLOW_ANONYMOUS")? {
+        if let Some(v) = env_bool(get, "HELION_AGENT_ALLOW_ANONYMOUS")? {
             self.auth.allow_anonymous = v;
         }
-        if let Ok(v) = std::env::var("HELION_AGENT_DOCKER_SOCKET") {
+        if let Some(v) = env(get, "HELION_AGENT_DOCKER_SOCKET") {
             self.docker.socket = v;
         }
-        if let Some(v) = env_bool("HELION_AGENT_HISTORY")? {
+        if let Some(v) = env_bool(get, "HELION_AGENT_HISTORY")? {
             self.history.enabled = v;
         }
-        if let Ok(v) = std::env::var("HELION_AGENT_HISTORY_PATH") {
+        if let Some(v) = env(get, "HELION_AGENT_HISTORY_PATH") {
             self.history.path = PathBuf::from(v);
         }
-        if let Ok(v) = std::env::var("HELION_AGENT_GITHUB_TOKEN") {
+        if let Some(v) = env(get, "HELION_AGENT_GITHUB_TOKEN") {
             let v = v.trim().to_string();
             self.updates.token = (!v.is_empty()).then_some(crate::updates::github::Secret(v));
         }
-        if let Ok(v) = std::env::var("HELION_AGENT_PEER_TOKEN") {
+        if let Some(v) = env(get, "HELION_AGENT_PEER_TOKEN") {
             let v = v.trim().to_string();
             self.peer_token = (!v.is_empty()).then_some(crate::peers::PeerToken(v));
         }
-        if let Ok(v) = std::env::var("HELION_AGENT_WEB_DIR") {
+        if let Some(v) = env(get, "HELION_AGENT_WEB_DIR") {
             self.web.dir = (!v.is_empty()).then(|| PathBuf::from(v));
         }
         Ok(())
+    }
+
+    /// 0.13 and older kept their databases in `/var/lib/cosmos-agent`. The image
+    /// has both directories, so a deployment that still mounts its volume at
+    /// the old path would otherwise start on an empty history in the new one.
+    /// Only the default locations move, and only when the old database is
+    /// there and the new one isn't.
+    fn use_legacy_data_dir(&mut self, exists: impl Fn(&Path) -> bool) {
+        for (path, file) in [(&mut self.history.path, "metrics.db"), (&mut self.state.path, "state.db")] {
+            let current = Path::new(DATA_DIR).join(file);
+            let legacy = Path::new(LEGACY_DATA_DIR).join(file);
+            if *path == current && !exists(&current) && exists(&legacy) {
+                tracing::warn!(
+                    "{} is where the data used to live; using it. Move it to {} or set the path in the config",
+                    legacy.display(),
+                    current.display()
+                );
+                *path = legacy;
+            }
+        }
     }
 
     fn validate(&self) -> Result<(), ConfigError> {
@@ -694,10 +722,25 @@ pub enum AuthMode {
     },
 }
 
-fn env_bool(key: &str) -> Result<Option<bool>, ConfigError> {
-    match std::env::var(key) {
-        Err(_) => Ok(None),
-        Ok(v) =>
+type Getter<'a> = &'a dyn Fn(&str) -> Option<String>;
+
+/// Reads a `HELION_…` variable, or failing that the same name under the
+/// `COSMOS_` prefix that 0.13 and older used, warning that the old one is
+/// deprecated. The new name wins when both are set.
+fn env(get: Getter, name: &str) -> Option<String> {
+    if let Some(v) = get(name) {
+        return Some(v);
+    }
+    let legacy = name.replacen("HELION_", "COSMOS_", 1);
+    let v = get(&legacy)?;
+    tracing::warn!("{legacy} is deprecated; rename it to {name}");
+    Some(v)
+}
+
+fn env_bool(get: Getter, key: &str) -> Result<Option<bool>, ConfigError> {
+    match env(get, key) {
+        None => Ok(None),
+        Some(v) =>
             match v.trim().to_ascii_lowercase().as_str() {
                 "1" | "true" | "yes" | "on" => Ok(Some(true)),
                 "0" | "false" | "no" | "off" => Ok(Some(false)),
@@ -1037,5 +1080,137 @@ mod tests {
             ::from_str("allow_actions = true\n[docker]\nallow_actions = false")
             .unwrap();
         assert!(cfg.migrate_deprecated().is_err());
+    }
+
+    /// The overlay with only the given variables set.
+    fn overlay(vars: &[(&str, &str)]) -> Result<Config, ConfigError> {
+        let get = |name: &str| vars.iter().find(|(k, _)| *k == name).map(|(_, v)| v.to_string());
+        let mut cfg = Config::default();
+        cfg.apply_env(&get)?;
+        Ok(cfg)
+    }
+
+    #[test]
+    fn the_environment_overlay_takes_helion_names() {
+        let cfg = overlay(
+            &[
+                ("HELION_NODE_NAME", "pluto"),
+                ("HELION_AGENT_BIND", "127.0.0.1:9000"),
+                ("HELION_AGENT_ALLOW_ACTIONS", "yes"),
+                ("HELION_AGENT_HISTORY_PATH", "/tmp/h.db"),
+                ("HELION_AGENT_WEB_DIR", "/web"),
+            ]
+        ).unwrap();
+        assert_eq!(cfg.node_name.as_deref(), Some("pluto"));
+        assert_eq!(cfg.server.bind.to_string(), "127.0.0.1:9000");
+        assert!(cfg.allow_actions);
+        assert_eq!(cfg.history.path, PathBuf::from("/tmp/h.db"));
+        assert_eq!(cfg.web.dir, Some(PathBuf::from("/web")));
+    }
+
+    #[test]
+    fn the_environment_overlay_still_takes_cosmos_names() {
+        let cfg = overlay(
+            &[
+                ("COSMOS_NODE_NAME", "jupiter"),
+                ("COSMOS_AGENT_BIND", "127.0.0.1:9001"),
+                ("COSMOS_AGENT_OIDC_ISSUER", "https://auth.example/application/o/cosmos/"),
+                ("COSMOS_AGENT_OIDC_CLIENT_ID", "cosmos"),
+                ("COSMOS_AGENT_ALLOW_ANONYMOUS", "true"),
+                ("COSMOS_AGENT_HISTORY", "off"),
+                ("COSMOS_AGENT_HISTORY_PATH", "/tmp/old.db"),
+                ("COSMOS_AGENT_GITHUB_TOKEN", " ghp_x "),
+                ("COSMOS_AGENT_PEER_TOKEN", &"p".repeat(32)),
+            ]
+        ).unwrap();
+        assert_eq!(cfg.node_name.as_deref(), Some("jupiter"));
+        assert_eq!(cfg.server.bind.to_string(), "127.0.0.1:9001");
+        let oidc = cfg.auth.oidc.expect("issuer from the old name");
+        assert_eq!((oidc.issuer.as_str(), oidc.client_id.as_str()), ("https://auth.example/application/o/cosmos/", "cosmos"));
+        assert!(cfg.auth.allow_anonymous);
+        assert!(!cfg.history.enabled, "HISTORY is not mistaken for HISTORY_PATH");
+        assert_eq!(cfg.history.path, PathBuf::from("/tmp/old.db"));
+        assert_eq!(cfg.updates.token.map(|t| t.0), Some("ghp_x".to_string()));
+        assert_eq!(cfg.peer_token.map(|t| t.0.len()), Some(32));
+    }
+
+    #[test]
+    fn the_new_name_wins_when_both_are_set() {
+        let cfg = overlay(&[("COSMOS_AGENT_DOCKER_SOCKET", "/old.sock"), ("HELION_AGENT_DOCKER_SOCKET", "/new.sock")]).unwrap();
+        assert_eq!(cfg.docker.socket, "/new.sock");
+        let cfg = overlay(&[("COSMOS_AGENT_ALLOW_ACTIONS", "true"), ("HELION_AGENT_ALLOW_ACTIONS", "false")]).unwrap();
+        assert!(!cfg.allow_actions);
+    }
+
+    #[test]
+    fn a_bad_legacy_value_names_the_current_variable() {
+        let err = overlay(&[("COSMOS_AGENT_ALLOW_ACTIONS", "maybe")]).unwrap_err().to_string();
+        assert!(err.contains("HELION_AGENT_ALLOW_ACTIONS"), "{err}");
+    }
+
+    #[test]
+    fn there_is_no_helion_agent_token() {
+        let cfg = overlay(&[("HELION_AGENT_TOKEN", "s3cret")]).unwrap();
+        assert_eq!(cfg.auth.token, None);
+        let cfg = overlay(&[("COSMOS_AGENT_TOKEN", "s3cret")]).unwrap();
+        assert!(cfg.auth_mode().unwrap_err().to_string().contains("COSMOS_AGENT_TOKEN"));
+    }
+
+    #[test]
+    fn a_new_install_defaults_to_the_helion_client_id() {
+        let cfg = overlay(&[("HELION_AGENT_OIDC_ISSUER", "https://auth.example/application/o/helion/")]).unwrap();
+        assert_eq!(cfg.auth.oidc.unwrap().client_id, "helion");
+    }
+
+    #[test]
+    fn peers_need_the_token_under_either_name() {
+        let peers = r#"
+            [[peers]]
+            name = "jupiter"
+            url = "https://helion.example.com"
+        "#;
+        let long = "t".repeat(32);
+        for (vars, ok) in [
+            (vec![], false),
+            (vec![("HELION_AGENT_PEER_TOKEN", long.as_str())], true),
+            (vec![("COSMOS_AGENT_PEER_TOKEN", long.as_str())], true),
+            (vec![("COSMOS_AGENT_PEER_TOKEN", "short")], false),
+            (vec![("HELION_AGENT_PEER_TOKEN", ""), ("COSMOS_AGENT_PEER_TOKEN", "")], false),
+        ] {
+            let mut cfg: Config = toml::from_str(peers).unwrap();
+            let get = |name: &str| vars.iter().find(|(k, _)| *k == name).map(|(_, v)| v.to_string());
+            cfg.apply_env(&get).unwrap();
+            assert_eq!(cfg.peers_ready().is_ok(), ok, "{vars:?}");
+        }
+        let err = Config { peers: toml::from_str::<Config>(peers).unwrap().peers, ..Config::default() }
+            .peers_ready()
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("HELION_AGENT_PEER_TOKEN"), "{err}");
+    }
+
+    #[test]
+    fn data_stays_in_the_old_directory_until_the_new_one_has_a_database() {
+        let both = |_: &Path| true;
+        let neither = |_: &Path| false;
+        let only_old = |p: &Path| p.starts_with(LEGACY_DATA_DIR);
+
+        let mut cfg = Config::default();
+        cfg.use_legacy_data_dir(only_old);
+        assert_eq!(cfg.history.path, PathBuf::from("/var/lib/cosmos-agent/metrics.db"));
+        assert_eq!(cfg.state.path, PathBuf::from("/var/lib/cosmos-agent/state.db"));
+
+        for exists in [&both as &dyn Fn(&Path) -> bool, &neither] {
+            let mut cfg = Config::default();
+            cfg.use_legacy_data_dir(exists);
+            assert_eq!(cfg.history.path, PathBuf::from("/var/lib/helion-agent/metrics.db"));
+            assert_eq!(cfg.state.path, PathBuf::from("/var/lib/helion-agent/state.db"));
+        }
+
+        let mut cfg = Config::default();
+        cfg.history.path = PathBuf::from("/data/custom.db");
+        cfg.use_legacy_data_dir(only_old);
+        assert_eq!(cfg.history.path, PathBuf::from("/data/custom.db"), "an explicit path is left alone");
+        assert_eq!(cfg.state.path, PathBuf::from("/var/lib/cosmos-agent/state.db"));
     }
 }

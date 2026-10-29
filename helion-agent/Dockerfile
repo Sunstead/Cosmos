@@ -41,6 +41,9 @@ COPY --from=build /helion-agent /usr/local/bin/helion-agent
 # directory's ownership, so without it the volume is root-owned and the
 # non-root agent can't create its database.
 COPY --from=build --chown=65532:65532 /data /var/lib/helion-agent
+# The path before the rename (0.13 and older). A deployment that still mounts
+# its volume here needs the same ownership; the agent finds its databases there.
+COPY --from=build --chown=65532:65532 /data /var/lib/cosmos-agent
 COPY --from=web /src/app/dist /usr/share/helion-agent/web
 ENV HELION_AGENT_WEB_DIR=/usr/share/helion-agent/web
 USER 65532:65532

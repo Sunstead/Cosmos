@@ -59,7 +59,7 @@ impl DockerEvent {
             name: attr("name")?,
             image: attr("image"),
             exit_code: attr("exitCode").and_then(|c| c.parse().ok()),
-            service: attr("helion.service"),
+            service: attrs.and_then(|a| crate::labels::label(a, "service")),
         })
     }
 }
@@ -605,6 +605,12 @@ mod tests {
         assert_eq!(e.exit_code, Some(2));
         assert_eq!(e.service.as_deref(), Some("gitea"));
         assert_eq!(e.image.as_deref(), Some("gitea/gitea:1.27.3"));
+
+        let mut legacy = msg.clone();
+        let attrs = legacy.actor.as_mut().and_then(|a| a.attributes.as_mut()).unwrap();
+        attrs.remove("helion.service");
+        attrs.insert("cosmos.service".into(), "gitea".into());
+        assert_eq!(DockerEvent::from_message(&legacy).unwrap().service.as_deref(), Some("gitea"));
 
         let volume = EventMessage { typ: Some(EventMessageTypeEnum::VOLUME), ..msg };
         assert_eq!(DockerEvent::from_message(&volume), None);

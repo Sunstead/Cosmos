@@ -95,6 +95,8 @@ export default async function globalSetup() {
       HELION_AGENT_BIND: `127.0.0.1:${port}`,
       // Signs in against the mock provider, exactly as against Authentik.
       HELION_AGENT_OIDC_ISSUER: oidc.issuer,
+      // Jupiter's Authentik client is still called `cosmos`; the mock answers to it.
+      HELION_AGENT_OIDC_CLIENT_ID: 'cosmos',
       HELION_AGENT_HISTORY_PATH: path.join(dir, 'history.db'),
       // Wake-on-LAN specs need it. No spec starts or stops a container.
       HELION_AGENT_ALLOW_ACTIONS: '1',

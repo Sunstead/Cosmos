@@ -17,6 +17,9 @@ type SvgComponent = ComponentType<SVGProps<SVGSVGElement>>;
 const ICONS: Record<string, SvgComponent> = {
   'helion-agent': HelionIcon,
   helion: HelionIcon,
+  // Before the rename: containers and labels in deployments that haven't moved.
+  'cosmos-agent': HelionIcon,
+  cosmos: HelionIcon,
   gitea: GiteaIcon,
   nextcloud: NextcloudIcon,
   immich: ImmichIcon,

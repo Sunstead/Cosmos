@@ -238,14 +238,10 @@ impl DockerProbe {
             restart_count,
             compose_project: labels.get("com.docker.compose.project").cloned(),
             compose_service: labels.get("com.docker.compose.service").cloned(),
-            update_labels: labels
-                .iter()
-                .filter(|(k, _)| k.as_str() == "helion.update" || k.starts_with("helion.update."))
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect(),
-            helion_service: labels.get("helion.service").cloned(),
-            helion_service_description: labels.get("helion.service.description").cloned(),
-            helion_service_url: labels.get("helion.service.url").cloned(),
+            update_labels: crate::labels::update_labels(&labels),
+            helion_service: crate::labels::label(&labels, "service"),
+            helion_service_description: crate::labels::label(&labels, "service.description"),
+            helion_service_url: crate::labels::label(&labels, "service.url"),
             cpu_pct,
             mem_used_bytes,
             mem_limit_bytes,
@@ -335,7 +331,7 @@ pub async fn sample_volumes(docker: &Docker) -> Result<VolumeSnapshot, bollard::
         .into_iter()
         .map(|v| VolumeInfo {
             compose_project: v.labels.get("com.docker.compose.project").cloned(),
-            helion_service: v.labels.get("helion.service").cloned(),
+            helion_service: crate::labels::label(&v.labels, "service"),
             scope: v.scope.and_then(|s| {
                 match s {
                     VolumeScopeEnum::LOCAL => Some("local".to_string()),

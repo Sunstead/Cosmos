@@ -47,7 +47,7 @@ pub async fn get_volumes() -> VolumesResponse {
         .into_iter()
         .map(|v| {
             let compose_project = v.labels.get("com.docker.compose.project").cloned();
-            let helion_service = v.labels.get("helion.service").cloned();
+            let helion_service = crate::labels::label(&v.labels, "service");
 
             let scope = v.scope.and_then(|s| match s {
                 VolumeScopeEnum::LOCAL => Some("local".to_string()),
