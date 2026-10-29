@@ -1,12 +1,12 @@
 # Releasing
 
-Cosmos has one version for everything it ships: the agent, the web UI it
+Helion has one version for everything it ships: the agent, the web UI it
 serves (Settings shows the version) and the desktop app. One command cuts a
 release, and two tags from it build the two outputs:
 
 | Tag | Workflow | Output |
 |---|---|---|
-| `v<version>` | Agent image | `ghcr.io/sunstead/cosmos-agent:<version>` and `:<major.minor>`, web UI included |
+| `v<version>` | Agent image | `ghcr.io/sunstead/helion-agent:<version>` and `:<major.minor>`, web UI included |
 | `app-v<version>` | App release | Draft GitHub Release with macOS and Windows installers |
 
 Pushes to `main` also publish the agent as `:latest`, but nothing runs that:
@@ -15,8 +15,8 @@ Jupiter pins a version.
 ## Cutting a release
 
 The version lives in `app/package.json` (`tauri.conf.json` reads it from
-there), `app/src-tauri/Cargo.toml`, `cosmos-agent/Cargo.toml` and
-`cosmos-common/Cargo.toml`. Don't edit these by hand: the release script keeps
+there), `app/src-tauri/Cargo.toml`, `helion-agent/Cargo.toml` and
+`helion-common/Cargo.toml`. Don't edit these by hand: the release script keeps
 them in step.
 
 1. Merge your changes to `main` as usual.
@@ -29,15 +29,15 @@ them in step.
    commit first. The script prints the push command, and how to undo it.
 3. The **Agent image** workflow publishes the image. The **App release**
    workflow builds:
-   - `Cosmos_<version>_universal.dmg` (Apple Silicon and Intel)
-   - `Cosmos_<version>_x64-setup.exe` and `Cosmos_<version>_x64_en-US.msi`
+   - `Helion_<version>_universal.dmg` (Apple Silicon and Intel)
+   - `Helion_<version>_x64-setup.exe` and `Helion_<version>_x64_en-US.msi`
 
    It attaches them, with the signed update bundles and `latest.json`, to
    a **draft** release. Review it on GitHub and press Publish, as a full
    release: that ships it to every installed copy (see [Updates](#updates)).
-4. Once the agent image run has passed, bump Jupiter: `compose/cosmos.yml` to
+4. Once the agent image run has passed, bump Jupiter: `compose/helion.yml` to
    the new version (a hand-made PR; Renovate is gone), in
-   the same PR as any `cosmos-agent.toml` change the release needs. An agent
+   the same PR as any `helion-agent.toml` change the release needs. An agent
    refuses config it doesn't understand, so the image must exist first.
    Merging deploys it.
 
@@ -67,7 +67,7 @@ with the repository secrets `TAURI_SIGNING_PRIVATE_KEY` and
 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`; the public half is the `pubkey` in
 `tauri.conf.json`. Keep the private key and its password backed up outside
 GitHub: without them no installed copy can ever be updated again, and a new
-key means everyone reinstalls by hand. The key is Cosmos's own, not
+key means everyone reinstalls by hand. The key is Helion's own, not
 Solstice's. To make one (from `app/`):
 
 ```bash

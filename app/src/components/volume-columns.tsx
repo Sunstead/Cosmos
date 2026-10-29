@@ -41,7 +41,7 @@ export function volumeColumns(showNode: boolean): ColumnDef<VolumeRow>[] {
     {
       id: 'service',
       header: 'Service',
-      accessorFn: (r) => r.compose_project ?? r.cosmos_service ?? '',
+      accessorFn: (r) => r.compose_project ?? r.helion_service ?? '',
       cell: ({ getValue }) => (
         <span className='text-muted-foreground'>{(getValue() as string) || NO_VALUE}</span>
       ),

@@ -51,8 +51,8 @@ export function wasSignedOut(issuer: string): boolean {
 
 /** Refresh this long before expiry, so a request never carries a dying token. */
 const REFRESH_MARGIN_MS = 60_000;
-const PENDING_KEY = 'cosmos-oidc-pending';
-const refreshKey = (issuer: string) => `cosmos-oidc:${issuer}`;
+const PENDING_KEY = 'helion-oidc-pending';
+const refreshKey = (issuer: string) => `helion-oidc:${issuer}`;
 
 export function clientOf(auth: OidcAuth): OidcClient {
   return { issuer: auth.issuer, clientId: auth.client_id, scopes: auth.scopes };
@@ -254,7 +254,7 @@ export async function completeSignIn(href: string): Promise<AfterSignIn> {
 
   const error = params.get('error');
   if (error) throw new OidcError(params.get('error_description') || `Sign-in was refused (${error}).`, error);
-  if (!raw) throw new OidcError('This sign-in link has expired. Start again from Cosmos.');
+  if (!raw) throw new OidcError('This sign-in link has expired. Start again from Helion.');
 
   const pending = JSON.parse(raw) as Pending;
   const code = params.get('code');

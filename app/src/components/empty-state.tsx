@@ -80,7 +80,7 @@ export function NoNodesState() {
       size='page'
       icon={ServerOff}
       title='No nodes yet'
-      description='Connect a machine running cosmos-agent.'
+      description='Connect a machine running helion-agent.'
       action={<AddNodeButton />}
     />
   );

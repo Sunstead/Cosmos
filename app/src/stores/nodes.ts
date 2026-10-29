@@ -248,7 +248,7 @@ export const useNodeStore = create<NodeStore>()(
       },
     }),
     {
-      name: 'cosmos-nodes',
+      name: 'helion-nodes',
       version: 1,
       partialize: (s) => ({ nodes: s.nodes }),
       migrate: (persisted) => {

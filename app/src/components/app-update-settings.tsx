@@ -11,7 +11,7 @@ function statusLine(status: AppUpdateStatus, version: string | undefined, lastCh
     case 'installing':
       return `Installing ${version}`;
     case 'available':
-      return `Cosmos ${version} is available.`;
+      return `Helion ${version} is available.`;
     case 'error':
       return status.message;
     default:
@@ -36,7 +36,7 @@ export function AppUpdateSettings({ platform }: { platform: string }) {
       <div className='flex flex-wrap items-center justify-between gap-x-4 gap-y-2 p-4'>
         <div className='min-w-0'>
           <p className='text-sm'>
-            Cosmos <span className='font-mono tabular-nums'>{__APP_VERSION__}</span>
+            Helion <span className='font-mono tabular-nums'>{__APP_VERSION__}</span>
             <span className='text-muted-foreground'> on {platform}</span>
           </p>
           {line && (

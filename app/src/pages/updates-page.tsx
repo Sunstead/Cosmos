@@ -153,7 +153,7 @@ function UpdateButton({
           <div className='space-y-2'>
             <p>
               The update workflow {steps.slice(0, -1).join(', ')} and {steps.at(-1)}.
-              Cosmos then watches it for a few minutes, and pauses automatic updates if it
+              Helion then watches it for a few minutes, and pauses automatic updates if it
               breaks.
             </p>
             {target.change === 'major' && (

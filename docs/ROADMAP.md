@@ -1,4 +1,4 @@
-# Sunstead Roadmap: Cosmos, Homepage, and the App Suite
+# Sunstead Roadmap: Helion, Homepage, and the App Suite
 
 Where my homelab and software suite are today, where they're headed, and the
 principles guiding the work. It's a handoff brief for Claude Code sessions
@@ -11,11 +11,11 @@ and deployment work today. This roadmap covers *direction*. Where they disagree
 about current behavior, trust those docs and flag the discrepancy here.
 
 **Goal:** reduce reliance on third-party systems by running my own suite of
-services, with Cosmos as the control plane, a homepage as the front door, and
+services, with Helion as the control plane, a homepage as the front door, and
 independent apps that store data in open formats.
 
 **Naming:** "Sunstead" is my company/brand name and the prefix for my services
-(Sunstead Cosmos, Sunstead Solstice, etc.). It is not a separate system, server
+(Sunstead Helion, Sunstead Solstice, etc.). It is not a separate system, server
 or filesystem path.
 
 ---
@@ -36,7 +36,7 @@ or filesystem path.
     transcodes) and the state backup repository.
 - Other nodes (Saturn, Mars, etc.) are planned. Servers are named after planets.
 - Docker Compose stack: Caddy, Authentik (own Postgres), OpenCloud, Immich (own
-  Postgres), Gitea (shared Postgres), ntfy, Tailscale, and the Cosmos agent/UI.
+  Postgres), Gitea (shared Postgres), ntfy, Tailscale, and the Helion agent/UI.
   Nextcloud, Uptime Kuma and Portainer were retired on 2026-09-29/30.
 - Caddy serves `*.home.example.com` with wildcard TLS via Cloudflare DNS-01.
 - Access is **Tailscale-only**. A Cloudflare Tunnel was tried and rolled back
@@ -48,11 +48,11 @@ or filesystem path.
 - A **self-hosted GitHub Actions runner on Jupiter** runs `deploy.yml` on every
   push to `main` (or manually): reset the real checkout at `DEPLOY_PATH` to
   `origin/main`, `compose config -q`, `pull` with retries, `up -d
-  --remove-orphans`, restart Caddy and cosmos-agent if their bind-mounted config
+  --remove-orphans`, restart Caddy and helion-agent if their bind-mounted config
   is newer than the container, prune images.
 - Secrets live in the server's `.env`, not in git.
 - **Every image is pinned to an explicit tag** (no digests), including
-  `ghcr.io/sunstead/cosmos-agent`. Watchtower and Renovate are gone: Cosmos
+  `ghcr.io/sunstead/helion-agent`. Watchtower and Renovate are gone: Helion
   proposes and applies updates through Jupiter's `update.yml` (3C), and the
   agent's own image is bumped by hand.
 
@@ -62,8 +62,8 @@ or filesystem path.
 - Authentik is configured through **blueprints in git** (`authentik/blueprints/`).
   **Exception:** Immich's OIDC client has no blueprint; it was set up by hand.
 - Groups: `homelab-users` (can use apps) and `homelab-admins` (admin inside apps
-  that map it, including Cosmos actions).
-- Cosmos, Gitea, Immich and OpenCloud use OIDC. No app uses Caddy forward auth
+  that map it, including Helion actions).
+- Helion, Gitea, Immich and OpenCloud use OIDC. No app uses Caddy forward auth
   any more; the snippet stays in the Caddyfile for the next one.
 - Every service keeps a local-account fallback if Authentik is down (`SSO.md`).
 
@@ -77,18 +77,18 @@ Details in Jupiter's `docs/BACKUPS.md`.
   Retention 7 daily, 4 weekly, 6 monthly. The primary is skipped below a
   free-space floor (`BACKUP_MIN_FREE_GB`) so it can't fill the root disk.
 - A weekly restore test loads every dump into a throwaway Postgres and compares
-  sample files; Cosmos shows it and can run it, a backup, or (before an update)
+  sample files; Helion shows it and can run it, a backup, or (before an update)
   a dump of one database, through a request inbox the agent never holds the
   password for.
-- Each run writes `restic-status.json`, which the Cosmos agent reads for its
+- Each run writes `restic-status.json`, which the Helion agent reads for its
   Backups page (including staleness detection, which replaced the Uptime Kuma
   heartbeat).
 - **The gap:** nothing leaves the machine. Losing the whole server loses
   everything; the next step is a `restic copy` to another drive, node or
   offsite target.
 
-### Cosmos (see CLAUDE.md for detail)
-- Cargo workspace: `cosmos-agent` (axum, port 7700), `cosmos-common` (shared types
+### Helion (see CLAUDE.md for detail)
+- Cargo workspace: `helion-agent` (axum, port 7700), `helion-common` (shared types
   via ts-rs), `app/src-tauri` (Tauri 2 desktop; the Android target is unused).
 - The agent provides: host metrics with SQLite history tiers, container and
   volume streaming, container actions behind `require_write` (admin principal +
@@ -96,13 +96,13 @@ Details in Jupiter's `docs/BACKUPS.md`.
   Tailscale status, Wake-on-LAN, a `state.db` for UI-edited state with
   append-only migrations, OIDC auth via Authentik, and capability negotiation so
   older agents degrade gracefully.
-- Service discovery through the `cosmos.service` Docker labels (`system` marks
+- Service discovery through the `helion.service` Docker labels (`system` marks
   infrastructure).
-- **Each agent is independent; there is no central Cosmos server.** The app
+- **Each agent is independent; there is no central Helion server.** The app
   connects to every agent directly. Anything "server-side" runs per node.
 - Jupiter runs agent 0.9.2 with `allow_actions = true`. The agent, web UI and
   desktop app share one version (`npm run release`, see `RELEASING.md`). The web UI is served by
-  the agent at `cosmos.home.example.com`; on my iPhone I use that.
+  the agent at `helion.home.example.com`; on my iPhone I use that.
 
 ### Other Sunstead projects
 - **Solstice:** Tauri/React markdown note-taking app with wikilinks. iOS sync is
@@ -116,8 +116,8 @@ Details in Jupiter's `docs/BACKUPS.md`.
 
 Three layers with clear responsibilities.
 
-### Layer 1: Cosmos (control plane, admin only)
-Cosmos runs things: nodes, containers, deploys, updates, backups, health,
+### Layer 1: Helion (control plane, admin only)
+Helion runs things: nodes, containers, deploys, updates, backups, health,
 routing, secrets, logs and notifications. Only admins can act; `homelab-users`
 can view at most.
 
@@ -129,11 +129,11 @@ content.
 ### Layer 3: Apps (custom and off-the-shelf)
 Each app is its own service with its own data. Apps store data in **open formats
 on disk** (markdown, `.ics`, `.vcf`, original photos, plain files), authenticate
-through **Authentik**, and keep working when Cosmos or the homepage is down.
+through **Authentik**, and keep working when Helion or the homepage is down.
 
 **Build vs. adopt:** custom where I can do meaningfully better or the scope is
 manageable (Solstice, the contacts app, the homepage); established open-source
-apps where it's too complex (drive, photos). Those still fit the suite: Cosmos
+apps where it's too complex (drive, photos). Those still fit the suite: Helion
 manages them, Authentik handles login, the homepage indexes them, and they keep
 data readable on disk wherever possible.
 
@@ -143,19 +143,19 @@ notifications (ntfy first), an event bus, the search index and the AI tool
 gateway.
 
 ### Core principles
-- **Blast radius:** breaking Cosmos must never take down user apps. Alerts
-  shouldn't depend on Cosmos either: apps and scripts can post to the
+- **Blast radius:** breaking Helion must never take down user apps. Alerts
+  shouldn't depend on Helion either: apps and scripts can post to the
   notification service directly.
 - **Permissions:** homepage and app users never get admin functions.
 - **Files are the truth:** apps are indexers or editors over open files wherever
   possible. Anything that must live in a database is exported regularly.
 - **Git is the source of truth for configuration:** Compose files, the
   Caddyfile, agent config and Authentik blueprints. Secrets stay in `.env`.
-  Settings edited from the Cosmos UI live in the agent's `state.db`.
+  Settings edited from the Helion UI live in the agent's `state.db`.
 - **Secrets stay out of network-facing processes.** The agent doesn't run restic
   or hold its password. The same goes for anything that can push to the deploy
   repo: that's root on the server (see 3C).
-- **Runtime-agnostic Cosmos:** Docker/Compose for now. New agent modules consume
+- **Runtime-agnostic Helion:** Docker/Compose for now. New agent modules consume
   the samplers' snapshots rather than calling Docker directly; the existing
   Docker code isn't refactored until a second runtime is real.
 
@@ -170,7 +170,7 @@ request mechanism, and a broken update is noticed by the health checks. One
 release per stage: 0.6 health checks, 0.7 backup controls, 0.8 updates.
 
 ### 0. Backup safety (Jupiter only; no new hardware)
-*In progress: Sunstead/Jupiter#15, with the Cosmos Backups page showing the
+*In progress: Sunstead/Jupiter#15, with the Helion Backups page showing the
 new steps.* Get the data into a shape where a new drive or an offsite target is
 a config change, and close what can be closed with two disks:
 - Stop backing up derived data (Immich `thumbs/`, `encoded-video/`).
@@ -183,7 +183,7 @@ a config change, and close what can be closed with two disks:
 - Later, with hardware: point the originals repo at a separate drive, then
   offsite (`restic copy`).
 
-### A. Cosmos: event log and notifications
+### A. Helion: event log and notifications
 *Done in 0.5 (Cosmos#13, #14; Jupiter#18, #19): the event log, ntfy on the
 iPhone, desktop notifications and "node unreachable" alerts.*
 - One append-only **event log** per agent in `state.db`: container died or
@@ -198,34 +198,34 @@ iPhone, desktop notifications and "node unreachable" alerts.*
   message ID only). Kept open for: a generic webhook (Home Assistant, Gotify,
   chat apps), Web Push to the home-screen web app, email.
 - Follows the agent's patterns: background tasks, never on the request path,
-  capability flag, types in `cosmos-common`.
+  capability flag, types in `helion-common`.
 - **Watching the watcher:** nothing on Jupiter can report Jupiter being down.
   The desktop app notifies when a node stays offline, and since 0.11 agents
   watch each other: Pluto exchanges heartbeats with Jupiter, each reports the
   other unreachable, and ntfy runs on Pluto (public at `ntfy.example.com`) so
   an alert about Jupiter has somewhere to go.
 
-### B. Cosmos: health checks (replaces Uptime Kuma)
+### B. Helion: health checks (replaces Uptime Kuma)
 *Shipped in 0.6 (Cosmos#15, Jupiter#23): an HTTP check per labelled service,
 custom HTTP and TCP checks edited in the UI, certificate expiry, an Uptime
 page. No ICMP: the agent runs with no capabilities, and TCP covers what ping
 would. Kuma was retired on 2026-09-29 (Jupiter#31).*
 - HTTP, TCP and ping probes per service with uptime history; targets default
-  from the `cosmos.service` labels.
+  from the `helion.service` labels.
 - Failures and recoveries become events, so they notify and show on the timeline.
 - The backup heartbeat moves to the agent's own staleness check. Then retire Kuma
   (and skip its v2 upgrade).
 
-### C. Cosmos: updates (replaces Renovate)
+### C. Helion: updates (replaces Renovate)
 *Shipped in 0.8 and 0.9: the Updates page, rules as compose labels, and
 `update.yml` in Jupiter as described below; Renovate is removed. Rollback of a service with a
 database also points at the `pre-update` backup, since a downgrade may not read
 a migrated database.*
-No GitHub PRs to merge. Updates happen from a Cosmos screen or automatically.
+No GitHub PRs to merge. Updates happen from a Helion screen or automatically.
 - The agent checks registries for newer tags of the images it runs, on a slow
   schedule. The UI lists them with a release-notes link.
 - **Per-service policy:** manual (default), patch automatically, or fully
-  automatic. The policy is set in the Cosmos UI (`state.db`); the rules below
+  automatic. The policy is set in the Helion UI (`state.db`); the rules below
   live in compose labels (decided 2026-09-26).
 - Update rules that Renovate encodes today (groups that move together, held
   majors, one Nextcloud major at a time) move into compose labels, so they live
@@ -241,16 +241,16 @@ No GitHub PRs to merge. Updates happen from a Cosmos screen or automatically.
 - Rollback is the same flow with the previous tag.
 - Renovate stays until this ships, then is removed.
 
-### D. Cosmos: backup controls
+### D. Helion: backup controls
 *Shipped in 0.7 (Cosmos#16; Jupiter#22 for the host side): back up now, the
-weekly restore test with its result in Cosmos, and a restore guide that
+weekly restore test with its result in Helion, and a restore guide that
 generates `scripts/restore.sh` commands.*
 - **Trigger backups from the UI** without the agent holding the restic password:
   the agent writes a request file into a directory the host watches (a systemd
   `.path` unit), which starts `jupiter-backup.service`. The status file reports
   the result. The pre-update backup uses the same mechanism.
 - **Guided restore:** show snapshots and walk through restoring files or a
-  database per `BACKUPS.md`. A guide only: Cosmos generates the commands and
+  database per `BACKUPS.md`. A guide only: Helion generates the commands and
   you run them (decided 2026-09-26).
 - **Automated restore drills:** periodically restore into a throwaway container
   and verify.
@@ -267,12 +267,12 @@ app and user, so indexing reads them directly (section 4).*
 - MVP sources: OpenCloud files (indexed from disk, the API for links,
   thumbnails and shared spaces) and Immich photos (its own smart search, at
   query time). Solstice notes since 0.1.4; calendar and contacts come later.
-- App launcher built on `cosmos.service` label discovery.
+- App launcher built on `helion.service` label discovery.
 - Unified search: full-text (Tantivy) plus embeddings later. Off-the-shelf apps
   indexed through their APIs or on-disk files.
 - **Search and AI results respect permissions:** a user only sees data they own
   or that's shared with them.
-- Sign-in through Authentik, reusing Cosmos's OIDC approach.
+- Sign-in through Authentik, reusing Helion's OIDC approach.
 - AI through an **MCP gateway** exposing tools per service. Read-only first, then
   tiers: reads free; reversible writes need a quick confirmation; destructive or
   infrastructure actions always need explicit approval.
@@ -295,7 +295,7 @@ app and user, so indexing reads them directly (section 4).*
 - Every piece of data has an owner, encoded in its path and keyed by a **stable**
   identifier. Proposed: the Authentik username, treated as immutable (readable
   paths; Immich's storage label can take the same value).
-- Cosmos stays admin-only for actions. Sharing starts with shared spaces (e.g.
+- Helion stays admin-only for actions. Sharing starts with shared spaces (e.g.
   family photos), not fine-grained sharing.
 
 ### Data classes
@@ -346,7 +346,7 @@ moving its folders is a planned migration, never an `mv`.
   over network mounts.
 - Other nodes receive copies (restic copies or filesystem replication), not live
   access.
-- Cosmos keeps a **storage registry** mapping logical names (e.g.
+- Helion keeps a **storage registry** mapping logical names (e.g.
   `photos/<user>`) to node, path and data class, enabling service migration
   later.
 
@@ -379,10 +379,10 @@ moving its folders is a planned migration, never an `mv`.
 
 | Date | Decision |
 |---|---|
-| 2026-09-24 | This roadmap lives at `docs/ROADMAP.md` in the Cosmos repo. |
-| 2026-09-24 | Backup safety comes first, before any Cosmos feature work. |
+| 2026-09-24 | This roadmap lives at `docs/ROADMAP.md` in the Helion repo. |
+| 2026-09-24 | Backup safety comes first, before any Helion feature work. |
 | 2026-09-24 | Notifications: ntfy first, behind a pluggable channel design. |
-| 2026-09-24 | Updates: a custom Cosmos flow plus auto-update policies, not Renovate PRs. |
+| 2026-09-24 | Updates: a custom Helion flow plus auto-update policies, not Renovate PRs. |
 | 2026-09-24 | Mobile means iOS / the web UI, not Android. |
 | 2026-09-24 | Keep the Windows partition. The primary repo stays on `/`, guarded by a free-space floor (`BACKUP_MIN_FREE_GB`, 50). |
 | 2026-09-24 | The state (dumps, volumes, `.env`) gets a second restic repo on the HDD, `/srv/storage/backups/restic-state`. |
@@ -393,21 +393,21 @@ moving its folders is a planned migration, never an `mv`.
 | 2026-09-26 | Updates: rules (groups, holds, one major at a time) in compose labels; per-service policy in the UI. |
 | 2026-09-26 | Pre-update backups only for services with a database. Auto-updates apply after a successful nightly backup, for versions first seen 3 or more days ago. |
 | 2026-09-26 | A broken update alerts and offers rollback (with a database restore where one migrated); nothing reverts on its own. |
-| 2026-09-26 | Restores from Cosmos are a guide only. |
+| 2026-09-26 | Restores from Helion are a guide only. |
 | 2026-09-26 | Order: health checks (0.6), backup controls (0.7), updates (0.8), one release each. |
 | 2026-09-29 | Homepage working name: Horizon. |
 | 2026-09-29 | HDD layout by data class: `data/` (originals), `apps/` (HDD app state), `derived/` (rebuildable, not backed up). |
 | 2026-09-29 | Files move to OpenCloud with PosixFS (plain files, watched), keeping its default `users/` and `projects/` folders; one Authentik client for all its apps. |
-| 2026-09-29 | Uptime Kuma and Portainer retired; Cosmos covers both. |
+| 2026-09-29 | Uptime Kuma and Portainer retired; Helion covers both. |
 | 2026-09-30 | Nextcloud retired, files only (no calendars or contacts were in use); a `nextcloud-final` snapshot is kept in both repositories. Radicale waits until calendars are needed. |
 | 2026-10-02 | Homepage name: Sunstead Atlas (was Horizon). |
-| 2026-10-02 | Homepage repo: its own (`Atlas`), with the shared UI package (`packages/sunstead-ui`, themes from Cosmos) starting inside it until a second app adopts it. |
-| 2026-10-02 | Atlas signs in as a confidential OIDC client with a server-side session cookie, unlike Cosmos's public client and bearer tokens, so links and address-bar searches work through sign-in. Users paste per-service API keys, sealed at rest. |
+| 2026-10-02 | Homepage repo: its own (`Atlas`), with the shared UI package (`packages/sunstead-ui`, themes from Helion) starting inside it until a second app adopts it. |
+| 2026-10-02 | Atlas signs in as a confidential OIDC client with a server-side session cookie, unlike Helion's public client and bearer tokens, so links and address-bar searches work through sign-in. Users paste per-service API keys, sealed at rest. |
 | 2026-10-02 | Solstice Sync comes before Atlas indexes notes; Atlas creates notes through it rather than writing vault files. |
 | 2026-10-03 | Atlas features are frozen while it is integrated with the other services (notes, shared UI). |
 | 2026-10-03 | Solstice Sync is CRDT-based, and lives in a Solstice monorepo next to the desktop app. |
-| 2026-10-03 | `sunstead-ui` moves to its own repo (`Sunstead/sunstead-ui`, 0.2.0) and standardises on Base UI; Cosmos and Atlas move off Radix, Solstice already uses it. |
-| 2026-10-03 | Every repo lives in the `Sunstead` GitHub organization (Solstice and Jupiter moved from `InventorPWB`). Cosmos's update token is now owned by the organization. |
+| 2026-10-03 | `sunstead-ui` moves to its own repo (`Sunstead/sunstead-ui`, 0.2.0) and standardises on Base UI; Helion and Atlas move off Radix, Solstice already uses it. |
+| 2026-10-03 | Every repo lives in the `Sunstead` GitHub organization (Solstice and Jupiter moved from `InventorPWB`). Helion's update token is now owned by the organization. |
 | 2026-10-03 | Solstice Sync uses Yjs (`yrs`), keeping history so overlapping offline edits can be flagged and reviewed. |
 | 2026-10-04 | Solstice Sync is live on Jupiter (public OIDC client, 10-minute tokens; a sync connection closes when its token expires). Solstice is public under MIT. Atlas 0.1.4 searches notes from the vaults on disk. |
 | 2026-10-10 | Multi-node: a service on several nodes is one entry with a row per node; pages that show one node keep their own choice, and Monitoring and Logs have "All nodes". |
@@ -421,10 +421,10 @@ moving its folders is a planned migration, never an `mv`.
 - **Filesystem:** ZFS vs. btrfs when a second drive is added.
 - **Backup copy target:** second local drive, another node, or offsite.
 - **Image digests:** pin tag plus digest, or tags only (digests block silent
-  rebuilds of the same tag, including security rebuilds, until Cosmos proposes
+  rebuilds of the same tag, including security rebuilds, until Helion proposes
   them).
 - **AI model:** local (Ollama), hosted, or hybrid.
-- **Mobile:** Tauri iOS for Cosmos, and how the homepage app is built.
+- **Mobile:** Tauri iOS for Helion, and how the homepage app is built.
 
 ---
 

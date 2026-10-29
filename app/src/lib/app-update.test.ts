@@ -6,7 +6,7 @@ import { servedUpdate } from './app-update';
 const node = (id: string, url: string): NodeConfig => ({ id, url, agentName: null, alias: null });
 const meta = (agentVersion: string | null) => ({ agentVersion }) as NodeMeta;
 
-const ORIGIN = 'https://cosmos.example.com';
+const ORIGIN = 'https://helion.example.com';
 
 describe('servedUpdate', () => {
   it('offers the newer version of the agent serving this page', () => {

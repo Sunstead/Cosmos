@@ -761,41 +761,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cosmos-agent"
-version = "0.13.0"
-dependencies = [
- "axum",
- "bollard",
- "cosmos-common",
- "futures-util",
- "jsonwebtoken",
- "libc",
- "reqwest 0.12.28",
- "rusqlite",
- "serde",
- "serde_json",
- "sysinfo",
- "tempfile",
- "thiserror 1.0.69",
- "tokio",
- "tokio-stream",
- "toml 0.8.2",
- "tower",
- "tower-http 0.5.2",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "cosmos-common"
-version = "0.13.0"
-dependencies = [
- "serde",
- "serde_json",
- "ts-rs",
-]
-
-[[package]]
 name = "cpufeatures"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1882,6 +1847,41 @@ name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
+
+[[package]]
+name = "helion-agent"
+version = "0.13.0"
+dependencies = [
+ "axum",
+ "bollard",
+ "futures-util",
+ "helion-common",
+ "jsonwebtoken",
+ "libc",
+ "reqwest 0.12.28",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sysinfo",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "tokio-stream",
+ "toml 0.8.2",
+ "tower",
+ "tower-http 0.5.2",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "helion-common"
+version = "0.13.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "ts-rs",
+]
 
 [[package]]
 name = "hermit-abi"

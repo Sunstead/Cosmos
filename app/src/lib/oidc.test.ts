@@ -23,13 +23,13 @@ describe('PKCE', () => {
 describe('authorizeUrl', () => {
   it('asks for a code with an S256 challenge', () => {
     const url = new URL(
-      authorizeUrl(discovery, client, { redirectUri: 'https://cosmos.example/auth/callback', state: 's', challenge: 'c' }),
+      authorizeUrl(discovery, client, { redirectUri: 'https://helion.example/auth/callback', state: 's', challenge: 'c' }),
     );
     expect(url.origin + url.pathname).toBe(discovery.authorization_endpoint);
     expect(Object.fromEntries(url.searchParams)).toEqual({
       response_type: 'code',
       client_id: 'cosmos',
-      redirect_uri: 'https://cosmos.example/auth/callback',
+      redirect_uri: 'https://helion.example/auth/callback',
       scope: 'openid profile',
       state: 's',
       code_challenge: 'c',

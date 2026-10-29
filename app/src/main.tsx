@@ -1,3 +1,4 @@
+import './boot-migrate';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { RouterProvider } from '@tanstack/react-router';
@@ -29,7 +30,7 @@ const queryClient = new QueryClient({
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <ThemeProvider app='cosmos' aliases={THEME_ALIASES}>
+    <ThemeProvider app='helion' aliases={THEME_ALIASES}>
       <TooltipProvider delay={300}>
         <QueryClientProvider client={queryClient}>
           <RouterProvider router={router} />

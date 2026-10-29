@@ -1,0 +1,231 @@
+# helion-agent configuration.
+#
+# Every value below is the built-in default unless noted. Any of it can be
+# overridden by environment variables: HELION_AGENT_BIND, HELION_AGENT_OIDC_ISSUER,
+# HELION_AGENT_OIDC_CLIENT_ID, HELION_AGENT_ALLOW_ANONYMOUS,
+# HELION_AGENT_ALLOW_ACTIONS, HELION_AGENT_DOCKER_SOCKET,
+# HELION_AGENT_HISTORY, HELION_AGENT_HISTORY_PATH, HELION_NODE_NAME, RUST_LOG.
+#
+# Before 0.14 (when this was Cosmos) these were COSMOS_AGENT_*, COSMOS_NODE_NAME,
+# the cosmos.* container labels and /var/lib/cosmos-agent. The old names still
+# work and log a deprecation warning.
+#
+# Any string can also name environment variables, ${NAME} ($$ for a dollar
+# sign), so domains can live in your .env instead of this file:
+#   issuer = "https://auth.${HOME_DOMAIN}/application/o/helion/"
+# The agent won't start if one isn't set. In Docker, pass each one under the
+# container's environment: (see compose.example.yaml).
+
+# Defaults to the system hostname.
+node_name = "jupiter"
+
+# What this node is for, shown beside its name in the app. Optional.
+# node_description = "Home server"
+
+# Off by default: a node is read-only until you say otherwise. Gates every
+# change the app can make (start, stop, restart and remove for containers and
+# volumes), and even then only for admins. The agent always refuses to act on
+# its own container. Must sit above the first [section].
+allow_actions = false
+
+[server]
+bind = "0.0.0.0:7700"
+shutdown_grace_secs = 10
+
+[auth]
+# Browser EventSource and WebSocket cannot set request headers, so the
+# streaming routes accept ?token= as a fallback. Turning this off breaks live
+# metrics and log following in the web build (the Tauri build is unaffected).
+allow_query_token = true
+
+# The agent REFUSES TO START without [auth.oidc] unless this is explicitly
+# true. Something that can stop containers must not be open by default.
+allow_anonymous = false
+
+[auth.oidc]
+# Sign-in through your identity provider (Authentik). The app signs in there
+# and sends the agent short-lived access tokens, which it checks against the
+# provider's published keys. Nothing here is secret.
+issuer = "https://auth.example.com/application/o/helion/"
+client_id = "helion"
+# Members of these groups may act (with allow_actions); others can only look.
+admin_groups = ["homelab-admins"]
+# Set when the agent must reach the provider at a different address:
+# discovery_url = "https://auth.internal/application/o/helion/.well-known/openid-configuration"
+
+[cors]
+# tauri://localhost, http(s)://tauri.localhost and localhost:1420 are always
+# allowed, and the UI served by the agent itself is same-origin. Only add
+# origins that serve the web build from somewhere else.
+extra_origins = []
+allow_null_origin = false
+
+[web]
+# A built web UI (app/dist) to serve at /. The Docker image sets this through
+# HELION_AGENT_WEB_DIR; leave unset for an API-only agent.
+# dir = "/usr/share/helion-agent/web"
+
+[host]
+interval_ms = 1000
+
+# Under `network_mode: host` the agent sees every bridge, veth and tunnel the
+# machine has. Summing those into "node throughput" counts container traffic
+# two or three times over.
+net_exclude = ["lo*", "docker*", "br-*", "veth*", "virbr*", "cni*", "flannel*"]
+net_include = []   # non-empty turns this into an allowlist and wins outright
+
+# Which filesystems to report, and what to call them.
+#
+# Leave this out when running directly on a host: every real mount is
+# reported. In a container, name where the host's / is mounted. That bind is
+# recursive, so every other drive the host has mounted (a data disk at /srv, a
+# pool at /mnt/tank) is found under it and reported by its host path; they
+# need no entries of their own. Overlay, tmpfs, container storage and boot
+# partitions are skipped. `path` is what the agent sees, `label` is what the
+# UI shows.
+[[host.disks]]
+path  = "/host/rootfs"
+label = "/"
+
+# The same thing, without an entry. Defaults to the entry labelled "/".
+# root = "/host/rootfs"
+
+# An entry can still rename a discovered drive, or add one mounted elsewhere.
+# [[host.disks]]
+# path  = "/host/rootfs/srv"
+# label = "storage"
+
+[docker]
+socket = "/var/run/docker.sock"
+interval_ms = 2000
+stats_concurrency = 8
+
+allow_logs = true
+
+# Subscribe to the Docker event stream so the container list refreshes the
+# moment something starts or dies, instead of at the next poll.
+watch_events = true
+
+[history]
+enabled = true
+path = "/var/lib/helion-agent/metrics.db"
+flush_interval_secs = 10
+retain_1s_secs = 3600      # 1 hour of full-resolution samples
+retain_1m_secs = 604800    # 7 days at 1-minute buckets
+retain_5m_secs = 7776000   # 90 days at 5-minute buckets
+
+[backups]
+# Reads the status file your restic job writes. The agent never runs restic,
+# never holds RESTIC_PASSWORD, and never takes a repository lock.
+# See scripts/backup-status.sh for the snippet that produces this file.
+enabled = false
+status_file = "/host/backups/restic-status.json"
+
+# mtime of this file is when the timer last fired — an independent signal that
+# catches the case where the timer ran but the job died before writing status.
+timer_stamp = "/host/systemd-timers/stamp-jupiter-backup.timer"
+
+# Backups older than 1.5x this are reported as stale.
+expected_interval_secs = 86400
+
+# A display name. Never the real repository path.
+repo_label = "jupiter/restic"
+
+# Optional: "Back up now" and "Run test now" on the Backups page (with
+# allow_actions, for admins). The agent drops a small request file in this
+# directory, mounted writable from the host, whose own service does the work;
+# the agent still never runs restic. Each result is a JSON file in
+# request_results_dir. Jupiter's scripts/request-dispatch.sh is one host side.
+# requests_dir = "/host/requests"
+# request_results_dir = "/host/backups/requests"
+
+# Optional: the latest restore test (scripts/restore-test.sh --status). A
+# failed one opens a problem, and so does none for 15 days.
+# restore_test_file = "/host/backups/restore-test-status.json"
+
+[tailscale]
+# Lists tailnet devices on the Network page and in the constellation. Reads
+# the host's tailscaled socket; tailscaled gives a non-root caller read-only
+# access, so this can't change anything in Tailscale. No API key involved.
+enabled = false
+socket = "/host/tailscale/tailscaled.sock"
+interval_ms = 10000
+
+[wol]
+# Wake-on-LAN from the Network page. Machines are added in the app and kept
+# in [state] path; waking and editing also need allow_actions and an admin.
+# The agent sends magic packets from the host's network (host networking),
+# so this node has to be on the same LAN as the machines it wakes.
+enabled = false
+interval_ms = 10000
+# How long to watch for a machine to come up before calling the wake failed.
+wake_timeout_secs = 180
+
+[events]
+# The Events page: container crashes and health, backups, disk space, admin
+# actions and wakes, and the problems open now. Kept in [state] path.
+enabled = true
+# Older events are deleted, except one that opened a problem still open.
+retain_days = 180
+# A filesystem this full opens a warning, and this full an error. Each clears
+# 5 points below.
+disk_warn_pct = 85
+disk_critical_pct = 95
+
+[uptime]
+# The Uptime page: an HTTP check for every service with a helion.service.url
+# label, plus the HTTP and TCP checks added in the app (kept in [state] path).
+# Three failures in a row open a problem; two passes close it.
+enabled = true
+interval_secs = 60
+# Names under these domains are checked through 127.0.0.1, i.e. the reverse
+# proxy on this host, instead of wherever DNS points. Use it when the proxy's
+# names resolve to an address this host can't reach itself, such as its own
+# Tailscale IP.
+# local_domains = ["example.net"]
+
+[updates]
+# The Updates page: newer tags of the images running here, from their
+# registries (anonymous, tag lists only). Rules come from compose labels
+# (helion.update.*); the policy per image is set in the app.
+enabled = true
+check_interval_hours = 6
+# How long a tag must have been out before it applies on its own.
+min_age_days = 3
+# To apply updates: the repository whose update workflow bumps the tag in
+# compose, commits and deploys. The token is HELION_AGENT_GITHUB_TOKEN in the
+# environment (never here): fine-grained, that repository only, Actions read
+# and write. It can start the workflow; it can't read or push code.
+# repo = "owner/infrastructure"
+# workflow = "update.yml"
+# ref = "main"
+# After a deploy, a check going down or a container restarting within this
+# long marks the update broken and pauses automatic updates for it.
+watch_minutes = 10
+
+[state]
+# Settings edited from the UI, and the event log. Must be on the writable
+# volume.
+path = "/var/lib/helion-agent/state.db"
+
+# Other agents this one watches, and that watch it: each reports the other
+# when it stops answering (`peer:<name>:unreachable`), which nothing on a node
+# can do about itself. One side dials (`url` set) and POSTs a heartbeat to the
+# other's /v1/peer/heartbeat every 15 s; one exchange tells both sides, so
+# only one has to be able to reach the other. Heartbeats carry a shared
+# secret, HELION_AGENT_PEER_TOKEN (32 characters or more, the same on every
+# peer), never the file. The agent won't start with peers and no token.
+#
+# Uptime checks added in the app can say they go through a peer; their
+# failures then don't notify while that peer is unreachable.
+#
+# On the node that can't reach the other (here, Jupiter):
+# [[peers]]
+# name = "pluto"
+# ui_url = "https://pluto.${TAILNET_DOMAIN}:7700" # listed in this agent's web UI
+#
+# On the node that can (Pluto):
+# [[peers]]
+# name = "jupiter"
+# url = "https://helion.${HOME_DOMAIN}"
+# tailnet_name = "jupiter"                       # defaults to name

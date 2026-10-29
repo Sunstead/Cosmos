@@ -1,0 +1,13 @@
+[package]
+name = "helion-common"
+version = "0.13.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+ts-rs = { version = "10", features = ["serde-compat"] }
+
+[dev-dependencies]
+ts-rs = { version = "10", features = ["serde-compat"] }
+serde_json = "1"

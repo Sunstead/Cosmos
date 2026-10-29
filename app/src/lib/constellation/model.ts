@@ -23,7 +23,7 @@ export interface NodeInput {
 
 export interface MoonInput {
   nodeId: string;
-  /** The `cosmos.service` key. */
+  /** The `helion.service` key. */
   service: string;
   name: string;
   state: MoonState;

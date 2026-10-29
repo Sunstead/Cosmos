@@ -1,7 +1,7 @@
 import { ComponentType, SVGProps } from 'react';
 import { Server } from 'lucide-react';
 
-import CosmosIcon from '@/assets/icon-mark.svg?react';
+import HelionIcon from '@/assets/icon-mark.svg?react';
 import GiteaIcon from '@/assets/icons/gitea.svg?react';
 import NextcloudIcon from '@/assets/icons/nextcloud.svg?react';
 import ImmichIcon from '@/assets/icons/immich.svg?react';
@@ -15,8 +15,11 @@ import OpencloudIcon from '@/assets/icons/opencloud.svg?react';
 type SvgComponent = ComponentType<SVGProps<SVGSVGElement>>;
 
 const ICONS: Record<string, SvgComponent> = {
-  'cosmos-agent': CosmosIcon,
-  cosmos: CosmosIcon,
+  'helion-agent': HelionIcon,
+  helion: HelionIcon,
+  // Before the rename: containers and labels in deployments that haven't moved.
+  'cosmos-agent': HelionIcon,
+  cosmos: HelionIcon,
   gitea: GiteaIcon,
   nextcloud: NextcloudIcon,
   immich: ImmichIcon,

@@ -55,7 +55,7 @@ export function AuthCallbackPage() {
           description={error}
           action={
             <Button variant='outline' onClick={() => router.history.replace('/overview')}>
-              Back to Cosmos
+              Back to Helion
             </Button>
           }
         />

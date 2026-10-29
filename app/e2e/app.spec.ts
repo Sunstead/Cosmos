@@ -98,15 +98,15 @@ test.describe('empty app', () => {
 
   test('a pre-0.10 light choice becomes Sunstead Light', async ({ page }) => {
     await page.goto('/overview');
-    await page.evaluate(() => localStorage.setItem('cosmos-theme', 'light'));
+    await page.evaluate(() => localStorage.setItem('helion-theme', 'light'));
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'sunstead-light');
     await expect(page.locator('html')).toHaveClass(/light/);
   });
 
-  test('Cosmos Dark, from before the shared themes, becomes Sunstead Dark', async ({ page }) => {
+  test('Helion Dark, from before the shared themes, becomes Sunstead Dark', async ({ page }) => {
     await page.goto('/overview');
-    await page.evaluate(() => localStorage.setItem('cosmos-theme', 'cosmos-dark'));
+    await page.evaluate(() => localStorage.setItem('helion-theme', 'cosmos-dark'));
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'sunstead-dark');
   });
@@ -157,8 +157,8 @@ test.describe('empty app', () => {
     for (const theme of ['dark', 'light']) {
       await page.goto('/overview');
       await page.evaluate((t) => {
-        localStorage.setItem('cosmos-theme', t);
-        localStorage.setItem('cosmos-sidebar-open', 'true');
+        localStorage.setItem('helion-theme', t);
+        localStorage.setItem('helion-sidebar-open', 'true');
       }, theme);
       await page.goto('/containers');
       const sidebar = page.locator('[data-sidebar=sidebar]');
@@ -512,7 +512,7 @@ test.describe('with a node', () => {
       kind: 'backup',
       requested_by: 'riley',
     });
-    await expect(section(page, 'Started from Cosmos')).toContainText('Waiting for the server');
+    await expect(section(page, 'Started from Helion')).toContainText('Waiting for the server');
     await expect(page.getByRole('button', { name: 'Backing up' })).toBeDisabled();
     unlinkSync(join(inbox, file));
   });
@@ -590,7 +590,7 @@ test.describe('with a node', () => {
                 watch_until: now + 480,
               },
             }),
-            unit('immich-postgres', { blocked: 'updates are off for it (cosmos.update: off)' }),
+            unit('immich-postgres', { blocked: 'updates are off for it (helion.update: off)' }),
           ],
           checked_at: now - 600,
           errors: [],
@@ -830,7 +830,7 @@ test.describe('with a node', () => {
     await addNodeOnline(page);
     const detail = new URL(page.url()).pathname;
     for (const theme of ['sunstead-dark', 'sunstead-light']) {
-      await page.evaluate((t) => localStorage.setItem('cosmos-theme', t), theme);
+      await page.evaluate((t) => localStorage.setItem('helion-theme', t), theme);
       for (const path of [...PAGES, detail]) {
         await page.goto(path);
         await page.waitForTimeout(300);
@@ -838,7 +838,7 @@ test.describe('with a node', () => {
       }
     }
     for (const { id } of THEMES) {
-      await page.evaluate((t) => localStorage.setItem('cosmos-theme', t), id);
+      await page.evaluate((t) => localStorage.setItem('helion-theme', t), id);
       await page.goto('/overview');
       await expect(page.locator('html')).toHaveAttribute('data-theme', id);
       await page.waitForTimeout(300);
@@ -858,7 +858,7 @@ test.describe('logs', () => {
       } catch {
         test.skip(true, 'Docker or the alpine:3 image is not available');
       }
-      const names = ['cosmos-e2e-chatty', 'cosmos-e2e-failing'];
+      const names = ['helion-e2e-chatty', 'helion-e2e-failing'];
       const scripts = [
         // Healthy output on stderr, the way nginx and Postgres write it.
         'while true; do echo "[notice] worker started" >&2; sleep 1; done',
@@ -879,8 +879,8 @@ test.describe('logs', () => {
         await expect(failing).toBeVisible();
 
         // Tagged with the container it came from.
-        await expect(notice).toContainText('cosmos-e2e-chatty');
-        await expect(failing).toContainText('cosmos-e2e-failing');
+        await expect(notice).toContainText('helion-e2e-chatty');
+        await expect(failing).toContainText('helion-e2e-failing');
         // stderr is not an error; ERROR is, even on stdout.
         await expect(notice).toHaveAttribute('data-stream', 'stderr');
         await expect(notice).not.toHaveClass(/text-error/);

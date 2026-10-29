@@ -8,15 +8,15 @@ describe('containers store', () => {
   beforeEach(() => useContainersStore.setState({ nodeContainers: {}, nodeServices: {}, services: [], dockerDown: {} }));
 
   it('derives services per node and flattens them sorted', () => {
-    store().setNodeContainers('b', [containerInfo({ id: '1', cosmos_service: 'zulu' })]);
-    store().setNodeContainers('a', [containerInfo({ id: '2', cosmos_service: 'alpha' })]);
+    store().setNodeContainers('b', [containerInfo({ id: '1', helion_service: 'zulu' })]);
+    store().setNodeContainers('a', [containerInfo({ id: '2', helion_service: 'alpha' })]);
     expect(store().services.map((s) => s.key)).toEqual(['alpha', 'zulu']);
   });
 
   it('leaves other nodes untouched on update', () => {
-    store().setNodeContainers('a', [containerInfo({ cosmos_service: 'alpha' })]);
+    store().setNodeContainers('a', [containerInfo({ helion_service: 'alpha' })]);
     const before = store().nodeServices.a;
-    store().setNodeContainers('b', [containerInfo({ cosmos_service: 'zulu' })]);
+    store().setNodeContainers('b', [containerInfo({ helion_service: 'zulu' })]);
     expect(store().nodeServices.a).toBe(before);
   });
 
@@ -31,7 +31,7 @@ describe('containers store', () => {
   });
 
   it('drops a removed node', () => {
-    store().setNodeContainers('a', [containerInfo({ cosmos_service: 'alpha' })]);
+    store().setNodeContainers('a', [containerInfo({ helion_service: 'alpha' })]);
     store().removeNode('a');
     expect(store().nodeContainers).toEqual({});
     expect(store().services).toEqual([]);

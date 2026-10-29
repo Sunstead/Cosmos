@@ -1,6 +1,6 @@
 name: Agent image
 
-# Builds cosmos-agent (with the bundled web UI) and publishes it to GHCR.
+# Builds helion-agent (with the bundled web UI) and publishes it to GHCR.
 #   main     -> :latest, :main, :sha-<short>
 #   v1.2.3   -> :1.2.3, :1.2, :sha-<short>
 # Pull requests build without pushing.
@@ -10,8 +10,8 @@ on:
     branches: [main]
     tags: ['v*']
     paths:
-      - cosmos-agent/**
-      - cosmos-common/**
+      - helion-agent/**
+      - helion-common/**
       - app/**
       - '!app/src-tauri/**'
       - Cargo.toml
@@ -20,8 +20,8 @@ on:
       - .github/workflows/agent-image.yml
   pull_request:
     paths:
-      - cosmos-agent/**
-      - cosmos-common/**
+      - helion-agent/**
+      - helion-common/**
       - app/**
       - '!app/src-tauri/**'
       - Cargo.lock
@@ -44,7 +44,7 @@ jobs:
 
       # GHCR image names must be lowercase; the owner may not be.
       - name: Image name
-        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/cosmos-agent" >> "$GITHUB_ENV"
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/helion-agent" >> "$GITHUB_ENV"
 
       - uses: docker/setup-buildx-action@v3
 
@@ -66,8 +66,8 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=sha,format=short
           labels: |
-            org.opencontainers.image.title=cosmos-agent
-            org.opencontainers.image.description=Cosmos homelab agent and web UI
+            org.opencontainers.image.title=helion-agent
+            org.opencontainers.image.description=Helion homelab agent and web UI
 
       # Build once into the local daemon so the image can be checked before
       # anything is published. The push below reuses the same cache.
@@ -75,10 +75,10 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: cosmos-agent/Dockerfile
+          file: helion-agent/Dockerfile
           platforms: linux/amd64
           load: true
-          tags: cosmos-agent:test
+          tags: helion-agent:test
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -90,15 +90,15 @@ jobs:
           # checks read everything with `grep ... >/dev/null` instead.
           # The data dir must be owned by the agent's uid, or a fresh named
           # volume comes up root-owned and history can't be written.
-          cid=$(docker create cosmos-agent:test)
-          docker export "$cid" | tar -tvf - | grep -E ' var/lib/cosmos-agent/?$' | tee /dev/stderr | grep -q '65532/65532'
+          cid=$(docker create helion-agent:test)
+          docker export "$cid" | tar -tvf - | grep -E ' var/lib/helion-agent/?$' | tee /dev/stderr | grep -q '65532/65532'
           docker rm "$cid" >/dev/null
 
           # An issuer nothing answers at: the agent must still start and
           # refuse unauthenticated reads.
           docker run -d --name smoke -p 7700:7700 \
-            -e COSMOS_AGENT_OIDC_ISSUER=http://127.0.0.1:9/application/o/cosmos/ \
-            -v smoke_data:/var/lib/cosmos-agent cosmos-agent:test
+            -e HELION_AGENT_OIDC_ISSUER=http://127.0.0.1:9/application/o/helion/ \
+            -v smoke_data:/var/lib/helion-agent helion-agent:test
           for i in $(seq 30); do curl -fsS localhost:7700/healthz >/dev/null && break; sleep 1; done
 
           curl -fsS localhost:7700/ | grep 'id="root"' >/dev/null
@@ -110,13 +110,33 @@ jobs:
           docker logs smoke 2>&1 | tee agent.log
           grep -q 'metrics history enabled' agent.log
           if grep -q $'\x1b' agent.log; then echo 'ANSI escapes in docker logs' >&2; exit 1; fi
+          if grep -q 'deprecated' agent.log; then echo 'the current names must not warn' >&2; exit 1; fi
+          docker rm -f smoke >/dev/null
+
+          # What 0.13 and older deployments pass must keep working: COSMOS_
+          # variables, a volume at the old data path and cosmos.* labels.
+          docker run -d --name legacy_svc --label cosmos.service=legacy-svc busybox sleep 300
+          docker run -d --name smoke_legacy -p 7700:7700 \
+            --group-add "$(stat -c %g /var/run/docker.sock)" \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -e COSMOS_AGENT_ALLOW_ANONYMOUS=true \
+            -e COSMOS_NODE_NAME=legacy \
+            -v smoke_legacy_data:/var/lib/cosmos-agent helion-agent:test
+          for i in $(seq 30); do curl -fsS localhost:7700/healthz >/dev/null && break; sleep 1; done
+          curl -fsS localhost:7700/v1/info | grep '"node_name":"legacy"' >/dev/null
+          for i in $(seq 15); do curl -fsS localhost:7700/v1/containers | grep '"helion_service":"legacy-svc"' >/dev/null && break; sleep 1; done
+          curl -fsS localhost:7700/v1/containers | grep '"helion_service":"legacy-svc"' >/dev/null
+          docker logs smoke_legacy 2>&1 | tee legacy.log
+          grep -q 'COSMOS_NODE_NAME is deprecated; rename it to HELION_NODE_NAME' legacy.log
+          grep -q 'cosmos.service is deprecated; rename it to helion.service' legacy.log
+          docker rm -f smoke_legacy legacy_svc >/dev/null
 
       - name: Push
         if: github.event_name != 'pull_request'
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: cosmos-agent/Dockerfile
+          file: helion-agent/Dockerfile
           platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}

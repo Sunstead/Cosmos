@@ -130,7 +130,7 @@ function LinkSetting({ nodeId, saved, canEdit, showNode }: { nodeId: string; sav
           <Input
             id={`link-${nodeId}`}
             value={link ?? saved}
-            placeholder='https://cosmos.example.com/events'
+            placeholder='https://helion.example.com/events'
             disabled={!canEdit}
             onChange={(e) => setLink(e.target.value)}
           />
@@ -427,7 +427,7 @@ function ChannelForm({
               <Input
                 id='channel-topic'
                 value={topic}
-                placeholder='cosmos-jupiter'
+                placeholder='helion-jupiter'
                 onChange={(e) => setTopic(e.target.value)}
                 className='font-mono'
                 required

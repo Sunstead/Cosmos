@@ -37,8 +37,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   // Desktop only; a browser hears of a new version from the agent serving it.
   useEffect(() => startBackgroundChecks(), []);
   // localStorage, not a cookie: cookies don't persist under Tauri's custom protocol.
-  const [sidebarOpen, setSidebarOpen] = usePersistentState('cosmos-sidebar-open', true);
-  const [sidebarWidth, setSidebarWidth] = usePersistentState('cosmos-sidebar-width', '18rem');
+  const [sidebarOpen, setSidebarOpen] = usePersistentState('helion-sidebar-open', true);
+  const [sidebarWidth, setSidebarWidth] = usePersistentState('helion-sidebar-width', '18rem');
 
   return (
     <SidebarProvider
@@ -46,7 +46,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       onOpenChange={setSidebarOpen}
       defaultWidth={sidebarWidth}
       onWidthChange={(px) => setSidebarWidth(`${px}px`)}
-      // Cosmos's collapsed rail is 4rem, wider than the shared default.
+      // Helion's collapsed rail is 4rem, wider than the shared default.
       style={{ '--sidebar-width-icon': '4rem' } as CSSProperties}
       className='h-full flex-col'
     >

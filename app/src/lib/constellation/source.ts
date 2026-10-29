@@ -165,7 +165,7 @@ export class StoreSource implements ConstellationSource {
         state: moonState(s.status, serviceCheck(this.checks, s.nodeId, s.key)?.state === 'down'),
         url: s.url,
       })),
-      // Devices that are Cosmos nodes are drawn as nodes already.
+      // Devices that are Helion nodes are drawn as nodes already.
       probes: this.devices
         .filter((d) => d.nodeId === null)
         .map((d) => {

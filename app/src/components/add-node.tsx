@@ -82,7 +82,7 @@ function AddNodeForm({ initialUrl, onDone }: { initialUrl: string; onDone: () =>
     <DialogContent>
       <DialogHeader>
         <DialogTitle>Add node</DialogTitle>
-        <DialogDescription>Connect a machine running cosmos-agent.</DialogDescription>
+        <DialogDescription>Connect a machine running helion-agent.</DialogDescription>
       </DialogHeader>
 
       <form id='add-node' onSubmit={submit} className='space-y-4'>

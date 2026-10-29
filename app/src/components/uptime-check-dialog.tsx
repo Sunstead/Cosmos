@@ -363,7 +363,7 @@ function ServiceForm({
       <DialogHeader>
         <DialogTitle>Check for {check.name}</DialogTitle>
         <DialogDescription>
-          Made from the service's cosmos.service.url label. It runs while one of its
+          Made from the service's helion.service.url label. It runs while one of its
           containers is running.
         </DialogDescription>
       </DialogHeader>

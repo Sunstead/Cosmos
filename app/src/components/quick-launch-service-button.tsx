@@ -65,7 +65,7 @@ export const QuickLaunchServiceButton = memo(function QuickLaunchServiceButton({
     <Button
       variant='secondary'
       disabled={!href}
-      title={href ?? `${group.name} has no cosmos.service.url label`}
+      title={href ?? `${group.name} has no helion.service.url label`}
       onClick={() => href && openExternal(href)}
       className={BUTTON_CLASS}
     >

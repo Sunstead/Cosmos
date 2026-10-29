@@ -131,7 +131,7 @@ function RowMenu({ item }: { item: WolItem }) {
         open={removing}
         onOpenChange={setRemoving}
         title={`Remove ${item.target.name}?`}
-        description='Cosmos will stop offering to wake it. The machine itself is not affected.'
+        description='Helion will stop offering to wake it. The machine itself is not affected.'
         confirmLabel='Remove'
         onConfirm={() => void remove(item.nodeId, item.target.id, item.target.name)}
       />

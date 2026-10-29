@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_THEME, normalizeChoice, normalizeSlot, storageKeys, THEMES, themeById } from '@sunstead/ui/themes';
 import { THEME_ALIASES } from './theme-aliases';
 
-// The themes themselves are tested in @sunstead/ui; this keeps Cosmos's own
+// The themes themselves are tested in @sunstead/ui; this keeps Helion's own
 // copies (index.html's first paint, the aliases) in step with them.
 const html = readFileSync(path.resolve(__dirname, '../../index.html'), 'utf8');
 
@@ -14,7 +14,7 @@ describe('themes', () => {
     const entries = [...map.matchAll(/'?([\w-]+)'?:\s*'(dark|light) (rounded|tech)'/g)].map((m) => [m[1], `${m[2]} ${m[3]}`]);
     expect(entries).toEqual(THEMES.map((t) => [t.id, `${t.scheme} ${t.style}`]));
     expect(html).toContain(`data-theme="${DEFAULT_THEME}" data-style="${themeById(DEFAULT_THEME)!.style}"`);
-    const keys = storageKeys('cosmos');
+    const keys = storageKeys('helion');
     expect(html).toContain(`localStorage.getItem('${keys.theme}')`);
     expect(html).toContain(`'${keys.theme}-' + s`);
   });

@@ -1,4 +1,4 @@
-# Cosmos app
+# Helion app
 
 Tauri 2 + React 19 desktop client. Also runs as a plain web app.
 
@@ -11,10 +11,10 @@ npm test
 ```
 
 **Generate the shared types first.** `src/generated/` is produced from
-`cosmos-common` by ts-rs and is gitignored, so a fresh clone has none:
+`helion-common` by ts-rs and is gitignored, so a fresh clone has none:
 
 ```bash
-cargo test -p cosmos-common
+cargo test -p helion-common
 ```
 
 ## How data flows

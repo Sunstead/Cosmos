@@ -37,7 +37,7 @@ export function ContainersPage() {
       all.filter((c) => {
         if (filter === 'running' && c.state !== 'running') return false;
         if (filter === 'stopped' && c.state === 'running') return false;
-        return matchesQuery(query, c.name, c.image, c.cosmos_service, c.compose_project);
+        return matchesQuery(query, c.name, c.image, c.helion_service, c.compose_project);
       }),
     [all, filter, query],
   );

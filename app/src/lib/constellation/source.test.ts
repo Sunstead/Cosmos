@@ -17,8 +17,8 @@ describe('StoreSource', () => {
     const source = new StoreSource();
     const stop = source.subscribe(() => {});
     useContainersStore.getState().setNodeContainers('a', [
-      containerInfo({ id: '1', cosmos_service: 'immich', state: 'running' }),
-      containerInfo({ id: '2', cosmos_service: 'system', state: 'running' }),
+      containerInfo({ id: '1', helion_service: 'immich', state: 'running' }),
+      containerInfo({ id: '2', helion_service: 'system', state: 'running' }),
     ]);
     const snap = source.snapshot();
     expect(snap.nodes).toEqual([{ id: 'a', name: 'jupiter', state: 'online', memBytes: null }]);
@@ -31,7 +31,7 @@ describe('StoreSource', () => {
     let calls = 0;
     const stop = source.subscribe(() => (calls += 1));
     calls = 0;
-    const containers = [containerInfo({ id: '1', cosmos_service: 'immich', state: 'running' })];
+    const containers = [containerInfo({ id: '1', helion_service: 'immich', state: 'running' })];
     useContainersStore.getState().setNodeContainers('a', containers);
     expect(calls).toBe(1);
     // The container stream repeats itself every 2 s, with new CPU figures.

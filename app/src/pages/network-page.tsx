@@ -216,9 +216,9 @@ export function NetworkPage() {
             key: `${nodeId}:${c.id}:${port.private_port}:${port.public_port}:${port.port_type}`,
             nodeId,
             container: c.name,
-            service: c.cosmos_service ?? null,
+            service: c.helion_service ?? null,
             port,
-            url: c.cosmos_service_url ?? null,
+            url: c.helion_service_url ?? null,
           });
         }
       }

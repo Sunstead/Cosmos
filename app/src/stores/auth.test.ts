@@ -24,7 +24,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe('getAccessToken', () => {
   it('reads the account from the token it gets', async () => {
-    localStorage.setItem(`cosmos-oidc:${auth.issuer}`, 'rt');
+    localStorage.setItem(`helion-oidc:${auth.issuer}`, 'rt');
     const access = jwt({
       exp: Math.floor(Date.now() / 1000) + 600,
       name: 'Pat Doe',
@@ -49,13 +49,13 @@ describe('getAccessToken', () => {
       picture: null,
       groups: ['admins'],
     });
-    expect(localStorage.getItem(`cosmos-oidc:${auth.issuer}`)).toBe('rt2');
+    expect(localStorage.getItem(`helion-oidc:${auth.issuer}`)).toBe('rt2');
   });
 
   it('takes only an https picture from the token', async () => {
     const pictureFrom = async (picture: string) => {
       useAuthStore.setState({ sessions: {} });
-      localStorage.setItem(`cosmos-oidc:${auth.issuer}`, 'rt');
+      localStorage.setItem(`helion-oidc:${auth.issuer}`, 'rt');
       const access = jwt({ exp: Math.floor(Date.now() / 1000) + 600, preferred_username: 'pat', picture });
       vi.stubGlobal(
         'fetch',
@@ -80,7 +80,7 @@ describe('getAccessToken', () => {
   });
 
   it('rejects, keeping the refresh token, when the provider is down', async () => {
-    localStorage.setItem(`cosmos-oidc:${auth.issuer}`, 'rt');
+    localStorage.setItem(`helion-oidc:${auth.issuer}`, 'rt');
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => {
@@ -89,7 +89,7 @@ describe('getAccessToken', () => {
     );
 
     await expect(getAccessToken(auth)).rejects.toBeInstanceOf(ProviderUnreachable);
-    expect(localStorage.getItem(`cosmos-oidc:${auth.issuer}`)).toBe('rt');
+    expect(localStorage.getItem(`helion-oidc:${auth.issuer}`)).toBe('rt');
   });
 
   it('still hands out a token that has not expired while the provider is down', async () => {
@@ -108,7 +108,7 @@ describe('getAccessToken', () => {
         },
       },
     });
-    localStorage.setItem(`cosmos-oidc:${auth.issuer}`, 'rt');
+    localStorage.setItem(`helion-oidc:${auth.issuer}`, 'rt');
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => {
@@ -120,7 +120,7 @@ describe('getAccessToken', () => {
   });
 
   it('forgets a refresh token the provider revoked', async () => {
-    localStorage.setItem(`cosmos-oidc:${auth.issuer}`, 'rt');
+    localStorage.setItem(`helion-oidc:${auth.issuer}`, 'rt');
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string) =>
@@ -131,6 +131,6 @@ describe('getAccessToken', () => {
     );
 
     expect(await getAccessToken(auth)).toBeNull();
-    expect(localStorage.getItem(`cosmos-oidc:${auth.issuer}`)).toBeNull();
+    expect(localStorage.getItem(`helion-oidc:${auth.issuer}`)).toBeNull();
   });
 });

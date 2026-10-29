@@ -48,14 +48,14 @@ function fakeTailscaled(socket: string, fixture: string): Server {
   return server;
 }
 
-/** Builds and starts a real cosmos-agent with a temp history DB. */
+/** Builds and starts a real helion-agent with a temp history DB. */
 export default async function globalSetup() {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-  execFileSync('cargo', ['build', '-q', '-p', 'cosmos-agent'], { cwd: root, stdio: 'inherit' });
+  execFileSync('cargo', ['build', '-q', '-p', 'helion-agent'], { cwd: root, stdio: 'inherit' });
 
   const port = await freePort();
   const oidc = await startMockOidc();
-  const dir = mkdtempSync(path.join(tmpdir(), 'cosmos-e2e-'));
+  const dir = mkdtempSync(path.join(tmpdir(), 'helion-e2e-'));
   const config = path.join(dir, 'agent.toml');
   const socket = path.join(dir, 'tailscaled.sock');
   const tailscaled = fakeTailscaled(socket, path.join(root, 'app/e2e/fixtures/tailscale-status.json'));
@@ -87,18 +87,20 @@ export default async function globalSetup() {
       `[updates]\nrepo = "e2e/infrastructure"\n`,
   );
 
-  const agent = spawn(path.join(root, 'target/debug/cosmos-agent'), [], {
+  const agent = spawn(path.join(root, 'target/debug/helion-agent'), [], {
     cwd: dir,
     env: {
       ...process.env,
-      COSMOS_AGENT_CONFIG: config,
-      COSMOS_AGENT_BIND: `127.0.0.1:${port}`,
+      HELION_AGENT_CONFIG: config,
+      HELION_AGENT_BIND: `127.0.0.1:${port}`,
       // Signs in against the mock provider, exactly as against Authentik.
-      COSMOS_AGENT_OIDC_ISSUER: oidc.issuer,
-      COSMOS_AGENT_HISTORY_PATH: path.join(dir, 'history.db'),
+      HELION_AGENT_OIDC_ISSUER: oidc.issuer,
+      // Jupiter's Authentik client is still called `cosmos`; the mock answers to it.
+      HELION_AGENT_OIDC_CLIENT_ID: 'cosmos',
+      HELION_AGENT_HISTORY_PATH: path.join(dir, 'history.db'),
       // Wake-on-LAN specs need it. No spec starts or stops a container.
-      COSMOS_AGENT_ALLOW_ACTIONS: '1',
-      COSMOS_AGENT_GITHUB_TOKEN: 'e2e-not-a-token',
+      HELION_AGENT_ALLOW_ACTIONS: '1',
+      HELION_AGENT_GITHUB_TOKEN: 'e2e-not-a-token',
       RUST_LOG: 'warn',
     },
     stdio: process.env.E2E_DEBUG ? 'inherit' : 'ignore',

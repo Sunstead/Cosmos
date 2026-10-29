@@ -1,5 +1,5 @@
 /**
- * Updates to Cosmos itself, not to the services it watches (that's the
+ * Updates to Helion itself, not to the services it watches (that's the
  * Updates page). The desktop app uses Tauri's updater against the
  * `latest.json` each published GitHub release carries (`plugins.updater` in
  * tauri.conf.json). The web UI comes from an agent, so it's updated by
