@@ -419,6 +419,31 @@ element: an inline SVG's stylesheet applies to the whole document.
 committed; re-run the script after editing the icon (needs Xcode 26+ and Icon
 Composer). The glass icon only shows in a bundled build, not `tauri dev`.
 
+## Names before 0.14 (Cosmos)
+
+Helion was Cosmos until 0.14, and deployments move over in steps, so the agent
+and app accept the old names, each with a warning, until the 0.15 cleanup.
+**Env** (`config.rs` `env`): `HELION_X` first, then the same name under
+`COSMOS_`; `apply_env` takes a lookup so tests don't touch the process
+environment. `COSMOS_AGENT_TOKEN`/`_TOKEN_FILE` exist only to reject a pre-0.3
+setup, and there is no `HELION_AGENT_TOKEN`. **Labels** (`labels.rs`):
+`helion.*` else `cosmos.*`, read at the sampler edge (containers, volumes,
+Docker events), and `update_labels` renames `cosmos.update*` to `helion.update*`
+so the rules only ever see the new names; each old label is warned about once
+per process, not per container per tick. **Data** (`use_legacy_data_dir`): the
+default databases live in `/var/lib/helion-agent`; where the new one is missing
+and `/var/lib/cosmos-agent` has one, that is used. The image creates both
+directories (so a stale mount is writable), which is why the test is for the
+database file, not the directory. **App**: `lib/migrate-legacy-storage.ts`
+copies `cosmos-*` local storage keys to `helion-*` once (marker, not every load,
+or a sign-out would be undone), moving the refresh tokens; `index.html` falls
+back to the old theme keys for first paint. **Not renamed on purpose**: the
+`cosmos-dark`/`cosmos-light` theme aliases, the Authentik slug and client id
+`cosmos` in Jupiter, ntfy topics, the `cosmos_agent_data` volume. The JSON field
+names became `helion_service*` with no alias, so an app older than 0.14 shows no
+service grouping against a 0.14 agent. The desktop app's identifier changed, so
+it starts empty.
+
 ## Gotchas worth knowing
 
 - **SSE events must stay unnamed.** The agent emits `Event::default().data(..)`

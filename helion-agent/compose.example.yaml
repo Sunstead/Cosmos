@@ -74,7 +74,7 @@ services:
       # plus the same bind mount. tailscaled grants non-root callers read only.
       - /var/run/tailscale:/host/tailscale
 
-      - cosmos_agent_data:/var/lib/helion-agent   # SQLite; the only writable path
+      - helion_agent_data:/var/lib/helion-agent   # SQLite; the only writable path
 
     labels:
       helion.service: helion
@@ -83,7 +83,7 @@ services:
       com.centurylinklabs.watchtower.enable: "true"
 
 volumes:
-  cosmos_agent_data:
+  helion_agent_data:
 
 # Caddyfile entry — the agent is on host networking, so reach it the same way
 # wol-waker is reached:

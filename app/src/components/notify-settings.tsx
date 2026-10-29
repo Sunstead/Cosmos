@@ -427,7 +427,7 @@ function ChannelForm({
               <Input
                 id='channel-topic'
                 value={topic}
-                placeholder='cosmos-jupiter'
+                placeholder='helion-jupiter'
                 onChange={(e) => setTopic(e.target.value)}
                 className='font-mono'
                 required

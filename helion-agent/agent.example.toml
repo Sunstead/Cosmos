@@ -6,6 +6,10 @@
 # HELION_AGENT_ALLOW_ACTIONS, HELION_AGENT_DOCKER_SOCKET,
 # HELION_AGENT_HISTORY, HELION_AGENT_HISTORY_PATH, HELION_NODE_NAME, RUST_LOG.
 #
+# Before 0.14 (when this was Cosmos) these were COSMOS_AGENT_*, COSMOS_NODE_NAME,
+# the cosmos.* container labels and /var/lib/cosmos-agent. The old names still
+# work and log a deprecation warning.
+#
 # Any string can also name environment variables, ${NAME} ($$ for a dollar
 # sign), so domains can live in your .env instead of this file:
 #   issuer = "https://auth.${HOME_DOMAIN}/application/o/helion/"
