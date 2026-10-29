@@ -2,7 +2,7 @@
 //! deploys that change a container's image.
 //!
 //! **Asked or not.** Everything that stops a container on purpose (`docker
-//! stop`, Compose recreating it during a deploy, a Cosmos action) sends a
+//! stop`, Compose recreating it during a deploy, a Helion action) sends a
 //! `kill` event before the `die`. A `die` with no `kill` for that container in
 //! the previous [`KILL_WINDOW`] is one nobody asked for. That's what keeps a
 //! deploy, which recreates every container it touches, from reading as a wave
@@ -15,7 +15,7 @@
 use super::{ EventsHandle, NewEvent, ProblemSpec, Report, Resolution };
 use crate::{ backups::parse_rfc3339, sample::{ docker::ContainerSnapshot, host::unix_now, Forwarded } };
 use bollard::models::{ EventMessage, EventMessageTypeEnum };
-use cosmos_common::types::{ ContainerHealth, ContainerInfo, EventCategory, Problem, Severity };
+use helion_common::types::{ ContainerHealth, ContainerInfo, EventCategory, Problem, Severity };
 use std::{ collections::HashMap, sync::Arc, time::Duration };
 use tokio::sync::{ mpsc, watch };
 
@@ -59,7 +59,7 @@ impl DockerEvent {
             name: attr("name")?,
             image: attr("image"),
             exit_code: attr("exitCode").and_then(|c| c.parse().ok()),
-            service: attr("cosmos.service"),
+            service: attr("helion.service"),
         })
     }
 }
@@ -241,7 +241,7 @@ impl ContainerTracker {
                         subject: name.clone(),
                         title: format!("{name} is down"),
                         detail: Some(format!("{} It hasn't restarted.", d.detail)),
-                        service: c.cosmos_service.clone().or_else(|| d.service.clone()),
+                        service: c.helion_service.clone().or_else(|| d.service.clone()),
                         depends_on: None,
                     });
                     false
@@ -262,7 +262,7 @@ impl ContainerTracker {
                         subject: c.name.clone(),
                         title: format!("{} is unhealthy", c.name),
                         detail: Some("Its health check is failing.".into()),
-                        service: c.cosmos_service.clone(),
+                        service: c.helion_service.clone(),
                         depends_on: None,
                     })
                 );
@@ -386,9 +386,9 @@ mod tests {
             compose_project: None,
             compose_service: None,
             update_labels: Default::default(),
-            cosmos_service: Some(name.into()),
-            cosmos_service_description: None,
-            cosmos_service_url: None,
+            helion_service: Some(name.into()),
+            helion_service_description: None,
+            helion_service_url: None,
             cpu_pct: 0.0,
             mem_used_bytes: 0,
             mem_limit_bytes: 0,
@@ -593,7 +593,7 @@ mod tests {
                         ("name".to_string(), "gitea".to_string()),
                         ("image".to_string(), "gitea/gitea:1.27.3".to_string()),
                         ("exitCode".to_string(), "2".to_string()),
-                        ("cosmos.service".to_string(), "gitea".to_string()),
+                        ("helion.service".to_string(), "gitea".to_string()),
                     ]
                         .into_iter()
                         .collect()

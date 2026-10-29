@@ -7,7 +7,7 @@
 //! Reads that serve requests come from samplers' snapshots, not from here.
 
 use crate::error::AgentError;
-use cosmos_common::types::{ WolProbe, WolTarget, WolWake };
+use helion_common::types::{ WolProbe, WolTarget, WolWake };
 use rusqlite::{ params, Connection, OptionalExtension };
 use std::{ path::Path, sync::{ Arc, Mutex } };
 

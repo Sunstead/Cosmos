@@ -75,7 +75,7 @@ jobs:
 
       # The frontend imports TypeScript types that ts-rs writes during tests.
       - name: Generate bindings
-        run: cargo test --locked -p cosmos-common --quiet
+        run: cargo test --locked -p helion-common --quiet
 
       - name: Install frontend dependencies
         working-directory: app
@@ -98,11 +98,11 @@ jobs:
           args: ${{ matrix.args }} ${{ startsWith(github.ref, 'refs/tags/app-v') && '--config src-tauri/tauri.updater.conf.json' || '' }}
           # Only tag builds publish; everything else just builds.
           tagName: ${{ startsWith(github.ref, 'refs/tags/app-v') && github.ref_name || '' }}
-          releaseName: Cosmos __VERSION__
+          releaseName: Helion __VERSION__
           releaseBody: |
-            Cosmos desktop app __VERSION__.
+            Helion desktop app __VERSION__.
 
-            **macOS:** Cosmos_*_universal.dmg (Apple Silicon and Intel). The app is not notarised yet: on first launch use right-click > Open, or System Settings > Privacy & Security > Open Anyway.
+            **macOS:** Helion_*_universal.dmg (Apple Silicon and Intel). The app is not notarised yet: on first launch use right-click > Open, or System Settings > Privacy & Security > Open Anyway.
             **Windows:** the -setup.exe or .msi installer. SmartScreen may warn about an unrecognised app: More info > Run anyway.
           releaseDraft: true
           # The updater only reads the latest full release, so this decides
@@ -125,11 +125,11 @@ jobs:
           args: ${{ matrix.args }} ${{ startsWith(github.ref, 'refs/tags/app-v') && '--config src-tauri/tauri.updater.conf.json' || '' }}
           # Only tag builds publish; everything else just builds.
           tagName: ${{ startsWith(github.ref, 'refs/tags/app-v') && github.ref_name || '' }}
-          releaseName: Cosmos __VERSION__
+          releaseName: Helion __VERSION__
           releaseBody: |
-            Cosmos desktop app __VERSION__.
+            Helion desktop app __VERSION__.
 
-            **macOS:** Cosmos_*_universal.dmg (Apple Silicon and Intel). The app is not notarised yet: on first launch use right-click > Open, or System Settings > Privacy & Security > Open Anyway.
+            **macOS:** Helion_*_universal.dmg (Apple Silicon and Intel). The app is not notarised yet: on first launch use right-click > Open, or System Settings > Privacy & Security > Open Anyway.
             **Windows:** the -setup.exe or .msi installer. SmartScreen may warn about an unrecognised app: More info > Run anyway.
           releaseDraft: true
           # The updater only reads the latest full release, so this decides
@@ -140,7 +140,7 @@ jobs:
         if: ${{ !startsWith(github.ref, 'refs/tags/app-v') }}
         uses: actions/upload-artifact@v4
         with:
-          name: cosmos-${{ runner.os }}
+          name: helion-${{ runner.os }}
           path: |
             target/*/release/bundle/dmg/*.dmg
             target/release/bundle/msi/*.msi

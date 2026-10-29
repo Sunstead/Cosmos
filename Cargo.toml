@@ -1,5 +1,5 @@
 [workspace]
-members = ["cosmos-common", "cosmos-agent", "app/src-tauri"]
+members = ["helion-common", "helion-agent", "app/src-tauri"]
 resolver = "2"
 
 [profile.release]

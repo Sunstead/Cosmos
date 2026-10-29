@@ -6,7 +6,7 @@
 
 use super::cert::CertValidity;
 use crate::events::{ human_duration, ProblemSpec, Report, Resolution };
-use cosmos_common::types::{ CheckState, EventCategory, Problem, Severity };
+use helion_common::types::{ CheckState, EventCategory, Problem, Severity };
 use std::collections::{ BTreeMap, HashMap };
 
 pub const DOWN_AFTER: u32 = 3;

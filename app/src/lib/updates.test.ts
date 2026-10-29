@@ -115,12 +115,12 @@ describe('updates', () => {
 describe('groupUnits', () => {
   it('puts the same image on two nodes in one group, in the order given', () => {
     const groups = groupUnits([
-      { ...unit('cosmos-agent'), nodeId: 'jupiter' },
+      { ...unit('helion-agent'), nodeId: 'jupiter' },
       { ...unit('immich'), nodeId: 'jupiter' },
-      { ...unit('cosmos-agent'), nodeId: 'pluto' },
+      { ...unit('helion-agent'), nodeId: 'pluto' },
     ]);
     expect(groups.map((g) => [g.id, g.items.map((i) => i.nodeId)])).toEqual([
-      ['cosmos-agent', ['jupiter', 'pluto']],
+      ['helion-agent', ['jupiter', 'pluto']],
       ['immich', ['jupiter']],
     ]);
   });

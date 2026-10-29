@@ -18,7 +18,7 @@ use crate::{
     store::{ self, StoredTarget, Store },
     wol,
 };
-use cosmos_common::types::{
+use helion_common::types::{
     EventCategory,
     Severity,
     WolEntry,
@@ -374,7 +374,7 @@ mod tests {
     #[tokio::test]
     async fn waking_then_the_tailnet_reporting_online_completes_the_wake() {
         use crate::sample::tailnet::{ TailnetData, TailnetSnapshot };
-        use cosmos_common::types::{ TailnetConnection, TailnetDevice, TailnetStatus };
+        use helion_common::types::{ TailnetConnection, TailnetDevice, TailnetStatus };
 
         let device = |online: bool| TailnetDevice {
             id: "nDESK".into(),

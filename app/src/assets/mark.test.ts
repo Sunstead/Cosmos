@@ -49,8 +49,8 @@ describe('generated mark', () => {
 });
 
 describe('ServiceIcon', () => {
-  it('renders the Cosmos mark with themed gradient stops', () => {
-    const { container } = render(React.createElement(ServiceIcon, { service: 'cosmos', size: 24 }));
+  it('renders the Helion mark with themed gradient stops', () => {
+    const { container } = render(React.createElement(ServiceIcon, { service: 'helion', size: 24 }));
     const stops = container.querySelectorAll('stop');
     expect(stops).toHaveLength(2);
     expect(stops[0].getAttribute('style')).toContain('var(--mark-0');

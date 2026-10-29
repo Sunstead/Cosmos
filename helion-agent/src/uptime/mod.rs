@@ -1,5 +1,5 @@
 //! Uptime checks: an HTTP check for every service with a
-//! `cosmos.service.url` label, plus the HTTP and TCP checks added in the UI.
+//! `helion.service.url` label, plus the HTTP and TCP checks added in the UI.
 //!
 //! One task owns the checks, like Wake-on-LAN's: handlers read the published
 //! snapshot, or send a reload and wait for it to republish. Probes run in
@@ -23,7 +23,7 @@ use crate::{
     store::Store,
 };
 use cert::CertValidity;
-use cosmos_common::types::{
+use helion_common::types::{
     CertInfo,
     CheckKind,
     CheckSource,
@@ -194,10 +194,10 @@ fn define(
     let mut sorted: Vec<&ContainerInfo> = containers.iter().collect();
     sorted.sort_by(|a, b| a.name.cmp(&b.name));
     for c in sorted {
-        let Some(service) = c.cosmos_service.as_deref().filter(|s| *s != "system") else {
+        let Some(service) = c.helion_service.as_deref().filter(|s| *s != "system") else {
             continue;
         };
-        let url = c.cosmos_service_url.as_deref().filter(|u| !u.trim().is_empty());
+        let url = c.helion_service_url.as_deref().filter(|u| !u.trim().is_empty());
         let running = c.state == "running";
         let started = c.started_at
             .as_deref()
@@ -692,9 +692,9 @@ mod tests {
             compose_project: None,
             compose_service: None,
             update_labels: Default::default(),
-            cosmos_service: service.map(Into::into),
-            cosmos_service_description: None,
-            cosmos_service_url: url.map(Into::into),
+            helion_service: service.map(Into::into),
+            helion_service_description: None,
+            helion_service_url: url.map(Into::into),
             cpu_pct: 0.0,
             mem_used_bytes: 0,
             mem_limit_bytes: 0,

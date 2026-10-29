@@ -117,7 +117,7 @@ describe('node store', () => {
 
   it('says so when the sign-in provider, not the agent, is down', async () => {
     useAuthStore.setState({ sessions: {} });
-    localStorage.setItem(`cosmos-oidc:${ISSUER}`, 'rt');
+    localStorage.setItem(`helion-oidc:${ISSUER}`, 'rt');
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: RequestInfo | URL) => {

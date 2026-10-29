@@ -43,6 +43,6 @@ export async function signOutAndSay(auth: OidcAuthInfo): Promise<void> {
 /** Where sign-in details are kept, for the Account section header. */
 export function tokenStorageNote(): string {
   return isDesktop()
-    ? 'Your sign-in is kept in the system keychain. Cosmos never sees your password.'
-    : 'In the browser, your sign-in is kept in local storage. Cosmos never sees your password.';
+    ? 'Your sign-in is kept in the system keychain. Helion never sees your password.'
+    : 'In the browser, your sign-in is kept in local storage. Helion never sees your password.';
 }

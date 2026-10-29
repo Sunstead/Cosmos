@@ -19,7 +19,7 @@ pub enum EventCategory {
     Container,
     Backup,
     Disk,
-    /// Something an admin did through Cosmos.
+    /// Something an admin did through Helion.
     Action,
     Wol,
     /// The agent and the host it runs on: restarts, upgrades, reboots.
@@ -96,9 +96,9 @@ pub struct Event {
     pub subject: String,
     pub title: String,
     pub detail: Option<String>,
-    /// Who did it, for actions taken through Cosmos.
+    /// Who did it, for actions taken through Helion.
     pub actor: Option<String>,
-    /// The subject's `cosmos.service` label, when it has one.
+    /// The subject's `helion.service` label, when it has one.
     pub service: Option<String>,
     pub problem: Option<ProblemRef>,
 }

@@ -2,7 +2,7 @@
 //! previous counters, so rate deltas are correct for any number of clients.
 
 use super::{ facts::HostFacts, filters::HostFilters };
-use cosmos_common::types::{ DiskInfo, DiskKind, HostInfo, NetInfo };
+use helion_common::types::{ DiskInfo, DiskKind, HostInfo, NetInfo };
 use std::{ collections::HashMap, sync::Arc, time::Instant };
 use sysinfo::{ CpuRefreshKind, DiskRefreshKind, Disks, MemoryRefreshKind, Networks, RefreshKind, System };
 

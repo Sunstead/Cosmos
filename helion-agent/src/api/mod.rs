@@ -21,7 +21,7 @@ mod wol;
 mod web;
 
 use crate::{ auth, error::AgentError, events::NewEvent, state::AppState };
-use cosmos_common::types::{ EventCategory, Severity };
+use helion_common::types::{ EventCategory, Severity };
 use axum::{
     http::{ header, HeaderValue },
     middleware::from_fn_with_state,

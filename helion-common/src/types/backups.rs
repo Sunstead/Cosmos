@@ -196,7 +196,7 @@ pub struct BackupsStatus {
     #[ts(optional = nullable)]
     pub space_check: Option<StepStatus>,
     pub heartbeat: Option<StepStatus>,
-    /// Backups and restore tests asked for from Cosmos, newest first. Absent
+    /// Backups and restore tests asked for from Helion, newest first. Absent
     /// from agents before 0.7.
     #[serde(default)]
     #[ts(as = "Option<Vec<BackupRequest>>", optional)]

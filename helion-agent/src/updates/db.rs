@@ -1,7 +1,7 @@
 //! Update state in `state.db` (migration in `store.rs`).
 
 use crate::error::AgentError;
-use cosmos_common::types::{ UpdatePolicy, UpdateRun, UpdateRunKind, UpdateRunState };
+use helion_common::types::{ UpdatePolicy, UpdateRun, UpdateRunKind, UpdateRunState };
 use rusqlite::{ params, Connection, OptionalExtension, Row };
 use std::collections::HashMap;
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Cuts a Cosmos release: one version for the agent, the web UI it serves and
+ * Cuts a Helion release: one version for the agent, the web UI it serves and
  * the desktop app. Sets it everywhere, commits, and tags `v<version>` (the
  * agent image, .github/workflows/agent-image.yml) and `app-v<version>` (the
  * desktop installers, .github/workflows/app-release.yml).
@@ -9,8 +9,8 @@
  *   npm run release -- 0.6.0 --push   ...and push the commit and both tags
  *
  * The version lives in app/package.json (tauri.conf.json reads it from there,
- * and the web UI shows it), app/src-tauri/Cargo.toml, cosmos-agent/Cargo.toml
- * and cosmos-common/Cargo.toml, kept in step here.
+ * and the web UI shows it), app/src-tauri/Cargo.toml, helion-agent/Cargo.toml
+ * and helion-common/Cargo.toml, kept in step here.
  */
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -27,8 +27,8 @@ const files = {
 /** Crate name (as in Cargo.lock) -> its Cargo.toml. */
 const crates = {
   app: path.join(appDir, 'src-tauri/Cargo.toml'),
-  'cosmos-agent': path.join(root, 'cosmos-agent/Cargo.toml'),
-  'cosmos-common': path.join(root, 'cosmos-common/Cargo.toml'),
+  'helion-agent': path.join(root, 'helion-agent/Cargo.toml'),
+  'helion-common': path.join(root, 'helion-common/Cargo.toml'),
 };
 
 const crateVersion = (file) => readFileSync(file, 'utf8').match(/^version = "([^"]*)"/m)?.[1];
@@ -106,15 +106,15 @@ writeFileSync(files.cargoLock, lock);
 
 git('add', files.pkg, files.lock, files.cargoLock, ...Object.values(crates));
 git('commit', '--quiet', '-m', `Release v${version}`);
-for (const tag of tags) git('tag', '-a', tag, '-m', `Cosmos ${version}`);
+for (const tag of tags) git('tag', '-a', tag, '-m', `Helion ${version}`);
 console.log(`Bumped ${current} -> ${version}, committed and tagged ${tags.join(' and ')}.`);
 
 if (push) {
   git('push', '--quiet', 'origin', 'main');
   git('push', '--quiet', 'origin', ...tags);
   console.log('Pushed. Building the agent image and a draft desktop release:');
-  console.log('  https://github.com/Sunstead/Cosmos/actions/workflows/agent-image.yml');
-  console.log('  https://github.com/Sunstead/Cosmos/actions/workflows/app-release.yml');
+  console.log('  https://github.com/Sunstead/Helion/actions/workflows/agent-image.yml');
+  console.log('  https://github.com/Sunstead/Helion/actions/workflows/app-release.yml');
 } else {
   console.log('Nothing pushed. When ready:');
   console.log(`  git push origin main && git push origin ${tags.join(' ')}`);

@@ -6,7 +6,7 @@ use crate::{
     state::AppState,
 };
 use axum::{ extract::State, http::StatusCode, Extension, Json };
-use cosmos_common::types::{ BackupRequestKind, BackupRunInput };
+use helion_common::types::{ BackupRequestKind, BackupRunInput };
 
 pub async fn current(State(state): State<AppState>) -> Result<CachedJson, AgentError> {
     let rx = state.backups_rx.as_ref().ok_or(AgentError::NotEnabled("backups"))?;

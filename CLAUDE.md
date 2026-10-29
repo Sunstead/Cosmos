@@ -4,10 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Cosmos is a homelab dashboard. A Cargo workspace holds three crates, plus a React frontend inside the Tauri crate's parent directory:
+Helion is a homelab dashboard. A Cargo workspace holds three crates, plus a React frontend inside the Tauri crate's parent directory:
 
-- `cosmos-agent` — axum server that runs on each node (port 7700). Host metrics (sysinfo), Docker containers/volumes (bollard), metrics history (SQLite), restic backup status.
-- `cosmos-common` — shared serde types, exported to TypeScript via `ts-rs`.
+- `helion-agent` — axum server that runs on each node (port 7700). Host metrics (sysinfo), Docker containers/volumes (bollard), metrics history (SQLite), restic backup status.
+- `helion-common` — shared serde types, exported to TypeScript via `ts-rs`.
 - `app/src-tauri` — Tauri 2 shell around the frontend; also targets Android (`gen/android`).
 - `app/` — Vite + React 19 + TypeScript (Tailwind v4, `@sunstead/ui` primitives on Base UI, TanStack Router/Query/Table, zustand, recharts).
 
@@ -15,11 +15,11 @@ Cosmos is a homelab dashboard. A Cargo workspace holds three crates, plus a Reac
 
 Rust (from repo root):
 ```bash
-cargo test -p cosmos-common                      # ALSO regenerates the TS bindings
+cargo test -p helion-common                      # ALSO regenerates the TS bindings
 cargo test --workspace
 cargo clippy --workspace --all-targets           # expected to be warning-free
-COSMOS_AGENT_ALLOW_ANONYMOUS=true COSMOS_AGENT_BIND=127.0.0.1:7700 cargo run -p cosmos-agent   # dev: no sign-in
-cargo build --profile release-agent -p cosmos-agent
+HELION_AGENT_ALLOW_ANONYMOUS=true HELION_AGENT_BIND=127.0.0.1:7700 cargo run -p helion-agent   # dev: no sign-in
+cargo build --profile release-agent -p helion-agent
 ```
 
 Frontend (from `app/`):
@@ -34,7 +34,7 @@ npm run test:e2e                   # Playwright, see below
 npm run release -- 0.6.0 [--push]  # agent, web UI and desktop app together; see RELEASING.md
 ```
 
-`npm run test:e2e` builds and starts a real `cosmos-agent` (random port, temp
+`npm run test:e2e` builds and starts a real `helion-agent` (random port, temp
 history DB, a fake `tailscaled` and a mock OIDC provider in `e2e/mock-oidc.ts`,
 so every spec signs in for real) and Vite on :1431, then drives system Chrome
 (`PW_CHANNEL` overrides). Docker-dependent specs skip when no daemon is up.
@@ -46,9 +46,9 @@ judging its look and frame time without Docker.
 
 Agent container (agent + bundled web UI):
 ```bash
-docker build -f cosmos-agent/Dockerfile -t cosmos-agent .   # build from the REPO ROOT
+docker build -f helion-agent/Dockerfile -t helion-agent .   # build from the REPO ROOT
 ```
-`.github/workflows/agent-image.yml` publishes `ghcr.io/sunstead/cosmos-agent`
+`.github/workflows/agent-image.yml` publishes `ghcr.io/sunstead/helion-agent`
 (linux/amd64): `:latest` from `main`, semver tags from `v*`. `ci.yml` runs the
 agent/common tests, clippy (`-D warnings`) and the frontend lint/test/build;
 the Tauri crate is skipped in CI because it needs WebKitGTK. `app-release.yml`
@@ -60,14 +60,14 @@ which tags `v<version>` (agent image) and `app-v<version>` (desktop) together.
 
 ## Type sharing (Rust → TS)
 
-Types live in `cosmos-common/src/types/` (`host`, `docker`, `history`, `backups`, `meta`, `error`), flat-re-exported from `types/mod.rs`. Each derives `ts_rs::TS` with `#[ts(export, export_to = "../../app/src/generated/")]`.
+Types live in `helion-common/src/types/` (`host`, `docker`, `history`, `backups`, `meta`, `error`), flat-re-exported from `types/mod.rs`. Each derives `ts_rs::TS` with `#[ts(export, export_to = "../../app/src/generated/")]`.
 
 Two things to know:
 
-- **`export_to` resolves against `cosmos-common/bindings/`, not the source file.** That's why every module uses the identical path string, and why the types can be reorganised freely.
+- **`export_to` resolves against `helion-common/bindings/`, not the source file.** That's why every module uses the identical path string, and why the types can be reorganised freely.
 - **64-bit integers carry `#[ts(type = "number")]`.** ts-rs maps `u64`/`i64` to `bigint`, but serde writes plain JSON numbers and `JSON.parse` yields `number` — without the annotation the generated type never matches the value at runtime. Every such field here is a byte count, timestamp or counter, all far below `Number.MAX_SAFE_INTEGER`.
 
-`app/src/generated/` is gitignored, so **a fresh clone has no types until you run `cargo test -p cosmos-common`** — `npm run build` fails until you do.
+`app/src/generated/` is gitignored, so **a fresh clone has no types until you run `cargo test -p helion-common`** — `npm run build` fails until you do.
 
 **Units on the wire are raw: bytes and bytes/second.** Formatting belongs in `app/src/lib/node-metrics.ts`. The pre-0.2 format mixed MB/s for disk with megabits/s for network in one struct.
 
@@ -83,7 +83,7 @@ Background samplers publish to `tokio::sync::watch` channels; handlers hand out 
 - `watch` not `broadcast`: subscribers only want the newest sample, and `watch` coalesces by construction.
 - Snapshots carry `json: Arc<str>` — serialization happens once per tick, not once per request per client.
 
-**Config** (`config.rs`). `agent.toml`, then the `COSMOS_AGENT_*` overlay.
+**Config** (`config.rs`). `agent.toml`, then the `HELION_AGENT_*` overlay.
 Any string in the file may name environment variables, `${NAME}` (`$$` is a
 dollar), expanded after parsing so TOML quoting never matters; unset or empty
 is a startup error naming the key. That's how a deployment keeps its domains
@@ -104,15 +104,15 @@ domain. `--check-config` expands too, so it needs the same variables.
 
 **History** (`history/`). SQLite, WAL + `synchronous = NORMAL` + `temp_store = MEMORY` (the last is required for `read_only: true` containers). Tiers: `metrics_1s` (1 h), `metrics_1m` (7 d), `metrics_5m` (90 d), each rolled-up tier carrying avg *and* max. A writer thread batches one transaction per 60 rows or 10 s; the sampler's `push` is `try_send` and drops rather than stalling the live stream. **Rollups only touch fully-closed buckets**, which makes them idempotent and crash-safe via a cursor in `meta`; retention never deletes rows the rollup hasn't consumed. Because a bucket is never revisited, the writer flushes its batch before rolling up and waits 5 s past the close for rows in flight. The 5m tier weights each minute by its sample count `n`. `/v1/metrics` returns columnar parallel arrays (~4× smaller than row objects at 10k points).
 
-**Tailnet** (`sample/tailnet.rs`). Polls `tailscaled`'s LocalAPI (`/localapi/v0/status`) over its unix socket every 10 s: raw HTTP/1.0, so the body ends at EOF and no HTTP client is needed. `tailscaled` authorises by peer uid and gives non-root, non-operator callers read-only access, so no API key and no write path. The snapshot keeps the parsed `TailnetStatus` as well as the JSON because Wake-on-LAN reads `online` from it. A device is matched to a Cosmos node when that node's agent reports it as `is_self`, never by hostname (`lib/tailnet.ts` `mergeTailnets`). A device's `name` is its machine name, the first label of its MagicDNS name as `tailscale status` shows it, not the OS hostname, which every iPhone and iPad reports as `localhost`; `mergeTailnets` derives it too, for 0.8.0 and older agents. The UI polls rather than streams; it's on the Network page and as the constellation's outer ring of probes.
+**Tailnet** (`sample/tailnet.rs`). Polls `tailscaled`'s LocalAPI (`/localapi/v0/status`) over its unix socket every 10 s: raw HTTP/1.0, so the body ends at EOF and no HTTP client is needed. `tailscaled` authorises by peer uid and gives non-root, non-operator callers read-only access, so no API key and no write path. The snapshot keeps the parsed `TailnetStatus` as well as the JSON because Wake-on-LAN reads `online` from it. A device is matched to a Helion node when that node's agent reports it as `is_self`, never by hostname (`lib/tailnet.ts` `mergeTailnets`). A device's `name` is its machine name, the first label of its MagicDNS name as `tailscale status` shows it, not the OS hostname, which every iPhone and iPad reports as `localhost`; `mergeTailnets` derives it too, for 0.8.0 and older agents. The UI polls rather than streams; it's on the Network page and as the constellation's outer ring of probes.
 
 **Wake-on-LAN** (`wol.rs`, `sample/wol.rs`, `store.rs`). Targets are edited in the UI and stored in `state.db` (`[state] path`), a separate SQLite file from the history database, with `PRAGMA user_version` migrations that are append-only. One task owns the target list and in-flight wakes; handlers read its snapshot, or send it a command (`reload`, `waking`) and wait for it to republish, so a GET right after a write reflects it. "Up" comes from the linked tailnet device's `online`, else a TCP probe where a refusal counts as up. The state machine (`step`) is pure and tested with a fake clock; each wake's outcome is persisted. Packets need `SO_BROADCAST`, no capabilities. `/v1/wol/neighbors` reads `/proc/net/arp` on request (admin only, rare), the one deliberate exception to "never on the request path".
 
-**Event log** (`events/`). An append-only `events` table in `state.db`, plus the `problems` open now. Detectors only *report*: `Event` (happened once), `Open(problem)` (true now, repeat freely), `Resolve(key)` (seen clear). One task owns the open set and writes rows, so repeats are free and a problem opened before a restart stays open until its detector sees the good condition; that is also where hysteresis comes from (disks warn at 85%, clear below 80%). Detectors are pure and tested with plain timestamps: `containers.rs` (Docker event stream forwarded by `spawn_event_watcher`, plus a 15 s tick over the typed container list), `backups.rs`, `disks.rs`, `lifecycle.rs` (version, boot time and a clean-stop marker written after SIGTERM, which is how a power cut shows up). **A `die` with no `kill` in the previous 30 s is one nobody asked for**: every intentional stop (Compose recreating on deploy, `docker stop`, Cosmos actions) sends `kill` first, which is what keeps a deploy from reading as a wave of crashes. The event watcher subscribes 30 s in the past and marks those events `replayed`; the tracker only takes `kill`/`oom` from them (`ContainerTracker::replay`), so a `kill` sent while the agent itself was being recreated still counts, and nothing is reported twice. Admin actions are recorded in the write handlers via `api::record_action`, with who. `GET /v1/events` reads SQLite (`after=` polls forward, `before=` pages back); the app polls rather than streams, because each node already holds three of the browser's ~6 HTTP/1.1 connections. Several snapshots (`ContainerSnapshot`, `HostSnapshot`, `BackupSnapshot`) keep typed data alongside their JSON for these detectors.
+**Event log** (`events/`). An append-only `events` table in `state.db`, plus the `problems` open now. Detectors only *report*: `Event` (happened once), `Open(problem)` (true now, repeat freely), `Resolve(key)` (seen clear). One task owns the open set and writes rows, so repeats are free and a problem opened before a restart stays open until its detector sees the good condition; that is also where hysteresis comes from (disks warn at 85%, clear below 80%). Detectors are pure and tested with plain timestamps: `containers.rs` (Docker event stream forwarded by `spawn_event_watcher`, plus a 15 s tick over the typed container list), `backups.rs`, `disks.rs`, `lifecycle.rs` (version, boot time and a clean-stop marker written after SIGTERM, which is how a power cut shows up). **A `die` with no `kill` in the previous 30 s is one nobody asked for**: every intentional stop (Compose recreating on deploy, `docker stop`, Helion actions) sends `kill` first, which is what keeps a deploy from reading as a wave of crashes. The event watcher subscribes 30 s in the past and marks those events `replayed`; the tracker only takes `kill`/`oom` from them (`ContainerTracker::replay`), so a `kill` sent while the agent itself was being recreated still counts, and nothing is reported twice. Admin actions are recorded in the write handlers via `api::record_action`, with who. `GET /v1/events` reads SQLite (`after=` polls forward, `before=` pages back); the app polls rather than streams, because each node already holds three of the browser's ~6 HTTP/1.1 connections. Several snapshots (`ContainerSnapshot`, `HostSnapshot`, `BackupSnapshot`) keep typed data alongside their JSON for these detectors.
 
 **Notifications** (`notify/`). Every stored event is broadcast; the notifier offers it to each channel (ntfy, webhook), which takes it when `rules::wants` (enabled, category, `min_severity`, `recoveries`) and the `FloodGuard` agree: a problem opens at most once per 30 min per channel (a held-back opening is delivered late if the problem is still open, so a flap that sticks isn't left looking resolved), and the same one-off event (one container crashing) at most once. Delivery is a task per message, three tries, no 3xx or 4xx retry, then dropped: the log has it. The client doesn't follow redirects: a redirected POST becomes a GET, which once made an `http://` ntfy address that redirects to `https://` read as delivered. Channels are edited in the app and stored in `state.db`; **the channel secret is write-only** (`has_secret` in the API, hidden from `Debug`), the agent's one stored credential. The notifier must subscribe before anything reports, or it misses the lifecycle events at startup.
 
-**Uptime** (`uptime/`). One task owns the checks, like Wake-on-LAN's: every `cosmos.service` with a url label gets an HTTP check (`svc:<service>`, `https://` added as `serviceHref` does), and custom HTTP or TCP checks live in `state.db`, as do per-service settings (off, path, any status counts). A service's check only runs while one of its containers is running, and failures in the first 2 minutes after a container starts don't count, so a deliberate stop or a deploy never pages. A service whose containers vanish keeps its check, paused, for a minute (`carry_vanished`), so a deploy that removes and recreates them doesn't resolve its problem or reset its heartbeat. Probes run in their own tasks and report back, so a slow target doesn't hold up a reload; creating or editing a check waits for its first result. HTTP doesn't follow redirects (a forward-auth 302 is up) and is up below 400. `[uptime] local_domains` resolves those names to 127.0.0.1 through a custom reqwest resolver: on Jupiter the home domain's names point at the Tailscale IP, which the host can't reach, so checks go through Caddy on the host. `detector.rs` is pure: down after 3 failures in a row, up after 2 passes, and certificates (read from `tls_info` by the small DER walker in `cert.rs`, keyed by serial so a wildcard is one problem) warn in their last quarter and are an error under 3 days. Results are tallied per hour into `uptime_hourly` every 5 minutes (additive, kept 90 days) for the 24h/30d/90d figures; the newest 90 per check live in memory for the heartbeat bar, and outages themselves are in the event log.
+**Uptime** (`uptime/`). One task owns the checks, like Wake-on-LAN's: every `helion.service` with a url label gets an HTTP check (`svc:<service>`, `https://` added as `serviceHref` does), and custom HTTP or TCP checks live in `state.db`, as do per-service settings (off, path, any status counts). A service's check only runs while one of its containers is running, and failures in the first 2 minutes after a container starts don't count, so a deliberate stop or a deploy never pages. A service whose containers vanish keeps its check, paused, for a minute (`carry_vanished`), so a deploy that removes and recreates them doesn't resolve its problem or reset its heartbeat. Probes run in their own tasks and report back, so a slow target doesn't hold up a reload; creating or editing a check waits for its first result. HTTP doesn't follow redirects (a forward-auth 302 is up) and is up below 400. `[uptime] local_domains` resolves those names to 127.0.0.1 through a custom reqwest resolver: on Jupiter the home domain's names point at the Tailscale IP, which the host can't reach, so checks go through Caddy on the host. `detector.rs` is pure: down after 3 failures in a row, up after 2 passes, and certificates (read from `tls_info` by the small DER walker in `cert.rs`, keyed by serial so a wildcard is one problem) warn in their last quarter and are an error under 3 days. Results are tallied per hour into `uptime_hourly` every 5 minutes (additive, kept 90 days) for the 24h/30d/90d figures; the newest 90 per check live in memory for the heartbeat bar, and outages themselves are in the event log.
 
 **Peers** (`peers/`). Agents watch each other, since nothing on a node can
 report that node down. `[[peers]]` lists the others; the side with a `url`
@@ -120,7 +120,7 @@ POSTs a `PeerHello` to the other's `/v1/peer/heartbeat` every 15 s and gets
 one back, so one exchange tells both sides and only one has to reach the
 other (Pluto dials Jupiter's agent through Caddy's public name for it: Jupiter's
 Tailscale is userspace and can't reach Pluto, and Pluto may only reach
-`jupiter:443`). The route is public and checks `COSMOS_AGENT_PEER_TOKEN`
+`jupiter:443`). The route is public and checks `HELION_AGENT_PEER_TOKEN`
 itself (constant time, env only, the agent refuses to start with peers and no
 token), not a sign-in: an Authentik restart must not read as a node down. One
 task owns the trackers; `detector.rs` is pure: late after 30 s, down after
@@ -133,28 +133,28 @@ peer (an uptime check with `via_peer`); the notifier holds its opening
 sends it if still open, or nothing if it cleared. `/config.json` lists each
 peer's `ui_url` after this agent, and `/v1/info` carries `node_description`.
 
-**Updates** (`updates/`). The agent never edits compose or pushes: git stays the record of what runs. Every `check_interval_hours` it lists each image repository's tags anonymously (`registry.rs`: one flow for every registry, the 401 challenge then a pull token from its realm, `Link` pagination up to 50 pages since Immich has ~30k tags, and **never a manifest request**, which Docker Hub counts against the pull limit deploys need). `rules.rs` groups services into units (one image repository, or a `cosmos.update.group`) and applies the `cosmos.update.*` labels (off, group, hold, major-step, major-digits, backup; the stricter wins); `tags.rs` only offers tags of the same shape (`16.15-alpine` → `16.x-alpine`, never an rc). First sighting of each tag is stored (`update_seen`) for `min_age_days`. Applying one dispatches the infrastructure repo's `update.yml` (`github.rs`, a fine-grained token from `COSMOS_AGENT_GITHUB_TOKEN` only, hidden from `Debug`), which re-checks everything itself, backs up where labelled, commits and deploys. A run is stored at each step (queued → dispatched → running → watching → done / failed / broken) so it resumes after the deploy restarts the agent. One workflow runs at a time, but the next queued one starts as soon as the last has deployed, while that one is still being watched; while a workflow runs, the agent reads its jobs for the step under way (`UpdateRun.step`, not stored), so the page only says it's backing up when it is. During the watch (`decide.rs`, pure) an uptime check going down or a container restarting marks it broken: a problem, and automatic updates for the unit pause until a policy is chosen again. Nothing rolls back on its own; a rollback is the same flow to the previous tag. Automatic updates are queued when the backup status shows a successful *timer* run (the timer fired just before it), so the nightly is the pre-update backup. `cosmos-agent --check-config <file>` lets the workflow try a new agent against the live config first.
+**Updates** (`updates/`). The agent never edits compose or pushes: git stays the record of what runs. Every `check_interval_hours` it lists each image repository's tags anonymously (`registry.rs`: one flow for every registry, the 401 challenge then a pull token from its realm, `Link` pagination up to 50 pages since Immich has ~30k tags, and **never a manifest request**, which Docker Hub counts against the pull limit deploys need). `rules.rs` groups services into units (one image repository, or a `helion.update.group`) and applies the `helion.update.*` labels (off, group, hold, major-step, major-digits, backup; the stricter wins); `tags.rs` only offers tags of the same shape (`16.15-alpine` → `16.x-alpine`, never an rc). First sighting of each tag is stored (`update_seen`) for `min_age_days`. Applying one dispatches the infrastructure repo's `update.yml` (`github.rs`, a fine-grained token from `HELION_AGENT_GITHUB_TOKEN` only, hidden from `Debug`), which re-checks everything itself, backs up where labelled, commits and deploys. A run is stored at each step (queued → dispatched → running → watching → done / failed / broken) so it resumes after the deploy restarts the agent. One workflow runs at a time, but the next queued one starts as soon as the last has deployed, while that one is still being watched; while a workflow runs, the agent reads its jobs for the step under way (`UpdateRun.step`, not stored), so the page only says it's backing up when it is. During the watch (`decide.rs`, pure) an uptime check going down or a container restarting marks it broken: a problem, and automatic updates for the unit pause until a policy is chosen again. Nothing rolls back on its own; a rollback is the same flow to the previous tag. Automatic updates are queued when the backup status shows a successful *timer* run (the timer fired just before it), so the nightly is the pre-update backup. `helion-agent --check-config <file>` lets the workflow try a new agent against the live config first.
 
-**Backups** (`backups.rs`). The agent **does not run restic**. It reads a status JSON that `scripts/cosmos-backup-status.sh` writes on the host, so the repo password never enters a network-facing process and nothing can contend for the repository lock. `BackupsStatus.stale` and `timer_last_fired` exist to catch the case a snapshot list can't: a timer that fired but whose job died before writing status. **Requests** (0.7): "Back up now" and "Run test now" (`POST /v1/backups/run`, `backup_actions`) write `{id, kind, requested_by}` as `<id>.tmp` then rename it to `<id>.json` in `[backups] requests_dir`, the host's inbox mounted writable; a host service (Jupiter's `request-dispatch.sh`, started by a systemd `.path` unit) starts the matching unit and writes a result per request into `request_results_dir`. The sampler lists queued files and results as `requests`, and polls every 2 s while one is queued or running. The `backup_state` and `backup_dump` kinds are for updates and refused on this route (`backup_dump`: only the databases the updated services use, which is what an update takes now). The latest restore test comes from `restore_test_file` (path-free messages); a failed one opens `backup:restore_test`, and none for 15 days a warning. The restore guide in the app only generates commands for the host's `scripts/restore.sh` (`lib/restore.ts`), using the `databases` the status file lists; nothing restores from Cosmos.
+**Backups** (`backups.rs`). The agent **does not run restic**. It reads a status JSON that `scripts/helion-backup-status.sh` writes on the host, so the repo password never enters a network-facing process and nothing can contend for the repository lock. `BackupsStatus.stale` and `timer_last_fired` exist to catch the case a snapshot list can't: a timer that fired but whose job died before writing status. **Requests** (0.7): "Back up now" and "Run test now" (`POST /v1/backups/run`, `backup_actions`) write `{id, kind, requested_by}` as `<id>.tmp` then rename it to `<id>.json` in `[backups] requests_dir`, the host's inbox mounted writable; a host service (Jupiter's `request-dispatch.sh`, started by a systemd `.path` unit) starts the matching unit and writes a result per request into `request_results_dir`. The sampler lists queued files and results as `requests`, and polls every 2 s while one is queued or running. The `backup_state` and `backup_dump` kinds are for updates and refused on this route (`backup_dump`: only the databases the updated services use, which is what an update takes now). The latest restore test comes from `restore_test_file` (path-free messages); a failed one opens `backup:restore_test`, and none for 15 days a warning. The restore guide in the app only generates commands for the host's `scripts/restore.sh` (`lib/restore.ts`), using the `databases` the status file lists; nothing restores from Helion.
 
 ## Deployment
 
 Production is the Jupiter repo (`Sunstead/Jupiter`, usually checked out
 beside this one), where a push to `main` deploys. It pins the agent to a
-semver tag, bumped by hand in a PR (`compose/cosmos.yml`) once a `v*` tag has
+semver tag, bumped by hand in a PR (`compose/helion.yml`) once a `v*` tag has
 published; Renovate is gone.
 An agent refuses config it doesn't understand, so a release that changes
 `agent.toml` needs its image published before the Jupiter PR that uses it
 merges.
 
-`cosmos-agent/compose.example.yaml` and `agent.example.toml`. Two things are easy to get wrong:
+`helion-agent/compose.example.yaml` and `agent.example.toml`. Two things are easy to get wrong:
 
 - **`network_mode: host` is required, not optional.** `/proc/net/dev` renders from the reading process's network namespace and sysinfo has no `HOST_PROC` escape hatch, so without it the agent reports the container's veth. Consequence: `ports:` does not apply, and `[host] net_exclude` becomes load-bearing.
 - **`:ro` on `docker.sock` is not a security control** — it applies to the inode, not the protocol. Anyone who can `connect()` has the full Docker API, which is root-equivalent. The real controls are `allow_actions = false` and network isolation.
 
 Disks (`sample/filters.rs`): in a container, the `[[host.disks]]` entry labelled `/` (or `[host] root`) says where the host root is mounted. The `/:/host/rootfs:ro,rslave` bind is recursive, so every other drive is discovered under it and reported by its host path; listing only the root used to hide them (a 2TB `/srv` never showed). Virtual filesystems, container storage and boot partitions are skipped, and mounts sharing a device are counted once (`pool_key`: the APFS container on macOS, the device path on Linux).
 
-**Web UI from the agent.** The image sets `COSMOS_AGENT_WEB_DIR`, and
+**Web UI from the agent.** The image sets `HELION_AGENT_WEB_DIR`, and
 `api/web.rs` serves `app/dist` as a public fallback after the API routes:
 SPA fallback to `index.html`, 404 for unknown `/v1/*` and missing `/assets/*`,
 immutable caching for hashed assets. `/config.json` returns `[{"url":"/"}]`,
@@ -188,23 +188,23 @@ the stream and write through refs inside a shared animation frame
 only where the whole view changes. Recharts is only on `/monitoring`, which is
 lazy-loaded.
 
-**Adding an endpoint:** type in `cosmos-common` → route + module in
-`cosmos-agent` → method on `AgentClient` → subscription in `NodeConnection` or
+**Adding an endpoint:** type in `helion-common` → route + module in
+`helion-agent` → method on `AgentClient` → subscription in `NodeConnection` or
 hook in `queries.ts` → store/page. Gate the UI on the `capabilities` flag so
 older agents degrade instead of erroring.
 
-**Service model.** Services come from the `cosmos.service` Docker label,
+**Service model.** Services come from the `helion.service` Docker label,
 grouped per node in `lib/services.ts`, then across nodes by that key
 (`groupServices`, the containers store's `groups`): a service on several nodes
-(Cosmos itself) is listed once, with a row per node, and counted once. The
+(Helion itself) is listed once, with a row per node, and counted once. The
 constellation keeps a moon per planet, since that's where each one runs.
-Updates group the same way (`groupUnits`). `cosmos.service: system` marks
-infrastructure (filtered by `userFacingServices()`). `cosmos.service.url` holds
+Updates group the same way (`groupUnits`). `helion.service: system` marks
+infrastructure (filtered by `userFacingServices()`). `helion.service.url` holds
 bare hostnames; always route them through `serviceHref()`.
 
 **Node scope.** A page that looks at one node at a time picks it with
 `useNodeScope(page, { capability, allowAll })`: each page keeps its own choice
-(`cosmos-scope-<page>`), offers only nodes with its feature (Backups never
+(`helion-scope-<page>`), offers only nodes with its feature (Backups never
 offers Pluto), and `ALL_NODES` is the "All nodes" entry. Monitoring then draws
 a line per node per metric (`mergeSeries` snaps them to a shared step), and
 Logs merges every node's all-containers socket, lines tagged with `node`.
@@ -262,7 +262,7 @@ composes with `render={<Button />}` rather than `asChild`; menu items take
 label sits inside a `DropdownMenuGroup`. Links styled as buttons put
 `buttonVariants(...)` on the `<Link>`. The sidebar is the package's
 `resizable-sidebar`; `AppLayout` keeps its open state and width in
-localStorage (`cosmos-sidebar-open`, `cosmos-sidebar-width`). An e2e spec
+localStorage (`helion-sidebar-open`, `helion-sidebar-width`). An e2e spec
 checks header height and title position on every page.
 
 **Copy.** Short, sentence case, no em dashes or curly quotes. An ESLint rule
@@ -274,7 +274,7 @@ Atlas and Solstice), each with one scheme (dark or light) and one style
 (`rounded` or `tech`), no custom ones. Themes, their CSS, `ThemeProvider` and
 `useTheme` all live in that package; a new theme or token goes there (its
 `themes.test.ts` checks every theme defines the same tokens, WCAG AA, metric
-colours apart, and so on). Cosmos keeps the first-paint script in
+colours apart, and so on). Helion keeps the first-paint script in
 `index.html` (ids, schemes and styles, and the aliases), which sets
 `data-theme`, `data-style`, the scheme's `dark`/`light` class (Tailwind's
 `dark:`, sonner) and `color-scheme` before anything renders;
@@ -282,8 +282,8 @@ colours apart, and so on). Cosmos keeps the first-paint script in
 Terminal, Red Alert, Blueprint) restyle the app from `[data-style='tech']`,
 CSS only: square, bracketed panels, mono headings and numbers. They are
 grouped under Dark or Light like the rest, and Follow system can pair them.
-Storage: `cosmos-theme` (an id, or `system` to follow the OS) plus
-`cosmos-theme-light`/`cosmos-theme-dark` for Follow system. Old values map
+Storage: `helion-theme` (an id, or `system` to follow the OS) plus
+`helion-theme-light`/`helion-theme-dark` for Follow system. Old values map
 through `lib/theme-aliases.ts`: the pre-0.10 `dark`/`light`, and
 `cosmos-dark`/`cosmos-light` from before the shared themes, all read as
 Sunstead Dark or Light. `useThemeStyle` reads the style off `<html>` (works
@@ -374,7 +374,7 @@ labels snap to device pixels, not CSS ones; `dispose()` releases the
 context with `forceContextLoss()`.
 
 **Platforms.** Tauri builds the window in Rust (`src-tauri/src/window.rs`),
-not `tauri.conf.json`. An init script sets `window.__COSMOS_PLATFORM__`;
+not `tauri.conf.json`. An init script sets `window.__HELION_PLATFORM__`;
 `main.tsx` copies it to `html[data-platform]` (`macos | windows | linux |
 web`) before render. macOS: overlay title bar, traffic lights positioned by
 `TRAFFIC_LIGHTS`, a native menu (must keep the Edit items or ⌘C/⌘V break in
@@ -404,7 +404,7 @@ phone updates through its store): in a browser the same indicator appears
 when the agent serving the page (`servedUpdate`: the node on this origin)
 reports a newer version than `__APP_VERSION__`, and offers a reload.
 
-**Cosmos mark.** `app/scripts/build-mark.mjs` (`npm run build:mark`) turns the
+**Helion mark.** `app/scripts/build-mark.mjs` (`npm run build:mark`) turns the
 two Inkscape sources (`icon_simple.svg` light ink, `icon_simple_dark.svg` dark
 ink) into `public/favicon.svg`, which carries both palettes and switches on
 `prefers-color-scheme` (browser chrome follows the OS, not the app theme), and
@@ -425,7 +425,7 @@ Composer). The glass icon only shows in a bundled build, not `tauri dev`.
   with no `.event(..)`. A named event is only delivered to a matching
   `addEventListener`, never to `EventSource.onmessage` — which looks like a
   perfectly healthy open stream that no handler ever sees.
-- `npm run build` fails on a fresh clone until `cargo test -p cosmos-common`
+- `npm run build` fails on a fresh clone until `cargo test -p helion-common`
   has generated `app/src/generated/`.
 - **Wrap a `DropdownMenuSubContent` in `DropdownMenuPortal`.** Left inside the
   menu, its `.glass` backdrop filter becomes the containing block for the

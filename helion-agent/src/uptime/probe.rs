@@ -1,7 +1,7 @@
 //! Running one check: an HTTP GET or a TCP connect.
 
 use super::cert::{ self, CertValidity };
-use cosmos_common::types::CheckKind;
+use helion_common::types::CheckKind;
 use reqwest::dns::{ Addrs, Name, Resolve, Resolving };
 use std::{ net::{ IpAddr, Ipv4Addr, SocketAddr }, sync::Arc, time::{ Duration, Instant } };
 
@@ -67,7 +67,7 @@ impl Prober {
         let client = reqwest::Client
             ::builder()
             .timeout(TIMEOUT)
-            .user_agent(concat!("cosmos-agent/", env!("CARGO_PKG_VERSION"), " (uptime check)"))
+            .user_agent(concat!("helion-agent/", env!("CARGO_PKG_VERSION"), " (uptime check)"))
             // A forward-auth redirect to the sign-in page is the app answering.
             .redirect(reqwest::redirect::Policy::none())
             .tls_info(true)

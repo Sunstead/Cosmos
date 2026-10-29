@@ -236,7 +236,7 @@ export function CommandPalette() {
                 </CommandItem>
                 {isDesktop() && (
                   <CommandItem
-                    value='check for app updates cosmos version'
+                    value='check for app updates helion version'
                     onSelect={go(() => void useAppUpdate.getState().check({ manual: true }))}
                   >
                     <CircleArrowDown /> Check for app updates

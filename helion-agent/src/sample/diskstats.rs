@@ -248,7 +248,7 @@ mod tests {
             Some(IoCounters { read_bytes: 3_388_420_914 * 512, written_bytes: 155_081_248 * 512 })
         );
         // Bind mounts of the root filesystem share its counters.
-        assert_eq!(io("/var/lib/cosmos-agent"), io("/host/rootfs"));
+        assert_eq!(io("/var/lib/helion-agent"), io("/host/rootfs"));
         // Virtual filesystems have none.
         assert_eq!(io("/"), None);
         assert_eq!(io("/host/rootfs/tmp"), None);

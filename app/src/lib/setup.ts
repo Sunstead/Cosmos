@@ -17,10 +17,10 @@ export const SETUP = {
   events: {
     summary: 'Update the agent to 0.5 or later, and give it a writable state path. The event log is on by default.',
     file: 'agent.toml',
-    snippet: '[events]\nenabled = true\n\n[state]\npath = "/var/lib/cosmos-agent/state.db"',
+    snippet: '[events]\nenabled = true\n\n[state]\npath = "/var/lib/helion-agent/state.db"',
   },
   backups: {
-    summary: 'Enable backups on the agent, then call cosmos-backup-status.sh at the end of your backup job.',
+    summary: 'Enable backups on the agent, then call helion-backup-status.sh at the end of your backup job.',
     file: 'agent.toml',
     snippet: '[backups]\nenabled = true\nstatus_file = "/host/backups/restic-status.json"',
   },
@@ -52,7 +52,7 @@ export const SETUP = {
   },
   updatesApply: {
     summary:
-      'Set the repository whose update workflow bumps the tag and deploys, and give the agent a fine-grained GitHub token for it (Actions: read and write) as COSMOS_AGENT_GITHUB_TOKEN.',
+      'Set the repository whose update workflow bumps the tag and deploys, and give the agent a fine-grained GitHub token for it (Actions: read and write) as HELION_AGENT_GITHUB_TOKEN.',
     file: 'agent.toml',
     snippet: '[updates]\nrepo = "owner/infrastructure"\nworkflow = "update.yml"',
   },
@@ -68,6 +68,6 @@ export const SETUP = {
   services: {
     summary: 'Group containers into a service with a Docker label.',
     file: 'docker-compose.yml',
-    snippet: 'labels:\n  cosmos.service: gitea\n  cosmos.service.url: gitea.example.com',
+    snippet: 'labels:\n  helion.service: gitea\n  helion.service.url: gitea.example.com',
   },
 } satisfies Record<string, SetupInfo>;

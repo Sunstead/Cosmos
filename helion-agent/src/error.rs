@@ -3,7 +3,7 @@
 //! Lets a client tell "Docker is down" from "no containers".
 
 use axum::{ http::StatusCode, response::{ IntoResponse, Response }, Json };
-use cosmos_common::types::{ ApiError, ErrorCode };
+use helion_common::types::{ ApiError, ErrorCode };
 
 #[derive(Debug, thiserror::Error)]
 pub enum AgentError {

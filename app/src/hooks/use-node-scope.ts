@@ -4,7 +4,7 @@ import { usePersistentState } from '@/hooks/use-persistent-state';
 import { scopeCandidates, resolveScope, ALL_NODES, NodeCapability } from '@/lib/node-scope';
 
 /** Before 0.11 every single-node page shared this one choice. */
-const LEGACY_KEY = 'cosmos-selected-node';
+const LEGACY_KEY = 'helion-selected-node';
 
 function legacyChoice(): string | null {
   try {
@@ -38,7 +38,7 @@ export function useNodeScope(
   const nodes = useNodeStore((s) => s.nodes);
   const meta = useNodeStore((s) => s.meta);
   const [stored, setStored] = usePersistentState<string | null>(
-    `cosmos-scope-${page}`,
+    `helion-scope-${page}`,
     initial ?? legacyChoice(),
   );
 

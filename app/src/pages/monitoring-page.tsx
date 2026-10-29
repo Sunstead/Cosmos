@@ -88,7 +88,7 @@ export function MonitoringPage() {
   });
   const all = scope === ALL_NODES;
   const nodeId = all ? null : scope;
-  const [range, setRange] = usePersistentState<Range>('cosmos-monitoring-range', '1h');
+  const [range, setRange] = usePersistentState<Range>('helion-monitoring-range', '1h');
   const meta = useNodeMeta(nodeId);
 
   const { data, isLoading, error } = useMetricHistory(nodeId, {

@@ -4,7 +4,7 @@
 
 use super::{ human_bytes, human_duration, EventsHandle, NewEvent, ProblemSpec, Report, Resolution };
 use crate::{ backups::{ parse_rfc3339, BackupSnapshot }, sample::host::unix_now };
-use cosmos_common::types::{
+use helion_common::types::{
     BackupsStatus,
     CheckResult,
     EventCategory,
@@ -261,7 +261,7 @@ mod tests {
     }
 
     fn test_result(failed: u32, finished_at: i64) -> RestoreTestStatus {
-        use cosmos_common::types::RestoreCheck;
+        use helion_common::types::RestoreCheck;
         let mut checks = vec![RestoreCheck { result: CheckResult::Pass, message: "primary: gitea_db restored (48 tables)".into() }];
         if failed > 0 {
             checks.push(RestoreCheck { result: CheckResult::Fail, message: "state: immich.sql.gz is missing from the snapshot".into() });

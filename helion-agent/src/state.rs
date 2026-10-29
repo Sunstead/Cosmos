@@ -24,7 +24,7 @@ use crate::{
     updates::UpdatesHandle,
     uptime::UptimeHandle,
 };
-use cosmos_common::types::Capabilities;
+use helion_common::types::Capabilities;
 use std::{ ops::Deref, sync::Arc };
 use tokio::sync::watch;
 

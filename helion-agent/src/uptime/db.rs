@@ -2,7 +2,7 @@
 //! (migration in `store.rs`).
 
 use crate::error::AgentError;
-use cosmos_common::types::{ CheckKind, UptimeServiceInput };
+use helion_common::types::{ CheckKind, UptimeServiceInput };
 use rusqlite::{ params, Connection, Row };
 use std::collections::HashMap;
 

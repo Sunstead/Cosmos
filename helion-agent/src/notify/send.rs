@@ -1,7 +1,7 @@
 //! Delivering one event to one channel.
 
 use super::Channel;
-use cosmos_common::types::{ ChannelKind, Event, ProblemState, Severity };
+use helion_common::types::{ ChannelKind, Event, ProblemState, Severity };
 use serde_json::json;
 use std::time::Duration;
 
@@ -16,7 +16,7 @@ pub fn client() -> reqwest::Client {
     reqwest::Client
         ::builder()
         .timeout(HTTP_TIMEOUT)
-        .user_agent(concat!("cosmos-agent/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("helion-agent/", env!("CARGO_PKG_VERSION")))
         .redirect(reqwest::redirect::Policy::none())
         .build()
         .expect("reqwest client")
@@ -145,7 +145,7 @@ pub async fn deliver(client: &reqwest::Client, ch: &Channel, e: &Event, node: &s
 mod tests {
     use super::*;
     use axum::{ http::{ HeaderMap, StatusCode }, routing::post, Json, Router };
-    use cosmos_common::types::{ EventCategory, ProblemRef };
+    use helion_common::types::{ EventCategory, ProblemRef };
     use std::sync::{ Arc, Mutex };
 
     type Seen = Arc<Mutex<Vec<(Option<String>, serde_json::Value)>>>;
@@ -208,11 +208,11 @@ mod tests {
 
     #[test]
     fn messages_rank_by_severity_and_recoveries_are_quiet() {
-        let m = message(&crash(), "jupiter", Some("https://cosmos.example.com/events"));
+        let m = message(&crash(), "jupiter", Some("https://helion.example.com/events"));
         assert_eq!(m.title, "jupiter: gitea crashed (exit 1)");
         assert_eq!(m.body, "Exited with code 1.");
         assert_eq!((m.priority, m.tags.as_slice()), (4, ["rotating_light"].as_slice()));
-        assert_eq!(m.click.as_deref(), Some("https://cosmos.example.com/events"));
+        assert_eq!(m.click.as_deref(), Some("https://helion.example.com/events"));
 
         let recovered = Event {
             problem: Some(ProblemRef { key: "k".into(), state: ProblemState::Resolved }),

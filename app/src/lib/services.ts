@@ -48,7 +48,7 @@ function formatServiceName(key: string): string {
 /**
  * Groups one node's containers into services.
  *
- * Services are declared by the `cosmos.service` Docker label; a container
+ * Services are declared by the `helion.service` Docker label; a container
  * without one becomes a single-container service under its own name.
  * Derivation is per-node so a poll from one node doesn't recompute every
  * other node's services.
@@ -60,7 +60,7 @@ export function deriveNodeServices(
   const groups = new Map<string, ContainerInfo[]>();
 
   for (const c of containers) {
-    const key = c.cosmos_service ?? c.name;
+    const key = c.helion_service ?? c.name;
     const group = groups.get(key) ?? [];
     group.push(c);
     groups.set(key, group);
@@ -91,8 +91,8 @@ export function deriveNodeServices(
       nodeId,
       name: formatServiceName(key),
       description:
-        group.map((c) => c.cosmos_service_description).find((d) => d != null) ?? null,
-      url: group.map((c) => c.cosmos_service_url).find((u) => u != null) ?? null,
+        group.map((c) => c.helion_service_description).find((d) => d != null) ?? null,
+      url: group.map((c) => c.helion_service_url).find((u) => u != null) ?? null,
       cpu_pct: group.reduce((sum, c) => sum + c.cpu_pct, 0),
       mem_used_bytes: group.reduce((sum, c) => sum + c.mem_used_bytes, 0),
       startedAt,
@@ -113,7 +113,7 @@ export function userFacingServices(services: ServiceInfo[]): ServiceInfo[] {
 }
 
 /**
- * One service across every node that runs it: Cosmos itself runs on each
+ * One service across every node that runs it: Helion itself runs on each
  * node, and later so may a proxy or an exporter. Pages list these, so a
  * service shows once, with a row per node inside it.
  */
@@ -139,7 +139,7 @@ function groupStatus(instances: ServiceInfo[]): ServiceStatus {
   return 'partial';
 }
 
-/** Groups services by their `cosmos.service` key across nodes, sorted by name. */
+/** Groups services by their `helion.service` key across nodes, sorted by name. */
 export function groupServices(services: ServiceInfo[]): ServiceGroup[] {
   const byKey = new Map<string, ServiceInfo[]>();
   for (const s of services) {

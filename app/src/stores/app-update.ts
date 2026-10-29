@@ -86,7 +86,7 @@ export const useAppUpdate = create<AppUpdateState>()(
       setAutoCheck: (autoCheck) => set({ autoCheck }),
     }),
     {
-      name: 'cosmos-app-update',
+      name: 'helion-app-update',
       version: 1,
       partialize: (s) => ({ autoCheck: s.autoCheck }),
     },
@@ -94,7 +94,7 @@ export const useAppUpdate = create<AppUpdateState>()(
 );
 
 /**
- * The version this copy of Cosmos could move to, unless the user said Later
+ * The version this copy of Helion could move to, unless the user said Later
  * to it: a downloaded release on the desktop, or in a browser, a newer agent
  * serving this page.
  */

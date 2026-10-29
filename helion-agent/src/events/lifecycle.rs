@@ -9,7 +9,7 @@
 
 use super::{ db, EventsHandle, NewEvent };
 use crate::{ backups::format_rfc3339, error::AgentError, store::Store };
-use cosmos_common::types::{ EventCategory, Severity };
+use helion_common::types::{ EventCategory, Severity };
 
 const VERSION: &str = "agent_version";
 const BOOT_TIME: &str = "boot_time";
@@ -51,9 +51,9 @@ pub fn on_start(prev: &Previous, node: &str, version: &str, boot_time: u64) -> V
 
     match &prev.version {
         Some(v) if v != version => {
-            out.push(event("upgraded", Severity::Info, format!("Cosmos agent upgraded to {version}")).detail(format!("It was {v}.")));
+            out.push(event("upgraded", Severity::Info, format!("Helion agent upgraded to {version}")).detail(format!("It was {v}.")));
         }
-        _ => out.push(event("started", Severity::Info, format!("Cosmos agent {version} started"))),
+        _ => out.push(event("started", Severity::Info, format!("Helion agent {version} started"))),
     }
     out
 }
@@ -105,19 +105,19 @@ mod tests {
     #[test]
     fn the_first_start_is_just_a_start() {
         let out = on_start(&Previous::default(), "jupiter", "0.5.0", BOOT);
-        assert_eq!(titles(&out), [("started", Severity::Info, "Cosmos agent 0.5.0 started".into())]);
+        assert_eq!(titles(&out), [("started", Severity::Info, "Helion agent 0.5.0 started".into())]);
     }
 
     #[test]
     fn a_deploy_restart_is_quiet() {
         let out = on_start(&prev("0.5.0", BOOT, true), "jupiter", "0.5.0", BOOT + 1);
-        assert_eq!(titles(&out), [("started", Severity::Info, "Cosmos agent 0.5.0 started".into())]);
+        assert_eq!(titles(&out), [("started", Severity::Info, "Helion agent 0.5.0 started".into())]);
     }
 
     #[test]
     fn an_upgrade_names_both_versions() {
         let out = on_start(&prev("0.4.0", BOOT, true), "jupiter", "0.5.0", BOOT);
-        assert_eq!(out[0].title, "Cosmos agent upgraded to 0.5.0");
+        assert_eq!(out[0].title, "Helion agent upgraded to 0.5.0");
         assert_eq!(out[0].detail.as_deref(), Some("It was 0.4.0."));
     }
 

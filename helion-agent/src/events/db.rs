@@ -2,7 +2,7 @@
 
 use super::{ NewEvent, ProblemSpec, Resolution };
 use crate::error::AgentError;
-use cosmos_common::types::{ Event, EventCategory, Problem, ProblemRef, ProblemState, Severity };
+use helion_common::types::{ Event, EventCategory, Problem, ProblemRef, ProblemState, Severity };
 use rusqlite::{ params, Connection, OptionalExtension, Row };
 
 const EVENT_COLUMNS: &str =

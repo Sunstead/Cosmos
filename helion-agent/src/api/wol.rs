@@ -8,7 +8,7 @@ use crate::{
     wol,
 };
 use axum::{ extract::{ Path, State }, http::StatusCode, Extension, Json };
-use cosmos_common::types::{ WolEntry, WolNeighborsResponse, WolTarget, WolTargetInput };
+use helion_common::types::{ WolEntry, WolNeighborsResponse, WolTarget, WolTargetInput };
 
 fn handle(state: &AppState) -> Result<&WolHandle, AgentError> {
     state.wol.as_ref().ok_or(AgentError::NotEnabled("wake-on-lan"))

@@ -1,14 +1,14 @@
-# cosmos-agent configuration.
+# helion-agent configuration.
 #
 # Every value below is the built-in default unless noted. Any of it can be
-# overridden by environment variables: COSMOS_AGENT_BIND, COSMOS_AGENT_OIDC_ISSUER,
-# COSMOS_AGENT_OIDC_CLIENT_ID, COSMOS_AGENT_ALLOW_ANONYMOUS,
-# COSMOS_AGENT_ALLOW_ACTIONS, COSMOS_AGENT_DOCKER_SOCKET,
-# COSMOS_AGENT_HISTORY, COSMOS_AGENT_HISTORY_PATH, COSMOS_NODE_NAME, RUST_LOG.
+# overridden by environment variables: HELION_AGENT_BIND, HELION_AGENT_OIDC_ISSUER,
+# HELION_AGENT_OIDC_CLIENT_ID, HELION_AGENT_ALLOW_ANONYMOUS,
+# HELION_AGENT_ALLOW_ACTIONS, HELION_AGENT_DOCKER_SOCKET,
+# HELION_AGENT_HISTORY, HELION_AGENT_HISTORY_PATH, HELION_NODE_NAME, RUST_LOG.
 #
 # Any string can also name environment variables, ${NAME} ($$ for a dollar
 # sign), so domains can live in your .env instead of this file:
-#   issuer = "https://auth.${HOME_DOMAIN}/application/o/cosmos/"
+#   issuer = "https://auth.${HOME_DOMAIN}/application/o/helion/"
 # The agent won't start if one isn't set. In Docker, pass each one under the
 # container's environment: (see compose.example.yaml).
 
@@ -42,12 +42,12 @@ allow_anonymous = false
 # Sign-in through your identity provider (Authentik). The app signs in there
 # and sends the agent short-lived access tokens, which it checks against the
 # provider's published keys. Nothing here is secret.
-issuer = "https://auth.example.com/application/o/cosmos/"
-client_id = "cosmos"
+issuer = "https://auth.example.com/application/o/helion/"
+client_id = "helion"
 # Members of these groups may act (with allow_actions); others can only look.
 admin_groups = ["homelab-admins"]
 # Set when the agent must reach the provider at a different address:
-# discovery_url = "https://auth.internal/application/o/cosmos/.well-known/openid-configuration"
+# discovery_url = "https://auth.internal/application/o/helion/.well-known/openid-configuration"
 
 [cors]
 # tauri://localhost, http(s)://tauri.localhost and localhost:1420 are always
@@ -58,8 +58,8 @@ allow_null_origin = false
 
 [web]
 # A built web UI (app/dist) to serve at /. The Docker image sets this through
-# COSMOS_AGENT_WEB_DIR; leave unset for an API-only agent.
-# dir = "/usr/share/cosmos-agent/web"
+# HELION_AGENT_WEB_DIR; leave unset for an API-only agent.
+# dir = "/usr/share/helion-agent/web"
 
 [host]
 interval_ms = 1000
@@ -104,7 +104,7 @@ watch_events = true
 
 [history]
 enabled = true
-path = "/var/lib/cosmos-agent/metrics.db"
+path = "/var/lib/helion-agent/metrics.db"
 flush_interval_secs = 10
 retain_1s_secs = 3600      # 1 hour of full-resolution samples
 retain_1m_secs = 604800    # 7 days at 1-minute buckets
@@ -169,7 +169,7 @@ disk_warn_pct = 85
 disk_critical_pct = 95
 
 [uptime]
-# The Uptime page: an HTTP check for every service with a cosmos.service.url
+# The Uptime page: an HTTP check for every service with a helion.service.url
 # label, plus the HTTP and TCP checks added in the app (kept in [state] path).
 # Three failures in a row open a problem; two passes close it.
 enabled = true
@@ -183,13 +183,13 @@ interval_secs = 60
 [updates]
 # The Updates page: newer tags of the images running here, from their
 # registries (anonymous, tag lists only). Rules come from compose labels
-# (cosmos.update.*); the policy per image is set in the app.
+# (helion.update.*); the policy per image is set in the app.
 enabled = true
 check_interval_hours = 6
 # How long a tag must have been out before it applies on its own.
 min_age_days = 3
 # To apply updates: the repository whose update workflow bumps the tag in
-# compose, commits and deploys. The token is COSMOS_AGENT_GITHUB_TOKEN in the
+# compose, commits and deploys. The token is HELION_AGENT_GITHUB_TOKEN in the
 # environment (never here): fine-grained, that repository only, Actions read
 # and write. It can start the workflow; it can't read or push code.
 # repo = "owner/infrastructure"
@@ -202,14 +202,14 @@ watch_minutes = 10
 [state]
 # Settings edited from the UI, and the event log. Must be on the writable
 # volume.
-path = "/var/lib/cosmos-agent/state.db"
+path = "/var/lib/helion-agent/state.db"
 
 # Other agents this one watches, and that watch it: each reports the other
 # when it stops answering (`peer:<name>:unreachable`), which nothing on a node
 # can do about itself. One side dials (`url` set) and POSTs a heartbeat to the
 # other's /v1/peer/heartbeat every 15 s; one exchange tells both sides, so
 # only one has to be able to reach the other. Heartbeats carry a shared
-# secret, COSMOS_AGENT_PEER_TOKEN (32 characters or more, the same on every
+# secret, HELION_AGENT_PEER_TOKEN (32 characters or more, the same on every
 # peer), never the file. The agent won't start with peers and no token.
 #
 # Uptime checks added in the app can say they go through a peer; their
@@ -223,5 +223,5 @@ path = "/var/lib/cosmos-agent/state.db"
 # On the node that can (Pluto):
 # [[peers]]
 # name = "jupiter"
-# url = "https://cosmos.${HOME_DOMAIN}"
+# url = "https://helion.${HOME_DOMAIN}"
 # tailnet_name = "jupiter"                       # defaults to name

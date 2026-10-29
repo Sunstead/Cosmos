@@ -71,10 +71,10 @@ pub struct ContainerInfo {
     #[serde(default)]
     #[ts(optional = nullable)]
     pub compose_service: Option<String>,
-    pub cosmos_service: Option<String>,
-    pub cosmos_service_description: Option<String>,
-    pub cosmos_service_url: Option<String>,
-    /// The `cosmos.update*` labels, for the agent's update rules only.
+    pub helion_service: Option<String>,
+    pub helion_service_description: Option<String>,
+    pub helion_service_url: Option<String>,
+    /// The `helion.update*` labels, for the agent's update rules only.
     #[serde(skip)]
     #[ts(skip)]
     pub update_labels: std::collections::BTreeMap<String, String>,
@@ -111,7 +111,7 @@ pub struct VolumeInfo {
     pub created_at: Option<String>,
     pub scope: Option<String>,
     pub compose_project: Option<String>,
-    pub cosmos_service: Option<String>,
+    pub helion_service: Option<String>,
     /// Names of containers currently mounting this volume. Empty = unused.
     pub in_use_by: Vec<String>,
 }

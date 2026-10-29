@@ -5,7 +5,7 @@
 //! the refresh token that mints them. The browser build has no keychain and
 //! keeps its refresh token in local storage; Settings says so.
 
-const SERVICE: &str = "net.sunstead.cosmos";
+const SERVICE: &str = "net.sunstead.helion";
 
 fn entry(account: &str) -> Result<keyring::Entry, String> {
     keyring::Entry::new(SERVICE, account).map_err(|e| e.to_string())

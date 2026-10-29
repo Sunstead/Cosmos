@@ -68,7 +68,7 @@ export const NodeOptionsDropdown = memo(function NodeOptionsDropdown({
         open={dialog === 'remove'}
         onOpenChange={close}
         title={`Remove ${name}?`}
-        description='Cosmos forgets this node. The node itself is unchanged.'
+        description='Helion forgets this node. The node itself is unchanged.'
         confirmLabel='Remove'
         onConfirm={() => removeNode(nodeId)}
       />

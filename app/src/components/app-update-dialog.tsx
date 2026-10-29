@@ -13,7 +13,7 @@ import { isDesktop } from '@/lib/platform';
 import { useAppUpdate } from '@/stores/app-update';
 import { useNodeStore } from '@/stores/nodes';
 
-/** Shows a new version of Cosmos and installs it, or a manual check's answer. One app-wide instance. */
+/** Shows a new version of Helion and installs it, or a manual check's answer. One app-wide instance. */
 export function AppUpdateDialog() {
   return isDesktop() ? <DesktopUpdateDialog /> : <ServedUpdateDialog />;
 }
@@ -29,18 +29,18 @@ function DesktopUpdateDialog() {
   let title: string;
   let description = '';
   if (installing) {
-    title = `Installing Cosmos ${update?.version}`;
-    description = 'Cosmos restarts when it is done.';
+    title = `Installing Helion ${update?.version}`;
+    description = 'Helion restarts when it is done.';
   } else if (status.state === 'checking') {
     title = 'Checking for updates';
   } else if (status.state === 'error') {
     title = update ? 'The update did not install' : 'Could not check for updates';
     description = status.message;
   } else if (update) {
-    title = `Cosmos ${update.version} is available`;
+    title = `Helion ${update.version} is available`;
     description = `You have ${__APP_VERSION__}.`;
   } else {
-    title = 'Cosmos is up to date';
+    title = 'Helion is up to date';
     description = `You have the latest version, ${__APP_VERSION__}.`;
   }
 
@@ -105,7 +105,7 @@ function ServedUpdateDialog() {
     <Dialog open={open && version !== null} onOpenChange={(next) => !next && closeDialog()}>
       <DialogContent className='sm:max-w-md'>
         <DialogHeader>
-          <DialogTitle>Cosmos {version} is available</DialogTitle>
+          <DialogTitle>Helion {version} is available</DialogTitle>
           <DialogDescription>
             This server was updated while the page was open; the page is still {__APP_VERSION__}. Reload to
             use the new version.

@@ -2,19 +2,19 @@ export type Platform = 'macos' | 'windows' | 'linux' | 'web';
 
 declare global {
   interface Window {
-    __COSMOS_PLATFORM__?: Exclude<Platform, 'web'>;
+    __HELION_PLATFORM__?: Exclude<Platform, 'web'>;
   }
 }
 
 /** Set by the Tauri init script; `web` in a browser. */
 export function getPlatform(): Platform {
   const fromHtml = document.documentElement.dataset.platform as Platform | undefined;
-  return fromHtml ?? window.__COSMOS_PLATFORM__ ?? 'web';
+  return fromHtml ?? window.__HELION_PLATFORM__ ?? 'web';
 }
 
 /** Copies the injected platform onto <html> for CSS. Call before render. */
 export function applyPlatform(): Platform {
-  const platform = window.__COSMOS_PLATFORM__ ?? 'web';
+  const platform = window.__HELION_PLATFORM__ ?? 'web';
   document.documentElement.dataset.platform = platform;
   return platform;
 }

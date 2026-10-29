@@ -6,7 +6,7 @@
 //! any capability, so this works under `cap_drop: [ALL]`.
 
 use crate::error::AgentError;
-use cosmos_common::types::{ WolNeighbor, WolNetwork, WolProbe, WolTarget, WolTargetInput };
+use helion_common::types::{ WolNeighbor, WolNetwork, WolProbe, WolTarget, WolTargetInput };
 use std::net::{ Ipv4Addr, SocketAddrV4 };
 
 const SYNC: [u8; 6] = [0xff; 6];

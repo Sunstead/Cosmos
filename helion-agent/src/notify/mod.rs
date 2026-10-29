@@ -16,7 +16,7 @@ pub mod rules;
 pub mod send;
 
 use crate::{ error::AgentError, events::EventsHandle, peers::PeersHandle, sample::host::unix_now, store::Store };
-use cosmos_common::types::{
+use helion_common::types::{
     ChannelKind,
     ChannelStatus,
     Event,
@@ -395,7 +395,7 @@ mod tests {
     fn the_link_must_be_a_web_address() {
         assert_eq!(validate_settings(NotifySettings { link_url: Some(" ".into()) }).unwrap().link_url, None);
         assert!(validate_settings(NotifySettings { link_url: Some("javascript:alert(1)".into()) }).is_err());
-        let ok = validate_settings(NotifySettings { link_url: Some("https://cosmos.example.com/events".into()) });
-        assert_eq!(ok.unwrap().link_url.as_deref(), Some("https://cosmos.example.com/events"));
+        let ok = validate_settings(NotifySettings { link_url: Some("https://helion.example.com/events".into()) });
+        assert_eq!(ok.unwrap().link_url.as_deref(), Some("https://helion.example.com/events"));
     }
 }

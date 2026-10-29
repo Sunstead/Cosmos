@@ -6,7 +6,7 @@ use crate::{
     updates::UpdatesHandle,
 };
 use axum::{ extract::State, http::StatusCode, Extension, Json };
-use cosmos_common::types::{ UpdateApplyInput, UpdatePolicyInput, UpdateRun, UpdateRunKind, UpdateUnitInput };
+use helion_common::types::{ UpdateApplyInput, UpdatePolicyInput, UpdateRun, UpdateRunKind, UpdateUnitInput };
 
 fn handle(state: &AppState) -> Result<&UpdatesHandle, AgentError> {
     state.updates.as_ref().ok_or(AgentError::NotEnabled("updates"))
@@ -76,9 +76,9 @@ pub async fn policy(
     let updates = handle(&state)?;
     let result = updates.policy(input.unit.clone(), input.policy).await;
     let label = match input.policy {
-        cosmos_common::types::UpdatePolicy::Manual => "manual",
-        cosmos_common::types::UpdatePolicy::Patch => "patches automatically",
-        cosmos_common::types::UpdatePolicy::Auto => "automatic",
+        helion_common::types::UpdatePolicy::Manual => "manual",
+        helion_common::types::UpdatePolicy::Patch => "patches automatically",
+        helion_common::types::UpdatePolicy::Auto => "automatic",
     };
     let action = Action {
         kind: "update_policy",

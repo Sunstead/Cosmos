@@ -12,7 +12,7 @@ use bollard::{
     volume::ListVolumesOptions,
     Docker,
 };
-use cosmos_common::types::{
+use helion_common::types::{
     ContainerHealth,
     ContainerInfo,
     ContainersResponse,
@@ -240,12 +240,12 @@ impl DockerProbe {
             compose_service: labels.get("com.docker.compose.service").cloned(),
             update_labels: labels
                 .iter()
-                .filter(|(k, _)| k.as_str() == "cosmos.update" || k.starts_with("cosmos.update."))
+                .filter(|(k, _)| k.as_str() == "helion.update" || k.starts_with("helion.update."))
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect(),
-            cosmos_service: labels.get("cosmos.service").cloned(),
-            cosmos_service_description: labels.get("cosmos.service.description").cloned(),
-            cosmos_service_url: labels.get("cosmos.service.url").cloned(),
+            helion_service: labels.get("helion.service").cloned(),
+            helion_service_description: labels.get("helion.service.description").cloned(),
+            helion_service_url: labels.get("helion.service.url").cloned(),
             cpu_pct,
             mem_used_bytes,
             mem_limit_bytes,
@@ -335,7 +335,7 @@ pub async fn sample_volumes(docker: &Docker) -> Result<VolumeSnapshot, bollard::
         .into_iter()
         .map(|v| VolumeInfo {
             compose_project: v.labels.get("com.docker.compose.project").cloned(),
-            cosmos_service: v.labels.get("cosmos.service").cloned(),
+            helion_service: v.labels.get("helion.service").cloned(),
             scope: v.scope.and_then(|s| {
                 match s {
                     VolumeScopeEnum::LOCAL => Some("local".to_string()),
@@ -406,9 +406,9 @@ mod tests {
                 compose_project: None,
                 compose_service: None,
                 update_labels: Default::default(),
-                cosmos_service: None,
-                cosmos_service_description: None,
-                cosmos_service_url: None,
+                helion_service: None,
+                helion_service_description: None,
+                helion_service_url: None,
                 cpu_pct: 0.0,
                 mem_used_bytes: 0,
                 mem_limit_bytes: 0,

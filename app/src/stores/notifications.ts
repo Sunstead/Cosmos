@@ -29,6 +29,6 @@ export const useNotificationPrefs = create<NotificationPrefs>()(
       markSeen: (nodeId, id) =>
         set((s) => ((s.seen[nodeId] ?? 0) >= id ? s : { seen: { ...s.seen, [nodeId]: id } })),
     }),
-    { name: 'cosmos-notifications', version: 1 },
+    { name: 'helion-notifications', version: 1 },
   ),
 );

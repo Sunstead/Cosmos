@@ -1,6 +1,6 @@
 use crate::{ auth, state::AppState };
 use axum::{ extract::{ OriginalUri, State }, http::HeaderMap, Json };
-use cosmos_common::types::{ AgentInfo, AuthInfo, PrincipalInfo };
+use helion_common::types::{ AgentInfo, AuthInfo, PrincipalInfo };
 
 pub async fn healthz() -> &'static str {
     "ok"

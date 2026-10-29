@@ -24,12 +24,12 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       # The Tauri crate needs WebKitGTK to build on Linux, so CI covers the
-      # agent and shared types. Testing cosmos-common also generates the TS
+      # agent and shared types. Testing helion-common also generates the TS
       # bindings the frontend needs.
       - name: Rust tests
-        run: cargo test --locked -p cosmos-common -p cosmos-agent
+        run: cargo test --locked -p helion-common -p helion-agent
       - name: Clippy
-        run: cargo clippy --locked -p cosmos-common -p cosmos-agent --all-targets -- -D warnings
+        run: cargo clippy --locked -p helion-common -p helion-agent --all-targets -- -D warnings
 
       - uses: actions/setup-node@v4
         with:

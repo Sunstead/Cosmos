@@ -1,10 +1,10 @@
-//! Types shared between `cosmos-agent` and the desktop app.
+//! Types shared between `helion-agent` and the desktop app.
 //!
 //! Every type here derives `ts_rs::TS` and exports to `app/src/generated/`.
-//! Run `cargo test -p cosmos-common` to regenerate the TypeScript bindings —
+//! Run `cargo test -p helion-common` to regenerate the TypeScript bindings —
 //! that directory is gitignored, so a fresh clone has none until you do.
 //!
-//! Note `export_to` is resolved against `cosmos-common/bindings/`, not against
+//! Note `export_to` is resolved against `helion-common/bindings/`, not against
 //! the source file, so every module here uses the identical path string.
 //!
 //! ## `#[ts(type = "number")]` on 64-bit integers
@@ -30,7 +30,7 @@ pub mod updates;
 pub mod uptime;
 pub mod wol;
 
-// Flat re-export: `cosmos_common::types::HostInfo` keeps working, and callers
+// Flat re-export: `helion_common::types::HostInfo` keeps working, and callers
 // don't have to care which file a type happens to live in.
 pub use backups::*;
 pub use docker::*;

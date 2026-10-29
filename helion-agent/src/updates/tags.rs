@@ -7,7 +7,7 @@
 //! and never to `17beta1-alpine`, `16-alpine` or `16.15-bookworm`, and
 //! release candidates (`v3.3.0-rc.1`) never replace a release.
 
-use cosmos_common::types::ChangeKind;
+use helion_common::types::ChangeKind;
 use std::cmp::Ordering;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -123,7 +123,7 @@ mod tests {
         assert_eq!(change_by("2026.5.2", "2026.5.3", 2), Some(Patch));
         assert_eq!(change_by("2026.5.2", "2026.8.0", 2), Some(Major));
         assert_eq!(change_by("1.27.3", "1.28.0", 2), Some(Major));
-        // cosmos-agent: on 0.x a minor is a major.
+        // helion-agent: on 0.x a minor is a major.
         assert_eq!(change("0.5.1", "0.5.2"), Some(Patch));
         assert_eq!(change("0.5.1", "0.6.0"), Some(Major));
     }

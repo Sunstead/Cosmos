@@ -33,7 +33,7 @@ impl CheckKind {
 #[ts(export, export_to = "../../app/src/generated/")]
 #[serde(rename_all = "snake_case")]
 pub enum CheckSource {
-    /// Made for a service from its `cosmos.service.url` label.
+    /// Made for a service from its `helion.service.url` label.
     Service,
     /// Added in the UI.
     Custom,
@@ -68,7 +68,7 @@ pub struct UptimeCheck {
     pub interval_secs: u32,
     pub enabled: bool,
     pub any_status: bool,
-    /// The `cosmos.service` it belongs to.
+    /// The `helion.service` it belongs to.
     pub service: Option<String>,
     /// A peer the target is reached through (Pluto's checks of the public
     /// sites go through Jupiter). Its failures are held back from

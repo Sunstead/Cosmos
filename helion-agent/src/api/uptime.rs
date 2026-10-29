@@ -6,7 +6,7 @@ use crate::{
     uptime::{ self, db, UptimeHandle },
 };
 use axum::{ extract::{ Path, State }, http::StatusCode, Extension, Json };
-use cosmos_common::types::{ UptimeCheckInput, UptimeEntry, UptimeServiceInput };
+use helion_common::types::{ UptimeCheckInput, UptimeEntry, UptimeServiceInput };
 
 fn handle(state: &AppState) -> Result<&UptimeHandle, AgentError> {
     state.uptime.as_ref().ok_or(AgentError::NotEnabled("uptime checks"))

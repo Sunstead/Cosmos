@@ -333,7 +333,7 @@ export function UptimePage() {
             size='card'
             icon={HeartPulse}
             title='Nothing to check yet'
-            description='Services with a cosmos.service.url label get a check on their own. Add one for anything else.'
+            description='Services with a helion.service.url label get a check on their own. Add one for anything else.'
             setup={SETUP.services}
           />
         ) : visible.length === 0 ? (

@@ -30,7 +30,7 @@ use axum::{
     Json,
 };
 use bollard::{ container::LogOutput, Docker };
-use cosmos_common::types::{ LogFrame, LogLine, LogStream, LogsResponse };
+use helion_common::types::{ LogFrame, LogLine, LogStream, LogsResponse };
 use futures_util::{ Stream, StreamExt };
 use serde::Deserialize;
 use std::pin::Pin;

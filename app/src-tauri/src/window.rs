@@ -25,7 +25,7 @@ pub const PLATFORM: &str = if cfg!(target_os = "macos") {
 /// WebView2 may not have <html> yet, so main.tsx also copies the global.
 fn init_script() -> String {
     format!(
-        "window.__COSMOS_PLATFORM__='{p}';\
+        "window.__HELION_PLATFORM__='{p}';\
          if(document.documentElement)document.documentElement.dataset.platform='{p}';",
         p = PLATFORM
     )
@@ -35,7 +35,7 @@ pub fn create_main(app: &mut App) -> tauri::Result<()> {
     let config = WindowConfig { label: "main".into(), ..Default::default() };
 
     let builder = WebviewWindowBuilder::from_config(app, &config)?
-        .title("Cosmos")
+        .title("Helion")
         .inner_size(1440.0, 900.0)
         .min_inner_size(900.0, 600.0)
         .center()

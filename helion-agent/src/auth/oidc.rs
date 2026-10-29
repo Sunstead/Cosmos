@@ -100,7 +100,7 @@ impl OidcVerifier {
             http: reqwest::Client
                 ::builder()
                 .timeout(HTTP_TIMEOUT)
-                .user_agent(concat!("cosmos-agent/", env!("CARGO_PKG_VERSION")))
+                .user_agent(concat!("helion-agent/", env!("CARGO_PKG_VERSION")))
                 .build()
                 .expect("reqwest client"),
             keys: RwLock::new(Keys::default()),

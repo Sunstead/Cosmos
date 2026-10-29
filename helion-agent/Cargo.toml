@@ -1,11 +1,11 @@
 [package]
-name = "cosmos-agent"
+name = "helion-agent"
 version = "0.13.0"
 edition = "2021"
 license = "MIT"
 
 [dependencies]
-cosmos-common = { path = "../cosmos-common" }
+helion-common = { path = "../helion-common" }
 
 axum = { version = "0.7", features = ["ws"] }
 # Trimmed from `full`: the agent needs a runtime, a listener, timers, channels

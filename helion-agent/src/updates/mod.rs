@@ -33,7 +33,7 @@ use crate::{
     store::Store,
     uptime::UptimeHandle,
 };
-use cosmos_common::types::{
+use helion_common::types::{
     EventCategory,
     Severity,
     UpdatePolicy,
@@ -128,7 +128,7 @@ pub fn spawn(cfg: &UpdatesConfig, inputs: Inputs) -> UpdatesHandle {
     let client = reqwest::Client
         ::builder()
         .timeout(Duration::from_secs(30))
-        .user_agent(concat!("cosmos-agent/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("helion-agent/", env!("CARGO_PKG_VERSION")))
         .build()
         .expect("reqwest client");
     let github = match (&cfg.repo, &cfg.token) {
@@ -666,7 +666,7 @@ impl Task {
             let service = self.units
                 .iter()
                 .find(|u| u.id == run.run.unit)
-                .and_then(|u| u.members.iter().find_map(|m| m.cosmos_service.clone()))
+                .and_then(|u| u.members.iter().find_map(|m| m.helion_service.clone()))
                 .filter(|s| s != "system");
             match state {
                 UpdateRunState::Done => {
@@ -803,7 +803,7 @@ impl Task {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cosmos_common::types::ContainerInfo;
+    use helion_common::types::ContainerInfo;
     use std::sync::atomic::{ AtomicBool, Ordering };
     use tokio::io::{ AsyncReadExt, AsyncWriteExt };
 
@@ -861,9 +861,9 @@ mod tests {
             compose_project: Some("jupiter".into()),
             compose_service: Some(service.into()),
             update_labels: Default::default(),
-            cosmos_service: Some(service.into()),
-            cosmos_service_description: None,
-            cosmos_service_url: None,
+            helion_service: Some(service.into()),
+            helion_service_description: None,
+            helion_service_url: None,
             cpu_pct: 0.0,
             mem_used_bytes: 0,
             mem_limit_bytes: 0,

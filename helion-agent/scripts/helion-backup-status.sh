@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 #
-# cosmos-backup-status.sh — publish restic status for cosmos-agent to read.
+# helion-backup-status.sh — publish restic status for helion-agent to read.
 #
 # Call this at the END of your backup job, after restic has finished and while
 # the repository environment is still set:
 #
-#     /path/to/cosmos-backup-status.sh "$EXIT_CODE" "$DURATION_SECS"
+#     /path/to/helion-backup-status.sh "$EXIT_CODE" "$DURATION_SECS"
 #
 # In jupiter-backup.service that looks like:
 #
 #     start=$(date +%s); set +e
 #     restic backup ... ; rc=$?
 #     set -e
-#     /path/to/cosmos-backup-status.sh "$rc" "$(( $(date +%s) - start ))"
+#     /path/to/helion-backup-status.sh "$rc" "$(( $(date +%s) - start ))"
 #
 # Why this exists rather than letting the agent run restic itself:
 #
@@ -27,10 +27,10 @@
 #
 # Reads from the environment (all already set by a restic job):
 #   RESTIC_REPOSITORY, RESTIC_PASSWORD / RESTIC_PASSWORD_FILE
-#   COSMOS_STATUS_FILE   where to write       (default $BACKUP_PATH/restic-status.json)
-#   COSMOS_TIMER_UNIT    timer to report on   (default jupiter-backup.timer)
+#   HELION_STATUS_FILE   where to write       (default $BACKUP_PATH/restic-status.json)
+#   HELION_TIMER_UNIT    timer to report on   (default jupiter-backup.timer)
 #   KEEP_DAILY / KEEP_WEEKLY / KEEP_MONTHLY   (default 7 / 4 / 6)
-#   COSMOS_PG_DUMP_OK / COSMOS_HEARTBEAT_OK   "1" or "0", optional
+#   HELION_PG_DUMP_OK / HELION_HEARTBEAT_OK   "1" or "0", optional
 #
 # Nothing secret is ever written to the output file.
 
@@ -39,8 +39,8 @@ set -uo pipefail
 EXIT_CODE="${1:-0}"
 DURATION_SECS="${2:-0}"
 
-STATUS_FILE="${COSMOS_STATUS_FILE:-${BACKUP_PATH:-/srv/backups}/restic-status.json}"
-TIMER_UNIT="${COSMOS_TIMER_UNIT:-jupiter-backup.timer}"
+STATUS_FILE="${HELION_STATUS_FILE:-${BACKUP_PATH:-/srv/backups}/restic-status.json}"
+TIMER_UNIT="${HELION_TIMER_UNIT:-jupiter-backup.timer}"
 KEEP_DAILY="${KEEP_DAILY:-7}"
 KEEP_WEEKLY="${KEEP_WEEKLY:-4}"
 KEEP_MONTHLY="${KEEP_MONTHLY:-6}"
@@ -55,7 +55,7 @@ epoch_to_iso() {
 }
 
 if ! command -v jq >/dev/null 2>&1; then
-  echo "cosmos-backup-status: jq is required (apt install jq)" >&2
+  echo "helion-backup-status: jq is required (apt install jq)" >&2
   exit 1
 fi
 
@@ -64,7 +64,7 @@ fi
 SNAPSHOTS="$(restic snapshots --json --latest 20 2>/dev/null)" || SNAPSHOTS=""
 [ -z "$SNAPSHOTS" ] && SNAPSHOTS="[]"
 
-# Reshape to exactly the fields cosmos-agent expects, dropping everything else
+# Reshape to exactly the fields helion-agent expects, dropping everything else
 # (restic includes the repository paths and program version; no reason to
 # publish more than is needed). size_bytes is null here: a per-snapshot size
 # needs `restic stats <id>` per snapshot, which is far too slow to be worth it.
@@ -107,8 +107,8 @@ step_json() { # $1 = "1"/"0"/"" , $2 = label
     *) printf 'null' ;;
   esac
 }
-PG_DUMP="$(step_json "${COSMOS_PG_DUMP_OK:-}" "postgres dump")"
-HEARTBEAT="$(step_json "${COSMOS_HEARTBEAT_OK:-}" "heartbeat push")"
+PG_DUMP="$(step_json "${HELION_PG_DUMP_OK:-}" "postgres dump")"
+HEARTBEAT="$(step_json "${HELION_HEARTBEAT_OK:-}" "heartbeat push")"
 
 # --- emit ------------------------------------------------------------------
 # Written to a temp file in the same directory and renamed, so the agent — which
@@ -147,4 +147,4 @@ chmod 0644 "$TMP"
 mv -f "$TMP" "$STATUS_FILE"
 trap - EXIT
 
-echo "cosmos-backup-status: wrote $STATUS_FILE"
+echo "helion-backup-status: wrote $STATUS_FILE"

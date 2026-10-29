@@ -16,7 +16,7 @@ use bollard::{
     },
     Docker,
 };
-use cosmos_common::types::{ ContainerAction, ContainerActionResult };
+use helion_common::types::{ ContainerAction, ContainerActionResult };
 use std::sync::{ Arc, RwLock };
 
 #[derive(Clone)]
@@ -134,7 +134,7 @@ impl DockerHandle {
         if self.is_self(id) {
             return Err(
                 AgentError::Forbidden(
-                    format!("refusing to {action} the cosmos-agent container itself")
+                    format!("refusing to {action} the helion-agent container itself")
                 )
             );
         }

@@ -3,7 +3,7 @@
 
 use super::Channel;
 use crate::{ error::AgentError, events::db::{ meta_get, meta_set } };
-use cosmos_common::types::{ ChannelKind, EventCategory, NotifySettings, Severity };
+use helion_common::types::{ ChannelKind, EventCategory, NotifySettings, Severity };
 use rusqlite::{ params, Connection, OptionalExtension, Row };
 
 const COLUMNS: &str = "id, name, kind, url, topic, secret, enabled, min_severity, recoveries, categories";
@@ -191,8 +191,8 @@ mod tests {
         let store = Store::in_memory();
         store.with(|c| {
             assert_eq!(settings(c).unwrap(), NotifySettings::default());
-            save_settings(c, &NotifySettings { link_url: Some("https://cosmos.example.com/events".into()) }).unwrap();
-            assert_eq!(settings(c).unwrap().link_url.as_deref(), Some("https://cosmos.example.com/events"));
+            save_settings(c, &NotifySettings { link_url: Some("https://helion.example.com/events".into()) }).unwrap();
+            assert_eq!(settings(c).unwrap().link_url.as_deref(), Some("https://helion.example.com/events"));
             save_settings(c, &NotifySettings::default()).unwrap();
             assert_eq!(settings(c).unwrap().link_url, None);
         });

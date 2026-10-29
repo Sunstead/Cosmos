@@ -24,7 +24,7 @@ pub mod disks;
 pub mod lifecycle;
 
 use crate::{ config::EventsConfig, sample::host::unix_now, store::Store };
-use cosmos_common::types::{ Event, EventCategory, Problem, Severity };
+use helion_common::types::{ Event, EventCategory, Problem, Severity };
 use std::{
     collections::HashMap,
     sync::{ atomic::{ AtomicBool, Ordering }, Arc },

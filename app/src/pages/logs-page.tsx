@@ -109,7 +109,7 @@ export function LogsPage() {
     [allNodes, nodeContainers, containers],
   );
   const nodeNames = useMemo(() => new Map(nodes.map((n) => [n.id, nodeDisplayName(n)])), [nodes]);
-  /** `pluto/cosmos-agent` when every node is shown, else the container. */
+  /** `pluto/helion-agent` when every node is shown, else the container. */
   const labelOf = (l: ViewLine) => {
     const container = l.container ? (names.get(l.container) ?? l.container.slice(0, 12)) : undefined;
     if (!l.node) return container;

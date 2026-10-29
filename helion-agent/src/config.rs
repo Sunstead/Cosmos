@@ -1,4 +1,4 @@
-//! Agent configuration: a TOML file with a `COSMOS_AGENT_*` environment
+//! Agent configuration: a TOML file with a `HELION_AGENT_*` environment
 //! overlay on top. Everything has a working default except auth: the agent
 //! refuses to start without an identity provider unless explicitly opened
 //! up with `allow_anonymous`.
@@ -53,7 +53,7 @@ pub struct Config {
     /// Other agents this one exchanges heartbeats with, each reporting the
     /// other when it stops answering (`[[peers]]`).
     pub peers: Vec<PeerConfig>,
-    /// From `COSMOS_AGENT_PEER_TOKEN` only, never the file: the secret every
+    /// From `HELION_AGENT_PEER_TOKEN` only, never the file: the secret every
     /// peer shares. Needed when `peers` is set.
     #[serde(skip)]
     pub peer_token: Option<crate::peers::PeerToken>,
@@ -108,7 +108,7 @@ pub struct UpdatesConfig {
     /// How long after a deploy a failing check or restarts count as the
     /// update's fault.
     pub watch_minutes: u32,
-    /// From `COSMOS_AGENT_GITHUB_TOKEN` only, never the file: Actions read and
+    /// From `HELION_AGENT_GITHUB_TOKEN` only, never the file: Actions read and
     /// write on `repo`, nothing else.
     #[serde(skip)]
     pub token: Option<crate::updates::github::Secret>,
@@ -117,7 +117,7 @@ pub struct UpdatesConfig {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct UptimeConfig {
-    /// HTTP checks for every service with a `cosmos.service.url` label, plus
+    /// HTTP checks for every service with a `helion.service.url` label, plus
     /// the checks added in the UI (kept in `[state] path`).
     pub enabled: bool,
     /// How often each check runs, unless a check says otherwise.
@@ -195,7 +195,7 @@ pub struct AuthConfig {
 #[serde(deny_unknown_fields)]
 pub struct OidcConfig {
     /// Exactly as the provider states it, e.g.
-    /// `https://auth.example.com/application/o/cosmos/`.
+    /// `https://auth.example.com/application/o/helion/`.
     pub issuer: String,
     /// The app's client ID; tokens must be addressed to it.
     pub client_id: String,
@@ -370,7 +370,7 @@ impl Default for HistoryConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            path: PathBuf::from("/var/lib/cosmos-agent/metrics.db"),
+            path: PathBuf::from("/var/lib/helion-agent/metrics.db"),
             flush_interval_secs: 10,
             retain_1s_secs: 3_600, // 1 hour
             retain_1m_secs: 604_800, // 7 days
@@ -424,7 +424,7 @@ impl Default for UptimeConfig {
 
 impl Default for StateConfig {
     fn default() -> Self {
-        Self { path: PathBuf::from("/var/lib/cosmos-agent/state.db") }
+        Self { path: PathBuf::from("/var/lib/helion-agent/state.db") }
     }
 }
 
@@ -446,10 +446,10 @@ impl Default for BackupsConfig {
 // --- loading ---------------------------------------------------------------
 
 impl Config {
-    /// Reads the TOML file named by `COSMOS_AGENT_CONFIG` (if set and present),
+    /// Reads the TOML file named by `HELION_AGENT_CONFIG` (if set and present),
     /// then applies the environment overlay, then validates.
     pub fn load() -> Result<Self, ConfigError> {
-        let mut cfg = match std::env::var("COSMOS_AGENT_CONFIG").ok() {
+        let mut cfg = match std::env::var("HELION_AGENT_CONFIG").ok() {
             Some(path) => Self::from_file(&path)?,
             // No config file is a perfectly good way to run the agent: the
             // defaults plus COSMOS_AGENT_TOKEN are enough.
@@ -481,7 +481,7 @@ impl Config {
     }
 
     /// Whether this version accepts the config at `path`, without the
-    /// `COSMOS_AGENT_*` overlay. For `--check-config`: an update workflow runs
+    /// `HELION_AGENT_*` overlay. For `--check-config`: an update workflow runs
     /// the new image against the live config before switching to it. The
     /// file's `${NAME}`s are still expanded, so the check needs them set.
     pub fn check_file(path: &str) -> Result<(), ConfigError> {
@@ -500,13 +500,13 @@ impl Config {
     }
 
     fn apply_env(&mut self) -> Result<(), ConfigError> {
-        if let Ok(v) = std::env::var("COSMOS_NODE_NAME") {
+        if let Ok(v) = std::env::var("HELION_NODE_NAME") {
             self.node_name = Some(v);
         }
-        if let Ok(v) = std::env::var("COSMOS_AGENT_BIND") {
+        if let Ok(v) = std::env::var("HELION_AGENT_BIND") {
             self.server.bind = v
                 .parse()
-                .map_err(|_| ConfigError::Invalid(format!("COSMOS_AGENT_BIND is not an address: {v}")))?;
+                .map_err(|_| ConfigError::Invalid(format!("HELION_AGENT_BIND is not an address: {v}")))?;
         }
         if let Ok(v) = std::env::var("COSMOS_AGENT_TOKEN") {
             self.auth.token = Some(v);
@@ -514,10 +514,10 @@ impl Config {
         if let Ok(v) = std::env::var("COSMOS_AGENT_TOKEN_FILE") {
             self.auth.token_file = Some(PathBuf::from(v));
         }
-        if let Ok(issuer) = std::env::var("COSMOS_AGENT_OIDC_ISSUER") {
+        if let Ok(issuer) = std::env::var("HELION_AGENT_OIDC_ISSUER") {
             let client_id = std::env
-                ::var("COSMOS_AGENT_OIDC_CLIENT_ID")
-                .unwrap_or_else(|_| "cosmos".into());
+                ::var("HELION_AGENT_OIDC_CLIENT_ID")
+                .unwrap_or_else(|_| "helion".into());
             let oidc = self.auth.oidc.get_or_insert_with(|| OidcConfig {
                 issuer: issuer.clone(),
                 client_id: client_id.clone(),
@@ -529,30 +529,30 @@ impl Config {
             oidc.issuer = issuer;
             oidc.client_id = client_id;
         }
-        if let Some(v) = env_bool("COSMOS_AGENT_ALLOW_ACTIONS")? {
+        if let Some(v) = env_bool("HELION_AGENT_ALLOW_ACTIONS")? {
             self.allow_actions = v;
         }
-        if let Some(v) = env_bool("COSMOS_AGENT_ALLOW_ANONYMOUS")? {
+        if let Some(v) = env_bool("HELION_AGENT_ALLOW_ANONYMOUS")? {
             self.auth.allow_anonymous = v;
         }
-        if let Ok(v) = std::env::var("COSMOS_AGENT_DOCKER_SOCKET") {
+        if let Ok(v) = std::env::var("HELION_AGENT_DOCKER_SOCKET") {
             self.docker.socket = v;
         }
-        if let Some(v) = env_bool("COSMOS_AGENT_HISTORY")? {
+        if let Some(v) = env_bool("HELION_AGENT_HISTORY")? {
             self.history.enabled = v;
         }
-        if let Ok(v) = std::env::var("COSMOS_AGENT_HISTORY_PATH") {
+        if let Ok(v) = std::env::var("HELION_AGENT_HISTORY_PATH") {
             self.history.path = PathBuf::from(v);
         }
-        if let Ok(v) = std::env::var("COSMOS_AGENT_GITHUB_TOKEN") {
+        if let Ok(v) = std::env::var("HELION_AGENT_GITHUB_TOKEN") {
             let v = v.trim().to_string();
             self.updates.token = (!v.is_empty()).then_some(crate::updates::github::Secret(v));
         }
-        if let Ok(v) = std::env::var("COSMOS_AGENT_PEER_TOKEN") {
+        if let Ok(v) = std::env::var("HELION_AGENT_PEER_TOKEN") {
             let v = v.trim().to_string();
             self.peer_token = (!v.is_empty()).then_some(crate::peers::PeerToken(v));
         }
-        if let Ok(v) = std::env::var("COSMOS_AGENT_WEB_DIR") {
+        if let Ok(v) = std::env::var("HELION_AGENT_WEB_DIR") {
             self.web.dir = (!v.is_empty()).then(|| PathBuf::from(v));
         }
         Ok(())
@@ -646,8 +646,8 @@ impl Config {
         match &self.peer_token {
             _ if self.peers.is_empty() => Ok(()),
             Some(t) if t.0.len() >= 32 => Ok(()),
-            Some(_) => Err(ConfigError::Invalid("COSMOS_AGENT_PEER_TOKEN must be at least 32 characters".into())),
-            None => Err(ConfigError::Invalid("[[peers]] is set but COSMOS_AGENT_PEER_TOKEN isn't".into())),
+            Some(_) => Err(ConfigError::Invalid("HELION_AGENT_PEER_TOKEN must be at least 32 characters".into())),
+            None => Err(ConfigError::Invalid("[[peers]] is set but HELION_AGENT_PEER_TOKEN isn't".into())),
         }
     }
 
@@ -676,7 +676,7 @@ impl Config {
             (None, false) =>
                 Err(
                     ConfigError::Invalid(
-                        "no sign-in configured. Set [auth.oidc] (or COSMOS_AGENT_OIDC_ISSUER), or \
+                        "no sign-in configured. Set [auth.oidc] (or HELION_AGENT_OIDC_ISSUER), or \
                          auth.allow_anonymous = true if this agent really should be open to anyone \
                          who can reach it".into()
                     )
@@ -893,7 +893,7 @@ mod tests {
 
                 [[peers]]
                 name = "jupiter"
-                url = "https://cosmos.jupiter.example.net"
+                url = "https://helion.jupiter.example.net"
 
                 [[peers]]
                 name = "saturn"
@@ -917,7 +917,7 @@ mod tests {
         for bad in [
             "[[peers]]\nname = \"has space\"",
             "[[peers]]\nname = \"a\"\n[[peers]]\nname = \"a\"",
-            "[[peers]]\nname = \"a\"\nurl = \"cosmos.example.net\"",
+            "[[peers]]\nname = \"a\"\nurl = \"helion.example.net\"",
         ] {
             let cfg: Config = toml::from_str(bad).unwrap();
             assert!(cfg.validate().is_err(), "{bad}");

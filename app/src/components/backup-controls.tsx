@@ -106,12 +106,12 @@ function RequestState({ r }: { r: BackupRequest }) {
   }
 }
 
-/** Backups and restore tests started from Cosmos, newest first. */
+/** Backups and restore tests started from Helion, newest first. */
 export function RequestsSection({ requests }: { requests: BackupRequest[] }) {
   if (requests.length === 0) return null;
   return (
     <Section
-      title='Started from Cosmos'
+      title='Started from Helion'
       count={requests.length}
       contentClassName='divide-y'
     >

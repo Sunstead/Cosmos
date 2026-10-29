@@ -1,6 +1,6 @@
 use crate::{ error::AgentError, sample::host::unix_now, state::AppState };
 use axum::{ extract::{ Query, State }, Json };
-use cosmos_common::types::{ MetricSeries, MetricStep };
+use helion_common::types::{ MetricSeries, MetricStep };
 use serde::Deserialize;
 
 #[derive(Deserialize)]

@@ -1,6 +1,6 @@
 use crate::{ error::AgentError, events::db, state::AppState };
 use axum::{ extract::{ Query, State }, Json };
-use cosmos_common::types::EventsResponse;
+use helion_common::types::EventsResponse;
 use serde::Deserialize;
 
 const DEFAULT_LIMIT: usize = 100;

@@ -15,5 +15,5 @@
 1094 1021 8:1 / /host/rootfs/srv/storage ro,relatime master:91 - ext4 /dev/sda1 rw
 1096 1021 0:75 / /host/rootfs/var/lib/docker/rootfs/overlayfs/0277e5d54bc8 ro,relatime master:244 - overlay overlay rw,lowerdir=/x,upperdir=/y,workdir=/z
 1123 979 0:25 /jupiter-requests/inbox /host/requests rw,nosuid,nodev,noexec,relatime - tmpfs tmpfs rw,size=6575248k,mode=755,inode64
-1127 979 259:5 /var/lib/docker/volumes/jupiter_cosmos_agent_data/_data /var/lib/cosmos-agent rw,relatime master:1 - ext4 /dev/nvme0n1p5 rw,errors=remount-ro
+1127 979 259:5 /var/lib/docker/volumes/jupiter_cosmos_agent_data/_data /var/lib/helion-agent rw,relatime master:1 - ext4 /dev/nvme0n1p5 rw,errors=remount-ro
 1129 979 0:25 /docker.sock /var/run/docker.sock rw,nosuid,nodev,noexec,relatime - tmpfs tmpfs rw,size=6575248k,mode=755,inode64

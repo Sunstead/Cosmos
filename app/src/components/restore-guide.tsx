@@ -131,7 +131,7 @@ function GuideBody({
       <DialogHeader>
         <DialogTitle>Restore from {snapshot.short_id}</DialogTitle>
         <DialogDescription>
-          Run these on the server, from the checkout with docker-compose.yml. Cosmos never
+          Run these on the server, from the checkout with docker-compose.yml. Helion never
           restores anything itself.
         </DialogDescription>
       </DialogHeader>

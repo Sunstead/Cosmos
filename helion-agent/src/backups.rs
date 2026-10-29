@@ -14,7 +14,7 @@
 //! which is equivalent to granting root on the host.
 
 use crate::{ config::BackupsConfig, error::AgentError };
-use cosmos_common::types::{
+use helion_common::types::{
     BackupDatabase,
     BackupRequest,
     BackupRequestKind,
@@ -513,7 +513,7 @@ mod tests {
 
     #[test]
     fn parses_a_status_file_and_never_echoes_secrets() {
-        let dir = std::env::temp_dir().join(format!("cosmos-backup-test-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("helion-backup-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("restic-status.json");
 

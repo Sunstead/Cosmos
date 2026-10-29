@@ -1,4 +1,4 @@
-package net.sunstead.cosmos
+package net.sunstead.helion
 
 import android.os.Bundle
 import androidx.activity.enableEdgeToEdge

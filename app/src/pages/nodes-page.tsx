@@ -15,7 +15,7 @@ import { matchesQuery } from '@/lib/format';
 type View = 'grid' | 'list';
 
 export function NodesPage() {
-  const [view, setView] = usePersistentState<View>('cosmos-nodes-view', 'grid');
+  const [view, setView] = usePersistentState<View>('helion-nodes-view', 'grid');
   const [query, setQuery] = useState('');
   const nodes = useNodeStore((s) => s.nodes);
   const visible = nodes.filter((n) => matchesQuery(query, nodeDisplayName(n), n.url, n.agentName));

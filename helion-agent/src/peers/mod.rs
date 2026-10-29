@@ -7,7 +7,7 @@
 //! sides the other is alive, so only one has to be able to reach the other:
 //! Pluto dials Jupiter, since Jupiter's userspace Tailscale can't reach Pluto.
 //!
-//! Heartbeats carry a shared secret (`COSMOS_AGENT_PEER_TOKEN`), not a
+//! Heartbeats carry a shared secret (`HELION_AGENT_PEER_TOKEN`), not a
 //! sign-in: the identity provider lives on one of the nodes, and its restart
 //! must not look like that node going down. All the token can do is say
 //! "I'm alive".
@@ -25,7 +25,7 @@ use crate::{
     sample::{ host::unix_now, tailnet::TailnetSnapshot },
     shutdown::Shutdown,
 };
-use cosmos_common::types::{
+use helion_common::types::{
     EventCategory,
     PeerDirection,
     PeerHello,
@@ -188,7 +188,7 @@ pub fn spawn(inputs: Inputs) -> PeersHandle {
     let client = reqwest::Client
         ::builder()
         .timeout(HTTP_TIMEOUT)
-        .user_agent(concat!("cosmos-agent/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("helion-agent/", env!("CARGO_PKG_VERSION")))
         .redirect(reqwest::redirect::Policy::none())
         .build()
         .expect("reqwest client");
@@ -434,7 +434,7 @@ mod tests {
 
     #[test]
     fn says_why_from_what_it_knows() {
-        let mut p = peer(Some("https://cosmos.example.net"));
+        let mut p = peer(Some("https://helion.example.net"));
         p.last_error = Some("timed out".into());
         assert_eq!(down_detail(&p, None, 60), "Heartbeats to it fail: timed out.");
 

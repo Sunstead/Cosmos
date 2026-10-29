@@ -3,7 +3,7 @@ import { TailnetStatus } from '@/generated/TailnetStatus';
 
 /** A tailnet device as the app shows it, across every reporting agent. */
 export interface Device extends TailnetDevice {
-  /** The Cosmos node this device is, when one of our agents runs on it. */
+  /** The Helion node this device is, when one of our agents runs on it. */
   nodeId: string | null;
   /** The agent whose view of this device we're showing. */
   reportedBy: string;

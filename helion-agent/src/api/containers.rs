@@ -11,7 +11,7 @@ use axum::{
     Extension,
     Json,
 };
-use cosmos_common::types::{ ContainerActionRequest, ContainerActionResult };
+use helion_common::types::{ ContainerActionRequest, ContainerActionResult };
 use futures_util::Stream;
 use serde::Deserialize;
 use std::convert::Infallible;
@@ -35,7 +35,7 @@ fn describe(state: &AppState, id: &str) -> (String, Option<String>) {
     snap.containers
         .iter()
         .find(|c| c.id == id || c.name == id || (id.len() >= 12 && c.id.starts_with(id)))
-        .map(|c| (c.name.clone(), c.cosmos_service.clone()))
+        .map(|c| (c.name.clone(), c.helion_service.clone()))
         .unwrap_or_else(|| (id.chars().take(12).collect(), None))
 }
 

@@ -1,4 +1,4 @@
-//! cosmos-agent — the per-node half of Cosmos.
+//! helion-agent — the per-node half of Helion.
 //!
 //! Design in one line: **sample on a schedule, never on the request path.**
 //! Background samplers publish to `watch` channels; HTTP handlers hand out the
@@ -40,11 +40,11 @@ fn main() -> ExitCode {
         if flag == "--check-config" {
             return match Config::check_file(path) {
                 Ok(()) => {
-                    println!("cosmos-agent {}: {path} is valid", env!("CARGO_PKG_VERSION"));
+                    println!("helion-agent {}: {path} is valid", env!("CARGO_PKG_VERSION"));
                     ExitCode::SUCCESS
                 }
                 Err(e) => {
-                    eprintln!("cosmos-agent {}: {e}", env!("CARGO_PKG_VERSION"));
+                    eprintln!("helion-agent {}: {e}", env!("CARGO_PKG_VERSION"));
                     ExitCode::FAILURE
                 }
             };
@@ -53,7 +53,7 @@ fn main() -> ExitCode {
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
-            eprintln!("cosmos-agent: fatal: {e}");
+            eprintln!("helion-agent: fatal: {e}");
             ExitCode::FAILURE
         }
     }
@@ -86,7 +86,7 @@ fn init_tracing() {
     use tracing_subscriber::{ fmt, prelude::*, EnvFilter };
 
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_|
-        EnvFilter::new("info,cosmos_agent=info")
+        EnvFilter::new("info,helion_agent=info")
     );
     // Colour only on a terminal; `docker logs` would show raw escape codes.
     let ansi = std::io::IsTerminal::is_terminal(&std::io::stdout());
@@ -106,7 +106,7 @@ async fn serve(cfg: Config, mode: config::AuthMode) -> Result<(), Box<dyn std::e
         os = %facts.os,
         arch = %facts.arch,
         cores = facts.cpu_logical_cores,
-        "cosmos-agent {} starting",
+        "helion-agent {} starting",
         env!("CARGO_PKG_VERSION")
     );
 
@@ -269,7 +269,7 @@ async fn serve(cfg: Config, mode: config::AuthMode) -> Result<(), Box<dyn std::e
         _ => None,
     };
     if cfg.updates.token.is_some() && cfg.updates.repo.is_none() {
-        tracing::warn!("COSMOS_AGENT_GITHUB_TOKEN is set but [updates] repo isn't; updates are only listed");
+        tracing::warn!("HELION_AGENT_GITHUB_TOKEN is set but [updates] repo isn't; updates are only listed");
     }
 
     let state = AppState::new(Inner {

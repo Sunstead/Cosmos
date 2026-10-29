@@ -1,4 +1,4 @@
-# Build context for cosmos-agent/Dockerfile. Keep it to sources only.
+# Build context for helion-agent/Dockerfile. Keep it to sources only.
 .git
 .github
 .vscode
@@ -9,6 +9,6 @@ app/e2e
 app/src/generated
 app/src-tauri/gen/android/**/build
 app/src-tauri/gen/android/.gradle
-cosmos-common/bindings
+helion-common/bindings
 **/.DS_Store
 *.log

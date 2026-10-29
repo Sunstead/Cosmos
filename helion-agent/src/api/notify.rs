@@ -6,7 +6,7 @@ use crate::{
     state::AppState,
 };
 use axum::{ extract::{ Path, State }, http::StatusCode, Extension, Json };
-use cosmos_common::types::{ ChannelStatus, NotifyChannel, NotifyChannelInput, NotifyResponse, NotifySettings };
+use helion_common::types::{ ChannelStatus, NotifyChannel, NotifyChannelInput, NotifyResponse, NotifySettings };
 
 fn handle(state: &AppState) -> Result<&NotifyHandle, AgentError> {
     state.notify.as_ref().ok_or(AgentError::NotEnabled("notifications"))

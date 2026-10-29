@@ -4,7 +4,7 @@ use bollard::{
     volume::ListVolumesOptions,
     secret::{ ContainerSummary, MountPointTypeEnum, VolumeScopeEnum },
 };
-use cosmos_common::types::{ VolumeInfo, VolumesResponse };
+use helion_common::types::{ VolumeInfo, VolumesResponse };
 use std::collections::HashMap;
 
 pub async fn get_volumes() -> VolumesResponse {
@@ -47,7 +47,7 @@ pub async fn get_volumes() -> VolumesResponse {
         .into_iter()
         .map(|v| {
             let compose_project = v.labels.get("com.docker.compose.project").cloned();
-            let cosmos_service = v.labels.get("cosmos.service").cloned();
+            let helion_service = v.labels.get("helion.service").cloned();
 
             let scope = v.scope.and_then(|s| match s {
                 VolumeScopeEnum::LOCAL => Some("local".to_string()),
@@ -64,7 +64,7 @@ pub async fn get_volumes() -> VolumesResponse {
                 created_at: v.created_at,
                 scope,
                 compose_project,
-                cosmos_service,
+                helion_service,
                 in_use_by,
             }
         })

@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Cosmos</title>
+    <title>Helion</title>
     <script>
       // Apply the saved theme before first paint, so nothing flashes.
       // Keep the ids, schemes and styles in step with @sunstead/ui's
@@ -51,10 +51,10 @@
           return has(aliases, id) ? aliases[id] : id;
         };
         try {
-          var t = alias(localStorage.getItem('cosmos-theme') || 'sunstead-dark');
+          var t = alias(localStorage.getItem('helion-theme') || 'sunstead-dark');
           if (t === 'system') {
             var s = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-            t = alias(localStorage.getItem('cosmos-theme-' + s));
+            t = alias(localStorage.getItem('helion-theme-' + s));
             if (!info(t) || info(t)[0] !== s) t = 'sunstead-' + s;
           }
           if (!info(t)) t = 'sunstead-dark';

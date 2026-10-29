@@ -10,7 +10,7 @@ pub mod rollup;
 pub mod schema;
 
 use crate::{ config::HistoryConfig, error::AgentError, sample::host::HostSample };
-use cosmos_common::types::{ MetricSeries, MetricStep };
+use helion_common::types::{ MetricSeries, MetricStep };
 use rusqlite::{ Connection, OpenFlags };
 use std::{
     sync::{ atomic::{ AtomicBool, Ordering }, mpsc, Arc, Mutex },
@@ -81,7 +81,7 @@ pub fn diagnose(path: &std::path::Path) -> &'static str {
     if !dir.is_dir() {
         return "the directory does not exist and could not be created";
     }
-    let probe = dir.join(".cosmos-write-test");
+    let probe = dir.join(".helion-write-test");
     match std::fs::File::create(&probe) {
         Ok(_) => {
             let _ = std::fs::remove_file(&probe);
@@ -432,7 +432,7 @@ mod tests {
 
     #[test]
     fn disk_io_sums_only_disks_with_counters() {
-        use cosmos_common::types::{ DiskInfo, DiskKind };
+        use helion_common::types::{ DiskInfo, DiskKind };
         let disk = |read_bps: f64, io_available: bool| DiskInfo {
             mount: "/".into(),
             label: "/".into(),

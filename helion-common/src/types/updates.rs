@@ -168,7 +168,7 @@ pub struct UpdateRun {
 }
 
 /// What moves together: every service running one image repository, or an
-/// explicit `cosmos.update.group` of several.
+/// explicit `helion.update.group` of several.
 #[derive(Serialize, Deserialize, TS, Debug, Clone, PartialEq)]
 #[ts(export, export_to = "../../app/src/generated/")]
 pub struct UpdateUnit {
@@ -194,7 +194,7 @@ pub struct UpdateUnit {
     /// Services with a database: the state is backed up first, and a
     /// rollback may need that backup restored.
     pub backup: bool,
-    /// Why it can't update at all (`cosmos.update: off`, conflicting labels).
+    /// Why it can't update at all (`helion.update: off`, conflicting labels).
     pub blocked: Option<String>,
     /// The latest run, finished or not.
     pub run: Option<UpdateRun>,

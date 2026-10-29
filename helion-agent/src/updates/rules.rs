@@ -2,31 +2,31 @@
 //!
 //! A unit is every service running one image repository (Authentik's server
 //! and worker, both Postgres databases), or an explicit
-//! `cosmos.update.group`, which joins different repositories that must run
+//! `helion.update.group`, which joins different repositories that must run
 //! the same version (Immich's server and machine learning). Rules come from
 //! the services' labels, in git:
 //!
 //! | Label | Meaning |
 //! |---|---|
-//! | `cosmos.update: off` | never offered |
-//! | `cosmos.update.group: <name>` | these move together, to one tag |
-//! | `cosmos.update.hold: major` (or `minor`) | nothing that big is offered |
-//! | `cosmos.update.major-step: 1` | at most that many majors at once |
-//! | `cosmos.update.major-digits: 2` | the first two numbers are the major |
-//! | `cosmos.update.backup: true` | has a database: back up the state first |
+//! | `helion.update: off` | never offered |
+//! | `helion.update.group: <name>` | these move together, to one tag |
+//! | `helion.update.hold: major` (or `minor`) | nothing that big is offered |
+//! | `helion.update.major-step: 1` | at most that many majors at once |
+//! | `helion.update.major-digits: 2` | the first two numbers are the major |
+//! | `helion.update.backup: true` | has a database: back up the state first |
 //!
 //! Where members disagree, the stricter rule wins; a disagreement that has
 //! no stricter side (the major's width) blocks the unit.
 
 use super::{ image::ImageRef, tags::Version };
-use cosmos_common::types::{ ChangeKind, ContainerInfo, HeldUpdate, UpdateCandidate };
+use helion_common::types::{ ChangeKind, ContainerInfo, HeldUpdate, UpdateCandidate };
 use std::collections::{ BTreeMap, HashMap };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Member {
     pub service: String,
     pub image: ImageRef,
-    pub cosmos_service: Option<String>,
+    pub helion_service: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -76,26 +76,26 @@ fn merge_rules(labels: &[&BTreeMap<String, String>]) -> (Rules, Option<String>) 
     let mut blocked = None;
     for l in labels {
         let get = |k: &str| l.get(k).map(|v| v.trim().to_ascii_lowercase());
-        if get("cosmos.update").is_some_and(|v| v == "off" || v == "false") {
+        if get("helion.update").is_some_and(|v| v == "off" || v == "false") {
             rules.off = true;
         }
-        match get("cosmos.update.hold").as_deref() {
+        match get("helion.update.hold").as_deref() {
             Some("minor") => rules.hold = Some(ChangeKind::Minor),
             Some("major") if rules.hold.is_none() => rules.hold = Some(ChangeKind::Major),
             _ => {}
         }
-        if let Some(n) = get("cosmos.update.major-step").and_then(|v| v.parse::<u64>().ok()).filter(|n| *n > 0) {
+        if let Some(n) = get("helion.update.major-step").and_then(|v| v.parse::<u64>().ok()).filter(|n| *n > 0) {
             rules.major_step = Some(rules.major_step.map_or(n, |m| m.min(n)));
         }
-        if let Some(d) = get("cosmos.update.major-digits").and_then(|v| v.parse::<usize>().ok()).filter(|d| (1..=3).contains(d)) {
+        if let Some(d) = get("helion.update.major-digits").and_then(|v| v.parse::<usize>().ok()).filter(|d| (1..=3).contains(d)) {
             match digits {
                 Some(existing) if existing != d => {
-                    blocked = Some("its services disagree on cosmos.update.major-digits".to_string());
+                    blocked = Some("its services disagree on helion.update.major-digits".to_string());
                 }
                 _ => digits = Some(d),
             }
         }
-        if get("cosmos.update.backup").is_some_and(|v| v == "true" || v == "yes") {
+        if get("helion.update.backup").is_some_and(|v| v == "true" || v == "yes") {
             rules.backup = true;
         }
     }
@@ -116,7 +116,7 @@ pub fn units(containers: &[ContainerInfo]) -> Vec<Unit> {
             continue;
         }
         seen_services.push(service);
-        let key = match c.update_labels.get("cosmos.update.group").map(|g| g.trim()).filter(|g| !g.is_empty()) {
+        let key = match c.update_labels.get("helion.update.group").map(|g| g.trim()).filter(|g| !g.is_empty()) {
             Some(group) => format!("group:{group}"),
             None => image.repo.clone(),
         };
@@ -141,14 +141,14 @@ pub fn units(containers: &[ContainerInfo]) -> Vec<Unit> {
                 blocked = Some(format!("its services run different versions ({})", distinct.join(", ")));
             }
             if rules.off {
-                blocked = Some("updates are off for it (cosmos.update: off)".into());
+                blocked = Some("updates are off for it (helion.update: off)".into());
             }
-            let cosmos: Vec<Option<&str>> = members
+            let helion: Vec<Option<&str>> = members
                 .iter()
-                .map(|(c, _)| c.cosmos_service.as_deref())
+                .map(|(c, _)| c.helion_service.as_deref())
                 .collect();
-            let name = match cosmos[0] {
-                Some(s) if s != "system" && cosmos.iter().all(|c| *c == Some(s)) => s.to_string(),
+            let name = match helion[0] {
+                Some(s) if s != "system" && helion.iter().all(|c| *c == Some(s)) => s.to_string(),
                 _ =>
                     match id.strip_prefix("group:") {
                         Some(g) => g.to_string(),
@@ -163,7 +163,7 @@ pub fn units(containers: &[ContainerInfo]) -> Vec<Unit> {
                     .map(|(c, image)| Member {
                         service: c.compose_service.clone().unwrap_or_default(),
                         image: image.clone(),
-                        cosmos_service: c.cosmos_service.clone(),
+                        helion_service: c.helion_service.clone(),
                     })
                     .collect(),
                 id,
@@ -220,10 +220,10 @@ pub fn offer(unit: &Unit, tags: &HashMap<String, Vec<String>>, first_seen: &Hash
     let why_held = |(v, _, change, _): &(Version, &str, ChangeKind, i64)| -> Option<String> {
         match unit.rules.hold {
             Some(ChangeKind::Minor) if *change != ChangeKind::Patch => {
-                return Some("only patches are allowed (cosmos.update.hold: minor)".into());
+                return Some("only patches are allowed (helion.update.hold: minor)".into());
             }
             Some(ChangeKind::Major) if *change == ChangeKind::Major => {
-                return Some("major versions are held (cosmos.update.hold: major)".into());
+                return Some("major versions are held (helion.update.hold: major)".into());
             }
             _ => {}
         }
@@ -254,7 +254,7 @@ pub fn offer(unit: &Unit, tags: &HashMap<String, Vec<String>>, first_seen: &Hash
 mod tests {
     use super::*;
 
-    fn container(service: &str, image: &str, cosmos: Option<&str>, labels: &[(&str, &str)]) -> ContainerInfo {
+    fn container(service: &str, image: &str, helion: Option<&str>, labels: &[(&str, &str)]) -> ContainerInfo {
         ContainerInfo {
             id: service.into(),
             name: service.into(),
@@ -272,9 +272,9 @@ mod tests {
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.to_string()))
                 .collect(),
-            cosmos_service: cosmos.map(Into::into),
-            cosmos_service_description: None,
-            cosmos_service_url: None,
+            helion_service: helion.map(Into::into),
+            helion_service_description: None,
+            helion_service_url: None,
             cpu_pct: 0.0,
             mem_used_bytes: 0,
             mem_limit_bytes: 0,
@@ -283,17 +283,17 @@ mod tests {
 
     /// Jupiter's stack, with the labels its compose files get.
     fn jupiter() -> Vec<ContainerInfo> {
-        let backup = ("cosmos.update.backup", "true");
+        let backup = ("helion.update.backup", "true");
         vec![
-            container("postgres", "postgres:16.15-alpine", Some("system"), &[("cosmos.update.hold", "major"), backup]),
-            container("authentik-postgres", "postgres:16.15-alpine", Some("authentik"), &[("cosmos.update.hold", "major"), backup]),
-            container("authentik-server", "ghcr.io/goauthentik/server:2026.5.2", Some("authentik"), &[("cosmos.update.major-digits", "2"), backup]),
-            container("authentik-worker", "ghcr.io/goauthentik/server:2026.5.2", Some("authentik"), &[("cosmos.update.major-digits", "2"), backup]),
-            container("immich-server", "ghcr.io/immich-app/immich-server:v3.2.2", Some("immich"), &[("cosmos.update.group", "immich"), backup]),
-            container("immich-machine-learning", "ghcr.io/immich-app/immich-machine-learning:v3.2.2", Some("immich"), &[("cosmos.update.group", "immich"), backup]),
-            container("immich-postgres", "ghcr.io/immich-app/postgres:18-vectorchord0.5.3-pgvector0.8.1", Some("immich"), &[("cosmos.update", "off")]),
-            container("nextcloud", "nextcloud:35.0.0-apache", Some("nextcloud"), &[("cosmos.update.major-step", "1"), backup]),
-            container("nextcloud-cron", "nextcloud:35.0.0-apache", Some("nextcloud"), &[("cosmos.update.major-step", "1"), backup]),
+            container("postgres", "postgres:16.15-alpine", Some("system"), &[("helion.update.hold", "major"), backup]),
+            container("authentik-postgres", "postgres:16.15-alpine", Some("authentik"), &[("helion.update.hold", "major"), backup]),
+            container("authentik-server", "ghcr.io/goauthentik/server:2026.5.2", Some("authentik"), &[("helion.update.major-digits", "2"), backup]),
+            container("authentik-worker", "ghcr.io/goauthentik/server:2026.5.2", Some("authentik"), &[("helion.update.major-digits", "2"), backup]),
+            container("immich-server", "ghcr.io/immich-app/immich-server:v3.2.2", Some("immich"), &[("helion.update.group", "immich"), backup]),
+            container("immich-machine-learning", "ghcr.io/immich-app/immich-machine-learning:v3.2.2", Some("immich"), &[("helion.update.group", "immich"), backup]),
+            container("immich-postgres", "ghcr.io/immich-app/postgres:18-vectorchord0.5.3-pgvector0.8.1", Some("immich"), &[("helion.update", "off")]),
+            container("nextcloud", "nextcloud:35.0.0-apache", Some("nextcloud"), &[("helion.update.major-step", "1"), backup]),
+            container("nextcloud-cron", "nextcloud:35.0.0-apache", Some("nextcloud"), &[("helion.update.major-step", "1"), backup]),
             container("ntfy", "binwiederhier/ntfy:v2.28.0", Some("ntfy"), &[]),
             container("adhoc", "sha256:0123", None, &[]),
         ]
@@ -343,7 +343,7 @@ mod tests {
 
         let pg = offer(unit(&units, "postgres"), &lists(&[("postgres", &["16.14-alpine", "16.16-alpine", "17.6-alpine", "16.16", "latest"])]), &none);
         assert_eq!(pg.available.as_ref().map(|c| (c.tag.as_str(), c.change)), Some(("16.16-alpine", ChangeKind::Patch)));
-        assert_eq!(pg.held.map(|h| (h.tag, h.reason)), Some(("17.6-alpine".into(), "major versions are held (cosmos.update.hold: major)".into())));
+        assert_eq!(pg.held.map(|h| (h.tag, h.reason)), Some(("17.6-alpine".into(), "major versions are held (helion.update.hold: major)".into())));
 
         let nc = offer(unit(&units, "nextcloud"), &lists(&[("nextcloud", &["35.0.1-apache", "36.0.3-apache", "37.0.0-apache"])]), &none);
         assert_eq!(nc.available.as_ref().map(|c| c.tag.as_str()), Some("36.0.3-apache"));
@@ -385,12 +385,12 @@ mod tests {
 
     #[test]
     fn the_stricter_label_wins() {
-        let a = BTreeMap::from([("cosmos.update.hold".to_string(), "major".to_string())]);
-        let b = BTreeMap::from([("cosmos.update.hold".to_string(), "minor".to_string())]);
+        let a = BTreeMap::from([("helion.update.hold".to_string(), "major".to_string())]);
+        let b = BTreeMap::from([("helion.update.hold".to_string(), "minor".to_string())]);
         assert_eq!(merge_rules(&[&a, &b]).0.hold, Some(ChangeKind::Minor));
         assert_eq!(merge_rules(&[&b, &a]).0.hold, Some(ChangeKind::Minor));
-        let d2 = BTreeMap::from([("cosmos.update.major-digits".to_string(), "2".to_string())]);
-        let d1 = BTreeMap::from([("cosmos.update.major-digits".to_string(), "1".to_string())]);
+        let d2 = BTreeMap::from([("helion.update.major-digits".to_string(), "2".to_string())]);
+        let d1 = BTreeMap::from([("helion.update.major-digits".to_string(), "1".to_string())]);
         assert!(merge_rules(&[&d2, &d1]).1.is_some(), "no stricter side, so blocked");
     }
 }

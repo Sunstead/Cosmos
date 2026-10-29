@@ -2,7 +2,7 @@
 //! problem or a crash-looping container from ringing the phone every minute.
 
 use super::Channel;
-use cosmos_common::types::{ Event, ProblemState };
+use helion_common::types::{ Event, ProblemState };
 use std::collections::HashMap;
 
 /// A problem opens at most once per this long per channel, and the same
@@ -147,7 +147,7 @@ impl PeerHolds {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cosmos_common::types::{ ChannelKind, EventCategory, ProblemRef, Severity };
+    use helion_common::types::{ ChannelKind, EventCategory, ProblemRef, Severity };
 
     fn channel() -> Channel {
         Channel {

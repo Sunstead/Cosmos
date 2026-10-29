@@ -242,7 +242,7 @@ function TargetForm({
                 ))}
               </SelectContent>
             </Select>
-            <FieldDescription>How Cosmos tells it woke up.</FieldDescription>
+            <FieldDescription>How Helion tells it woke up.</FieldDescription>
           </Field>
 
           <div className='grid grid-cols-[minmax(0,1fr)_6rem] gap-3'>

@@ -4,7 +4,7 @@
 
 use super::{ human_bytes, EventsHandle, ProblemSpec, Report, Resolution };
 use crate::sample::host::HostSnapshot;
-use cosmos_common::types::{ DiskInfo, EventCategory, Problem, Severity };
+use helion_common::types::{ DiskInfo, EventCategory, Problem, Severity };
 use std::{ sync::Arc, time::Duration };
 use tokio::sync::watch;
 
@@ -90,7 +90,7 @@ pub fn spawn(events: EventsHandle, host: watch::Receiver<Arc<HostSnapshot>>, war
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cosmos_common::types::DiskKind;
+    use helion_common::types::DiskKind;
 
     fn disk(label: &str, pct: u64) -> DiskInfo {
         DiskInfo {

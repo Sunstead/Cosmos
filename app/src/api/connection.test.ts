@@ -166,7 +166,7 @@ describe('NodeConnection', () => {
       created_at: null,
       scope: 'local',
       compose_project: null,
-      cosmos_service: null,
+      helion_service: null,
       in_use_by: [],
     });
     const names = (lists: { name: string }[][]) => lists.map((l) => l.map((v) => v.name));

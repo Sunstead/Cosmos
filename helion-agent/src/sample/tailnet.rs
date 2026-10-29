@@ -9,7 +9,7 @@
 //! EOF. That keeps this a few lines of tokio I/O instead of an HTTP client.
 
 use crate::config::TailscaleConfig;
-use cosmos_common::types::{ TailnetConnection, TailnetDevice, TailnetStatus };
+use helion_common::types::{ TailnetConnection, TailnetDevice, TailnetStatus };
 use serde::Deserialize;
 use std::{ collections::HashMap, path::Path, sync::Arc, time::Duration };
 use tokio::sync::watch;

@@ -3,7 +3,7 @@
 //!
 //! We listen on 127.0.0.1 on a random port, open the system browser at the
 //! provider, and catch the redirect back. The provider allows any port on
-//! `http://127.0.0.1/callback` for the Cosmos client. The code exchange and
+//! `http://127.0.0.1/callback` for the Helion client. The code exchange and
 //! every refresh happen here, so the refresh token goes from the provider to
 //! the keychain without passing through the webview; JavaScript only ever
 //! receives access tokens, which expire in minutes.
@@ -124,9 +124,9 @@ async fn serve_one(stream: &mut tokio::net::TcpStream) -> Option<String> {
     let (path, query) = target.split_once('?').unwrap_or((target.as_str(), ""));
     let is_callback = path == "/callback";
     let page = if is_callback {
-        "<!doctype html><meta charset=utf-8><title>Cosmos</title>\
+        "<!doctype html><meta charset=utf-8><title>Helion</title>\
          <body style=\"font:15px system-ui;display:grid;place-items:center;height:90vh\">\
-         <p>Signed in to Cosmos. You can close this tab.</p>"
+         <p>Signed in to Helion. You can close this tab.</p>"
     } else {
         ""
     };

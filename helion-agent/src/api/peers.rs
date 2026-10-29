@@ -1,6 +1,6 @@
 use crate::{ api::CachedJson, error::AgentError, state::AppState };
 use axum::{ extract::State, http::{ header, HeaderMap }, Json };
-use cosmos_common::types::PeerHello;
+use helion_common::types::PeerHello;
 
 /// 501 without `[[peers]]`, so the app hides the panel.
 pub async fn list(State(state): State<AppState>) -> Result<CachedJson, AgentError> {

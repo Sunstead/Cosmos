@@ -3,7 +3,7 @@
 
 use super::{ db::StoredRun, image::ImageRef, rules::Offer };
 use crate::backups::parse_rfc3339;
-use cosmos_common::types::{ BackupsStatus, CheckSource, CheckState, ChangeKind, ContainerInfo, UpdatePolicy, UptimeEntry };
+use helion_common::types::{ BackupsStatus, CheckSource, CheckState, ChangeKind, ContainerInfo, UpdatePolicy, UptimeEntry };
 
 /// A fresh container restarting this often has a problem.
 const RESTARTS: u32 = 3;
@@ -52,7 +52,7 @@ pub fn judge(run: &StoredRun, containers: &[ContainerInfo], uptime: &[UptimeEntr
             e.check.source == CheckSource::Service &&
                 e.state == CheckState::Down &&
                 e.check.service.is_some() &&
-                e.check.service == c.cosmos_service
+                e.check.service == c.helion_service
         });
         if let Some(e) = down {
             let why = e.recent.last().and_then(|b| b.detail.clone());
@@ -100,7 +100,7 @@ pub fn nightly_succeeded(s: &BackupsStatus) -> bool {
 mod tests {
     use super::*;
     use crate::backups::format_rfc3339;
-    use cosmos_common::types::{
+    use helion_common::types::{
         CheckKind,
         UpdateCandidate,
         UpdateRun,
@@ -126,9 +126,9 @@ mod tests {
             compose_project: None,
             compose_service: Some(service.into()),
             update_labels: Default::default(),
-            cosmos_service: Some("immich".into()),
-            cosmos_service_description: None,
-            cosmos_service_url: None,
+            helion_service: Some("immich".into()),
+            helion_service_description: None,
+            helion_service_url: None,
             cpu_pct: 0.0,
             mem_used_bytes: 0,
             mem_limit_bytes: 0,

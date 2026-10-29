@@ -5,7 +5,7 @@
 //! `peer:<name>:unreachable`; two heartbeats in a row bring it back. A peer
 //! that said it was stopping (a deploy, a reboot) gets longer.
 
-use cosmos_common::types::PeerState;
+use helion_common::types::PeerState;
 
 /// The dialling side sends one this often.
 pub const INTERVAL_SECS: i64 = 15;

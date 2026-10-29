@@ -1,8 +1,8 @@
-# cosmos-agent
+# helion-agent
 
-The per-node half of Cosmos. Serves host metrics, Docker containers and
-volumes, metrics history and read-only restic status to the Cosmos desktop app,
-and (in the Docker image) the Cosmos web UI from the same address.
+The per-node half of Helion. Serves host metrics, Docker containers and
+volumes, metrics history and read-only restic status to the Helion desktop app,
+and (in the Docker image) the Helion web UI from the same address.
 
 **Design in one line: sample on a schedule, never on the request path.**
 Background samplers publish to `watch` channels and HTTP handlers hand out the
@@ -12,34 +12,34 @@ serde and takes no locks.
 ## Running it
 
 ```bash
-COSMOS_AGENT_ALLOW_ANONYMOUS=true COSMOS_AGENT_BIND=127.0.0.1:7700 cargo run -p cosmos-agent
+HELION_AGENT_ALLOW_ANONYMOUS=true HELION_AGENT_BIND=127.0.0.1:7700 cargo run -p helion-agent
 ```
 
 That runs it open, for development. Everything else has a working default
 except sign-in: a real agent needs an OpenID Connect provider (`[auth.oidc]`,
-or `COSMOS_AGENT_OIDC_ISSUER`) and refuses to start without one. See [`agent.example.toml`](agent.example.toml) for the full
+or `HELION_AGENT_OIDC_ISSUER`) and refuses to start without one. See [`agent.example.toml`](agent.example.toml) for the full
 configuration. Any string in it can name environment variables, `${NAME}`, so
 domains and the like can live in your `.env` rather than in the file.
 
 ## Deploying to a Docker host
 
-GitHub Actions publishes `ghcr.io/sunstead/cosmos-agent` (linux/amd64) on every
+GitHub Actions publishes `ghcr.io/sunstead/helion-agent` (linux/amd64) on every
 push to `main` (`:latest`, `:main`, `:sha-<short>`) and on `v*` tags
 (`:1.2.3`, `:1.2`). To build it yourself, from the **repository root**:
 
 ```bash
-docker build -f cosmos-agent/Dockerfile -t cosmos-agent .
+docker build -f helion-agent/Dockerfile -t helion-agent .
 # from an Apple Silicon Mac for an x86_64 server:
-docker buildx build --platform linux/amd64 -f cosmos-agent/Dockerfile -t cosmos-agent .
+docker buildx build --platform linux/amd64 -f helion-agent/Dockerfile -t helion-agent .
 ```
 
 Then use [`compose.example.yaml`](compose.example.yaml).
 
 **Web UI.** The image bundles the web build and sets
-`COSMOS_AGENT_WEB_DIR`, so `http://<host>:7700/` (or the Caddy address in
-front of it) opens Cosmos. Static files are public; every API route still needs
+`HELION_AGENT_WEB_DIR`, so `http://<host>:7700/` (or the Caddy address in
+front of it) opens Helion. Static files are public; every API route still needs
 the token, which the page asks for on first visit and keeps in that browser.
-Unset `COSMOS_AGENT_WEB_DIR` (or `[web] dir`) for an API-only agent. The desktop
+Unset `HELION_AGENT_WEB_DIR` (or `[web] dir`) for an API-only agent. The desktop
 app connects to the same address.
 
 Two things are easy to get wrong:
@@ -76,7 +76,7 @@ file and the agent reads it. That choice is deliberate:
 
 ### Wiring it into a restic job
 
-[`scripts/cosmos-backup-status.sh`](scripts/cosmos-backup-status.sh) writes the
+[`scripts/helion-backup-status.sh`](scripts/helion-backup-status.sh) writes the
 file. Call it at the end of your backup script, while the repository
 environment is still set. For a script that uses `set -euo pipefail`, run it
 from an `EXIT` trap so a *failed* run still reports — a backup that died is
@@ -86,27 +86,27 @@ For the Jupiter stack's `scripts/backup.sh`, the change is:
 
 ```bash
 # ── after the RESTIC_REPOSITORY / RESTIC_PASSWORD exports ───────────────
-COSMOS_START_TS=$(date +%s)
-COSMOS_PG_DUMP_OK=0
-COSMOS_HEARTBEAT_OK=0
+HELION_START_TS=$(date +%s)
+HELION_PG_DUMP_OK=0
+HELION_HEARTBEAT_OK=0
 
-cosmos_status() {
+helion_status() {
   local rc=$?
-  COSMOS_STATUS_FILE="$BACKUP_PATH/restic-status.json" \
-  COSMOS_TIMER_UNIT=jupiter-backup.timer \
-  COSMOS_PG_DUMP_OK="$COSMOS_PG_DUMP_OK" \
-  COSMOS_HEARTBEAT_OK="$COSMOS_HEARTBEAT_OK" \
+  HELION_STATUS_FILE="$BACKUP_PATH/restic-status.json" \
+  HELION_TIMER_UNIT=jupiter-backup.timer \
+  HELION_PG_DUMP_OK="$HELION_PG_DUMP_OK" \
+  HELION_HEARTBEAT_OK="$HELION_HEARTBEAT_OK" \
   KEEP_DAILY=7 KEEP_WEEKLY=4 KEEP_MONTHLY=6 \
-    "$PWD/scripts/cosmos-backup-status.sh" "$rc" "$(( $(date +%s) - COSMOS_START_TS ))" \
+    "$PWD/scripts/helion-backup-status.sh" "$rc" "$(( $(date +%s) - HELION_START_TS ))" \
     || true    # never let status reporting fail the backup
 }
-trap cosmos_status EXIT
+trap helion_status EXIT
 
 # ── after the three `dump` calls ───────────────────────────────────────
-COSMOS_PG_DUMP_OK=1
+HELION_PG_DUMP_OK=1
 
 # ── inside the heartbeat block, on success ─────────────────────────────
-COSMOS_HEARTBEAT_OK=1
+HELION_HEARTBEAT_OK=1
 ```
 
 It needs `jq` (`sudo apt install jq`). Then set `[backups] enabled = true` in

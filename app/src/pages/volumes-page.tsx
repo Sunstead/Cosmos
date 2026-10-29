@@ -35,7 +35,7 @@ export function VolumesPage() {
         const used = v.in_use_by.length > 0;
         if (filter === 'used' && !used) return false;
         if (filter === 'unused' && used) return false;
-        return matchesQuery(query, v.name, v.compose_project, v.cosmos_service, ...v.in_use_by);
+        return matchesQuery(query, v.name, v.compose_project, v.helion_service, ...v.in_use_by);
       }),
     [all, filter, query],
   );

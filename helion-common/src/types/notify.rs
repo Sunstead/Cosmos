@@ -90,7 +90,7 @@ pub struct NotifyChannelInput {
 #[ts(export, export_to = "../../app/src/generated/")]
 pub struct NotifySettings {
     /// Opened when a notification is tapped, e.g.
-    /// `https://cosmos.example.com/events`.
+    /// `https://helion.example.com/events`.
     pub link_url: Option<String>,
 }
 
