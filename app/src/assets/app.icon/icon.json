@@ -1,28 +1,19 @@
 {
   "fill" : {
     "linear-gradient" : [
-      "display-p3:0.24706,0.26275,0.37647,1.00000",
-      "display-p3:0.07059,0.07059,0.16078,1.00000"
-    ],
-    "orientation" : {
-      "start" : {
-        "x" : 0.5,
-        "y" : 0
-      },
-      "stop" : {
-        "x" : 0.5,
-        "y" : 0.7
-      }
-    }
+      "display-p3:0.27059,0.08235,0.01569,1.00000",
+      "display-p3:0.10196,0.02745,0.00000,1.00000"
+    ]
   },
   "groups" : [
     {
       "layers" : [
         {
-          "image-name" : "icon_simple_2.svg",
-          "name" : "icon_simple_2",
+          "glass" : false,
+          "image-name" : "helion_ring.svg",
+          "name" : "helion_ring",
           "position" : {
-            "scale" : 60,
+            "scale" : 1,
             "translation-in-points" : [
               0,
               0
@@ -32,21 +23,22 @@
       ],
       "shadow" : {
         "kind" : "neutral",
-        "opacity" : 0.5
+        "opacity" : 0.35
       },
+      "specular" : false,
       "translucency" : {
-        "enabled" : true,
+        "enabled" : false,
         "value" : 0.5
       }
     },
     {
       "layers" : [
         {
-          "hidden" : true,
-          "image-name" : "icon_simple 4.svg",
-          "name" : "icon_simple 4",
+          "glass" : false,
+          "image-name" : "helion_core.svg",
+          "name" : "helion_core",
           "position" : {
-            "scale" : 60,
+            "scale" : 1,
             "translation-in-points" : [
               0,
               0
@@ -58,8 +50,59 @@
         "kind" : "neutral",
         "opacity" : 0.5
       },
+      "specular" : false,
       "translucency" : {
-        "enabled" : true,
+        "enabled" : false,
+        "value" : 0.5
+      }
+    },
+    {
+      "layers" : [
+        {
+          "glass" : false,
+          "image-name" : "helion_sun.svg",
+          "name" : "helion_sun",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "specular" : false,
+      "translucency" : {
+        "enabled" : false,
+        "value" : 0.5
+      }
+    },
+    {
+      "layers" : [
+        {
+          "glass" : false,
+          "image-name" : "helion_glow.svg",
+          "name" : "helion_glow",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "none",
+        "opacity" : 0
+      },
+      "specular" : false,
+      "translucency" : {
+        "enabled" : false,
         "value" : 0.5
       }
     }
